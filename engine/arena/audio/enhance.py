@@ -124,50 +124,90 @@ class AudioEnhancer:
                 "Required packages not installed. Run: pip install noisereduce pyloudnorm"
             )
 
-        # Load audio
+        # Load audio (preserve original sample rate)
         y, sr = librosa.load(str(audio_path), sr=None)
 
-        # Step 1: Noise reduction
-        y_enhanced = self._reduce_noise(y, sr)
+        # Get enhancement level from environment (gentle, moderate, aggressive)
+        enhancement_level = os.getenv("ARENA_ENHANCEMENT_LEVEL", "gentle").lower()
 
-        # Step 2: Normalize volume
-        y_enhanced = self._normalize_loudness(y_enhanced, sr)
+        # Step 1: Gentle noise reduction (optional)
+        if enhancement_level != "none":
+            y_enhanced = self._reduce_noise(y, sr, level=enhancement_level)
+        else:
+            y_enhanced = y
 
-        # Step 3: Apply gentle compression
-        y_enhanced = self._apply_compression(y_enhanced)
+        # Step 2: Normalize volume (gentle approach)
+        y_enhanced = self._normalize_loudness(y_enhanced, sr, target=-18.0)
 
-        # Save enhanced audio
+        # Step 3: Skip compression for gentle mode
+        if enhancement_level == "aggressive":
+            y_enhanced = self._apply_compression(y_enhanced)
+
+        # Save enhanced audio (prevent clipping)
+        y_enhanced = np.clip(y_enhanced, -1.0, 1.0)
         sf.write(str(output_path), y_enhanced, sr)
 
         return output_path
 
-    def _reduce_noise(self, audio: np.ndarray, sr: int) -> np.ndarray:
-        """Reduce background noise"""
+    def _reduce_noise(self, audio: np.ndarray, sr: int, level: str = "gentle") -> np.ndarray:
+        """Reduce background noise with configurable intensity"""
         try:
             import noisereduce as nr
-            # Use first 1 second as noise profile
-            return nr.reduce_noise(y=audio, sr=sr, stationary=True)
+
+            # Configure based on level
+            if level == "gentle":
+                # Very light noise reduction
+                return nr.reduce_noise(
+                    y=audio,
+                    sr=sr,
+                    stationary=False,  # Better for varying noise
+                    prop_decrease=0.8,  # Reduce by 80% (gentle)
+                    freq_mask_smooth_hz=500,  # Smooth frequency mask
+                    time_mask_smooth_ms=50  # Smooth time mask
+                )
+            elif level == "moderate":
+                return nr.reduce_noise(
+                    y=audio,
+                    sr=sr,
+                    stationary=False,
+                    prop_decrease=1.0
+                )
+            else:  # aggressive
+                return nr.reduce_noise(
+                    y=audio,
+                    sr=sr,
+                    stationary=True,
+                    prop_decrease=1.5
+                )
         except ImportError:
-            # Fallback: simple high-pass filter to remove low-frequency noise
+            # Fallback: simple high-pass filter (very gentle)
             from scipy.signal import butter, filtfilt
-            b, a = butter(4, 100 / (sr / 2), btype='high')
+            b, a = butter(2, 80 / (sr / 2), btype='high')  # Lower order, lower cutoff
             return filtfilt(b, a, audio)
 
-    def _normalize_loudness(self, audio: np.ndarray, sr: int) -> np.ndarray:
+    def _normalize_loudness(self, audio: np.ndarray, sr: int, target: float = -18.0) -> np.ndarray:
         """Normalize audio loudness to broadcast standards"""
         try:
             import pyloudnorm as pyln
             # Measure loudness
             meter = pyln.Meter(sr)
             loudness = meter.integrated_loudness(audio)
-            # Normalize to -16 LUFS (podcast standard)
-            return pyln.normalize.loudness(audio, loudness, -16.0)
-        except ImportError:
-            # Fallback: simple RMS normalization
+
+            # Only normalize if needed (avoid making quiet audio too loud)
+            if loudness < target - 3:  # Only boost if significantly quieter
+                # Use gentler normalization to avoid clipping
+                normalized = pyln.normalize.loudness(audio, loudness, target)
+                # Blend original and normalized (50/50) for more natural sound
+                return 0.7 * normalized + 0.3 * audio
+            else:
+                return audio  # Audio is already good, don't touch it
+
+        except Exception:
+            # Fallback: simple RMS normalization (very gentle)
             rms = np.sqrt(np.mean(audio**2))
-            target_rms = 0.1  # Conservative target
-            if rms > 0:
-                return audio * (target_rms / rms)
+            target_rms = 0.08  # More conservative target
+            if rms > 0 and rms < target_rms * 0.5:  # Only boost if very quiet
+                return audio * (target_rms / rms) * 0.8  # 80% boost
             return audio
 
     def _apply_compression(self, audio: np.ndarray) -> np.ndarray:
