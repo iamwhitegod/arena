@@ -1,0 +1,24 @@
+# Core dependencies
+openai>=1.0.0
+python-dotenv>=1.0.0
+
+# Video processing
+moviepy>=1.0.3
+opencv-python>=4.8.0
+scenedetect[opencv]>=0.6.2
+ffmpeg-python>=0.2.0
+
+# Audio processing
+librosa>=0.10.0
+soundfile>=0.12.0
+numba>=0.58.0
+noisereduce>=3.0.0
+pyloudnorm>=0.1.0
+scipy>=1.11.0
+
+# Image processing
+pillow>=10.0.0
+
+# Utilities
+numpy>=1.24.0
+tqdm>=4.66.0
