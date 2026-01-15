@@ -8,6 +8,7 @@ Arena helps developers, indie founders, technical content creators, DevRels, and
 
 ## Features
 
+- **Hybrid AI + Energy Analysis**: Combines AI content analysis with audio energy detection to find clips with great content AND enthusiastic delivery
 - **Auto-clip generation**: Automatically identify and extract interesting segments from your videos
 - **AI-powered audio enhancement**: Professional sound quality with noise removal and volume normalization (Adobe Podcast-style)
 - **Multi-modal analysis**: Combines AI transcript analysis, audio energy detection, and visual scene detection
@@ -17,24 +18,71 @@ Arena helps developers, indie founders, technical content creators, DevRels, and
 
 ## Quick Start
 
-```bash
-# Process a video and generate clips automatically
-arena process video.mp4
+Arena uses a git-style CLI with simple commands:
 
-# Or use the multi-step pipeline for more control
-arena analyze video.mp4   # Analyze the video
-arena review              # Review and select clips
-arena generate            # Generate selected clips
+### Option 1: Quick Demo (No API Key Needed)
+
+```bash
+cd engine
+./arena-cli demo
+```
+
+Generates 3 sample clips from existing test data in seconds!
+
+### Option 2: Process Your Own Video
+
+```bash
+cd engine
+
+# Set your OpenAI API key
+export OPENAI_API_KEY="sk-your-key-here"
+
+# Process video - generates 5 clips automatically
+./arena-cli process path/to/your/video.mp4
+
+# Generate 10 short clips for social media
+./arena-cli process video.mp4 -n 10 --min 15 --max 30 --fast
+```
+
+See [CLI_REFERENCE.md](./CLI_REFERENCE.md) for all commands and [QUICKSTART.md](./QUICKSTART.md) for detailed instructions.
+
+### All Commands
+
+```bash
+arena demo              # Run demo (no API key needed)
+arena process <video>   # Full pipeline
+arena extract-audio <video> # Extract audio from video
+arena transcribe <video> # Transcribe only
+arena analyze <video>   # Analyze only
+arena generate <video> <analysis> # Generate clips
+arena info <video>      # Show video info
 ```
 
 ## Installation
 
 ```bash
-# Install globally via npm
-npm install -g arena-cli
+# Clone repository
+git clone <repository-url>
+cd arena/engine
 
-# Or use directly with npx
-npx arena-cli process video.mp4
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Make CLI executable
+chmod +x arena-cli
+
+# Test it works
+./arena-cli --help
+```
+
+**Optional:** Create global symlink:
+
+```bash
+sudo ln -s $(pwd)/arena-cli /usr/local/bin/arena
+
+# Then use from anywhere
+arena demo
+arena process video.mp4
 ```
 
 ## How It Works
@@ -57,23 +105,26 @@ Arena uses a hybrid Python + Node.js architecture:
 
 ## Project Status
 
-**Sprint 2 Complete + Audio Enhancement!** Arena can now:
+**Sprint 4 Complete - Clip Generation!** Arena can now:
 - ✅ Transcribe videos with OpenAI Whisper (API or local)
-- ✅ **NEW: AI-powered audio enhancement** (noise removal, volume normalization)
+- ✅ AI-powered audio enhancement (noise removal, volume normalization)
+- ✅ Audio energy detection (detect speaker enthusiasm and emphasis)
+- ✅ Hybrid AI + Energy analysis (combines content quality with delivery energy)
+- ✅ **NEW: Video clip generation** (FFmpeg-based extraction with metadata)
+- ✅ **NEW: Thumbnail generation** (extract preview images at any timestamp)
+- ✅ **NEW: Batch processing** (generate multiple clips efficiently)
 - ✅ Analyze transcripts with GPT-4 to identify interesting segments
 - ✅ Score and rank clips by engagement potential
-- ✅ Generate metadata with clip recommendations
 - ✅ Cache transcripts and enhanced audio for cost/time savings
 
-**Coming Soon (Sprint 3-5):**
-- Audio energy detection
+**Coming Soon (Sprint 5+):**
 - Scene change detection
-- Actual video clip generation
-- Subtitle burning
-- Interactive review mode
+- Subtitle burning with customizable styles
+- Interactive review mode in CLI
 - Adobe Podcast API integration
+- CLI command for end-to-end processing
 
-See [SPRINT2.md](./SPRINT2.md) for details and [AUDIO_ENHANCEMENT_QUICKSTART.md](./AUDIO_ENHANCEMENT_QUICKSTART.md) for audio enhancement.
+See [SPRINT2.md](./SPRINT2.md) for sprint details, [AUDIO_ENHANCEMENT_QUICKSTART.md](./AUDIO_ENHANCEMENT_QUICKSTART.md) for audio enhancement, [AUDIO_ENERGY_DETECTION.md](./AUDIO_ENERGY_DETECTION.md) for energy detection, [HYBRID_ANALYSIS.md](./HYBRID_ANALYSIS.md) for hybrid analysis, and [CLIP_GENERATION.md](./CLIP_GENERATION.md) for clip generation.
 
 ## License
 
