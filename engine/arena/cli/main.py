@@ -104,16 +104,22 @@ Documentation:
     process_parser.add_argument(
         '--min',
         type=int,
-        default=30,
+        default=None,
         dest='min_duration',
-        help='Minimum clip duration in seconds (default: 30)'
+        help='Minimum clip duration in seconds (optional, no default)'
     )
     process_parser.add_argument(
         '--max',
         type=int,
-        default=90,
+        default=None,
         dest='max_duration',
-        help='Maximum clip duration in seconds (default: 90)'
+        help='Maximum clip duration in seconds (optional, no default)'
+    )
+    process_parser.add_argument(
+        '--max-adjustment',
+        type=float,
+        default=10.0,
+        help='Max seconds to adjust clip boundaries for sentence alignment (default: 10.0)'
     )
     process_parser.add_argument(
         '--fast',
@@ -190,16 +196,22 @@ Documentation:
     analyze_parser.add_argument(
         '--min',
         type=int,
-        default=30,
+        default=None,
         dest='min_duration',
-        help='Minimum clip duration in seconds (default: 30)'
+        help='Minimum clip duration in seconds (optional, no default)'
     )
     analyze_parser.add_argument(
         '--max',
         type=int,
-        default=90,
+        default=None,
         dest='max_duration',
-        help='Maximum clip duration in seconds (default: 90)'
+        help='Maximum clip duration in seconds (optional, no default)'
+    )
+    analyze_parser.add_argument(
+        '--max-adjustment',
+        type=float,
+        default=10.0,
+        help='Max seconds to adjust clip boundaries for sentence alignment (default: 10.0)'
     )
     analyze_parser.add_argument(
         '--energy-weight',

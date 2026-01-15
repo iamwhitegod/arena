@@ -25,8 +25,8 @@ class TranscriptAnalyzer:
         self,
         transcript_data: Dict,
         target_clips: int = 10,
-        min_duration: int = 30,
-        max_duration: int = 90
+        min_duration: Optional[int] = None,
+        max_duration: Optional[int] = None
     ) -> List[Dict]:
         """
         Analyze transcript to identify interesting segments
@@ -34,8 +34,8 @@ class TranscriptAnalyzer:
         Args:
             transcript_data: Transcript dict with 'text' and 'segments'
             target_clips: Number of clips to identify
-            min_duration: Minimum clip duration in seconds
-            max_duration: Maximum clip duration in seconds
+            min_duration: Optional minimum clip duration in seconds (None = no constraint)
+            max_duration: Optional maximum clip duration in seconds (None = no constraint)
 
         Returns:
             List of candidate segments with timestamps, titles, and reasons
@@ -120,17 +120,35 @@ class TranscriptAnalyzer:
         self,
         transcript: str,
         target_clips: int,
-        min_duration: int,
-        max_duration: int
+        min_duration: Optional[int],
+        max_duration: Optional[int]
     ) -> str:
         """Create the analysis prompt for GPT"""
+
+        # Build duration guidance
+        if min_duration is not None and max_duration is not None:
+            duration_guidance = f"Each clip should be between {min_duration}-{max_duration} seconds long."
+            duration_constraint = f"- Ensure clips are between {min_duration}-{max_duration} seconds"
+        elif min_duration is not None:
+            duration_guidance = f"Each clip should be at least {min_duration} seconds long."
+            duration_constraint = f"- Ensure clips are at least {min_duration} seconds"
+        elif max_duration is not None:
+            duration_guidance = f"Each clip should be no longer than {max_duration} seconds."
+            duration_constraint = f"- Ensure clips are no longer than {max_duration} seconds"
+        else:
+            duration_guidance = "Identify complete thoughts, stories, or insights - let the content dictate the length."
+            duration_constraint = "- Focus on complete, self-contained ideas regardless of length"
+
         return f"""Analyze this video transcript and identify the {target_clips} most interesting segments that would make engaging short clips for social media.
 
-Each clip should be between {min_duration}-{max_duration} seconds long and should:
+{duration_guidance}
+
+Each clip should:
 - Have a clear hook or attention-grabbing opening
 - Contain a complete thought or story arc
 - Be engaging and valuable on its own
 - Appeal to developers, founders, or technical content creators
+- Start and end at natural sentence boundaries (complete sentences)
 
 Look for:
 1. Hooks and attention-grabbing statements
@@ -160,19 +178,20 @@ Return ONLY a JSON object in this exact format:
 }}
 
 Important:
-- Ensure clips are between {min_duration}-{max_duration} seconds
+{duration_constraint}
 - Use actual timestamp values from the transcript
 - Make titles compelling and specific (not generic)
 - Interest score should be 0.0 to 1.0
 - Content types: "hook", "insight", "advice", "story", "controversial", "emotional"
 - Return exactly {target_clips} clips, ranked by interest_score (highest first)
+- Prioritize complete thoughts over arbitrary time constraints
 """
 
     def _validate_clips(
         self,
         clips: List[Dict],
-        min_duration: int,
-        max_duration: int
+        min_duration: Optional[int],
+        max_duration: Optional[int]
     ) -> List[Dict]:
         """Validate and normalize clip data"""
         validated = []
@@ -185,8 +204,10 @@ Important:
             # Calculate duration
             duration = clip["end_time"] - clip["start_time"]
 
-            # Validate duration
-            if duration < min_duration or duration > max_duration:
+            # Validate duration only if constraints are specified
+            if min_duration is not None and duration < min_duration:
+                continue
+            if max_duration is not None and duration > max_duration:
                 continue
 
             # Normalize the clip

@@ -33,8 +33,8 @@ class HybridAnalyzer:
         video_path: Path,
         transcript_data: Dict,
         target_clips: int = 10,
-        min_duration: int = 30,
-        max_duration: int = 90
+        min_duration: Optional[int] = None,
+        max_duration: Optional[int] = None
     ) -> Dict:
         """
         Perform hybrid analysis combining AI content and audio energy
@@ -43,8 +43,8 @@ class HybridAnalyzer:
             video_path: Path to video file
             transcript_data: Transcript dict with 'text' and 'segments'
             target_clips: Number of clips to identify
-            min_duration: Minimum clip duration in seconds
-            max_duration: Maximum clip duration in seconds
+            min_duration: Optional minimum clip duration in seconds (None = no constraint)
+            max_duration: Optional maximum clip duration in seconds (None = no constraint)
 
         Returns:
             Dict with AI clips, energy segments, hybrid scored clips, and stats
@@ -60,9 +60,14 @@ class HybridAnalyzer:
         print(f"   ✓ Found {len(ai_clips)} interesting content segments\n")
 
         print("⚡ Analyzing audio energy...")
+        # Calculate energy segment durations
+        # If no constraints, use reasonable defaults for energy detection
+        energy_min = float(min_duration * 0.3) if min_duration else 10.0
+        energy_max = float(max_duration) if max_duration else 120.0
+
         energy_segments = self.energy_analyzer.analyze(
-            min_duration=float(min_duration * 0.3),  # Allow shorter energy segments
-            max_duration=float(max_duration),
+            min_duration=energy_min,
+            max_duration=energy_max,
             energy_threshold=0.5,
             top_n=20  # Get many energy segments for overlap detection
         )

@@ -18,5 +18,6 @@ def run_process(args):
         max_duration=args.max_duration,
         use_cached_transcript=not args.no_cache,
         fast_mode=args.fast,
-        padding=args.padding
+        padding=args.padding,
+        max_adjustment=args.max_adjustment
     )

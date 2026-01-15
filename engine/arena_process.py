@@ -32,17 +32,20 @@ from arena.audio.energy import AudioEnergyAnalyzer
 from arena.ai.analyzer import TranscriptAnalyzer
 from arena.ai.hybrid import HybridAnalyzer
 from arena.clipping.generator import ClipGenerator
+from arena.clipping.professional import ProfessionalClipAligner
+from arena.ai.sentence_detector import SentenceBoundaryDetector
 
 
 def run_arena_pipeline(
     video_path: str,
     output_dir: str = "output",
     num_clips: int = 5,
-    min_duration: int = 30,
-    max_duration: int = 90,
+    min_duration: Optional[int] = None,
+    max_duration: Optional[int] = None,
     use_cached_transcript: bool = True,
     fast_mode: bool = False,
-    padding: float = 0.5
+    padding: float = 0.0,
+    max_adjustment: float = 10.0
 ):
     """
     Run the complete Arena pipeline
@@ -51,11 +54,12 @@ def run_arena_pipeline(
         video_path: Path to input video file
         output_dir: Directory for output files (relative to project root or absolute path)
         num_clips: Number of clips to generate
-        min_duration: Minimum clip duration in seconds
-        max_duration: Maximum clip duration in seconds
+        min_duration: Optional minimum clip duration in seconds (None = no constraint)
+        max_duration: Optional maximum clip duration in seconds (None = no constraint)
         use_cached_transcript: Use cached transcript if available
         fast_mode: Use fast clip extraction (stream copy)
         padding: Seconds to add before/after each clip
+        max_adjustment: Max seconds to adjust clip boundaries for sentence alignment
     """
 
     print(f"\n{'='*70}")
@@ -88,7 +92,17 @@ def run_arena_pipeline(
 
     print(f"📹 Input:  {video_file.name}")
     print(f"📁 Output: {output_path}")
-    print(f"🎯 Target: {num_clips} clips ({min_duration}-{max_duration}s each)\n")
+
+    # Show duration constraints if specified
+    if min_duration is not None and max_duration is not None:
+        print(f"🎯 Target: {num_clips} clips ({min_duration}-{max_duration}s each)")
+    elif min_duration is not None:
+        print(f"🎯 Target: {num_clips} clips (at least {min_duration}s each)")
+    elif max_duration is not None:
+        print(f"🎯 Target: {num_clips} clips (at most {max_duration}s each)")
+    else:
+        print(f"🎯 Target: {num_clips} clips (content-driven length)")
+    print()
 
     # Check for API key
     api_key = os.getenv('OPENAI_API_KEY')
@@ -99,7 +113,7 @@ def run_arena_pipeline(
         return 1
 
     # Pipeline progress tracking
-    total_steps = 3
+    total_steps = 4  # Added professional alignment step
     current_step = 0
 
     # =========================================================================
@@ -220,12 +234,12 @@ def run_arena_pipeline(
         # Print summary
         hybrid_analyzer.print_summary(analysis_results)
 
-        # Get top clips
-        top_clips = analysis_results['clips'][:num_clips]
+        # Get top clips (before alignment)
+        top_clips = analysis_results['clips'][:num_clips * 2]  # Get more for alignment selection
 
         print(f"\n✓ Analysis complete")
         print(f"  Results saved: {analysis_file.name}")
-        print(f"  Selected {len(top_clips)} top clips for generation\n")
+        print(f"  Selected {len(top_clips)} candidates for professional alignment\n")
 
     except Exception as e:
         print(f"❌ Analysis failed: {e}")
@@ -234,7 +248,49 @@ def run_arena_pipeline(
         return 1
 
     # =========================================================================
-    # STEP 3: Clip Generation
+    # STEP 3: Professional Clip Alignment
+    # =========================================================================
+    current_step += 1
+    print(f"{'='*70}")
+    print(f"[{current_step}/{total_steps}] 🎬 Professional Editing (Sentence Alignment)")
+    print(f"{'='*70}\n")
+
+    try:
+        # Initialize professional aligner
+        aligner = ProfessionalClipAligner(max_adjustment=max_adjustment)
+
+        print(f"📝 Aligning clips to sentence boundaries...")
+        print(f"   Max adjustment: {max_adjustment}s\n")
+
+        # Align clips to sentence boundaries
+        aligned_clips = aligner.align_clips(
+            clips=top_clips,
+            transcript_segments=transcript_data.get('segments', []),
+            min_duration=min_duration,
+            max_duration=max_duration
+        )
+
+        # Select top N after alignment
+        top_clips = aligned_clips[:num_clips]
+
+        # Print alignment report
+        print(aligner.generate_alignment_report(top_clips, top_n=min(5, len(top_clips))))
+        print()
+
+        # Save alignment stats
+        alignment_stats = aligner.get_alignment_stats(top_clips)
+        analysis_results['alignment_stats'] = alignment_stats
+
+        # Update analysis file with alignment info
+        hybrid_analyzer.export_results(analysis_results, analysis_file)
+
+    except Exception as e:
+        print(f"⚠️  Alignment failed, using original timestamps: {e}")
+        print(f"   Continuing with clip generation...\n")
+        # Continue with original clips if alignment fails
+
+    # =========================================================================
+    # STEP 4: Clip Generation
     # =========================================================================
     current_step += 1
     print(f"{'='*70}")
