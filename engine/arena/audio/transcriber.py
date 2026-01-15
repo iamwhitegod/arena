@@ -4,6 +4,7 @@ from typing import Dict, List, Optional
 import os
 import subprocess
 import tempfile
+import shutil
 
 
 class Transcriber:
@@ -69,6 +70,14 @@ class Transcriber:
                 "Install with: pip install openai"
             )
 
+        # Check file size (OpenAI limit is 25MB)
+        file_size_mb = audio_path.stat().st_size / (1024 * 1024)
+
+        if file_size_mb > 24:  # Leave 1MB buffer
+            print(f"⚠️  Audio file is {file_size_mb:.1f}MB (limit: 25MB)")
+            print(f"   Chunking audio into smaller segments...")
+            return self._transcribe_chunked(audio_path)
+
         client = OpenAI(api_key=self.api_key)
 
         with open(audio_path, "rb") as audio_file:
@@ -113,6 +122,145 @@ class Transcriber:
             ]
 
         return result
+
+    def _transcribe_chunked(self, audio_path: Path) -> Dict:
+        """
+        Transcribe large audio files by chunking into smaller segments
+
+        Args:
+            audio_path: Path to audio file (>25MB)
+
+        Returns:
+            Merged transcript from all chunks
+        """
+        try:
+            from openai import OpenAI
+        except ImportError:
+            raise ImportError("openai package required")
+
+        client = OpenAI(api_key=self.api_key)
+
+        # Get audio duration
+        duration = self._get_audio_duration(audio_path)
+
+        # Split into 10-minute chunks (safe for 25MB limit at 128kbps)
+        chunk_duration = 600  # 10 minutes in seconds
+        num_chunks = int(duration / chunk_duration) + 1
+
+        print(f"   Splitting {duration/60:.1f} minutes into {num_chunks} chunks...")
+
+        all_words = []
+        all_segments = []
+        full_text = []
+
+        temp_dir = Path(tempfile.mkdtemp())
+
+        try:
+            for i in range(num_chunks):
+                start_time = i * chunk_duration
+                end_time = min((i + 1) * chunk_duration, duration)
+
+                # Extract chunk
+                chunk_path = temp_dir / f"chunk_{i:03d}.mp3"
+                self._extract_audio_chunk(audio_path, chunk_path, start_time, end_time)
+
+                print(f"   Transcribing chunk {i+1}/{num_chunks} ({start_time/60:.1f}-{end_time/60:.1f} min)...")
+
+                # Transcribe chunk
+                with open(chunk_path, "rb") as audio_file:
+                    transcript = client.audio.transcriptions.create(
+                        model="whisper-1",
+                        file=audio_file,
+                        response_format="verbose_json",
+                        timestamp_granularities=["word", "segment"]
+                    )
+
+                # Merge results with timestamp offset
+                offset = start_time
+
+                if hasattr(transcript, 'words') and transcript.words:
+                    for word in transcript.words:
+                        all_words.append({
+                            "word": word.word,
+                            "start": word.start + offset,
+                            "end": word.end + offset
+                        })
+
+                if hasattr(transcript, 'segments') and transcript.segments:
+                    for segment in transcript.segments:
+                        all_segments.append({
+                            "id": len(all_segments),
+                            "start": segment.start + offset,
+                            "end": segment.end + offset,
+                            "text": segment.text
+                        })
+
+                full_text.append(transcript.text)
+
+                # Clean up chunk file
+                chunk_path.unlink()
+
+            print(f"   ✓ Transcription complete ({num_chunks} chunks merged)\n")
+
+            return {
+                "text": " ".join(full_text),
+                "language": getattr(transcript, 'language', 'en'),
+                "duration": duration,
+                "words": all_words,
+                "segments": all_segments
+            }
+
+        finally:
+            # Clean up temp directory
+            if temp_dir.exists():
+                import shutil
+                shutil.rmtree(temp_dir)
+
+    def _get_audio_duration(self, audio_path: Path) -> float:
+        """Get audio duration in seconds using ffprobe"""
+        command = [
+            "ffprobe",
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            str(audio_path)
+        ]
+
+        result = subprocess.run(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+
+        return float(result.stdout.strip())
+
+    def _extract_audio_chunk(
+        self,
+        audio_path: Path,
+        output_path: Path,
+        start_time: float,
+        end_time: float
+    ):
+        """Extract a specific time range from audio file"""
+        duration = end_time - start_time
+
+        command = [
+            "ffmpeg",
+            "-i", str(audio_path),
+            "-ss", str(start_time),
+            "-t", str(duration),
+            "-acodec", "copy",  # Copy codec (faster)
+            "-y",
+            str(output_path)
+        ]
+
+        subprocess.run(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True
+        )
 
     def _transcribe_local(self, audio_path: Path) -> Dict:
         """Transcribe using local Whisper model"""
