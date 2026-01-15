@@ -345,10 +345,15 @@ def run_arena_pipeline(
             pbar.close()
             print()
 
+        # Calculate successful clips count
+        successful = sum(1 for r in clip_results if r.get('success'))
+
         # Generate thumbnails and metadata
         if HAS_TQDM:
             print(f"\n📸 Generating thumbnails and metadata...")
             thumb_pbar = tqdm(total=successful, desc="📸 Thumbnails", unit="thumb")
+        else:
+            print(f"\n📸 Generating thumbnails and metadata...")
 
         for i, (clip, result) in enumerate(zip(top_clips, clip_results), 1):
             if result.get('success'):
@@ -396,7 +401,6 @@ def run_arena_pipeline(
             print()
 
         # Summary
-        successful = sum(1 for r in clip_results if r.get('success'))
         failed = len(clip_results) - successful
         total_size = sum(r.get('size_mb', 0) for r in clip_results if r.get('success'))
 
