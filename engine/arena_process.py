@@ -29,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from arena.audio.transcriber import Transcriber
 from arena.audio.energy import AudioEnergyAnalyzer
+from arena.audio.enhance import AudioEnhancer
 from arena.ai.analyzer import TranscriptAnalyzer
 from arena.ai.hybrid import HybridAnalyzer
 from arena.clipping.generator import ClipGenerator
@@ -45,7 +46,9 @@ def run_arena_pipeline(
     use_cached_transcript: bool = True,
     fast_mode: bool = False,
     padding: float = 0.0,
-    max_adjustment: float = 10.0
+    max_adjustment: float = 10.0,
+    enhance_audio: bool = True,
+    use_scene_detection: bool = False
 ):
     """
     Run the complete Arena pipeline
@@ -60,6 +63,8 @@ def run_arena_pipeline(
         fast_mode: Use fast clip extraction (stream copy)
         padding: Seconds to add before/after each clip
         max_adjustment: Max seconds to adjust clip boundaries for sentence alignment
+        enhance_audio: Apply AI-powered audio enhancement (default: True)
+        use_scene_detection: Enable scene detection for cut point optimization (default: False)
     """
 
     print(f"\n{'='*70}")
@@ -125,6 +130,51 @@ def run_arena_pipeline(
     print(f"{'='*70}\n")
 
     transcript_cache = cache_dir / f"{video_file.stem}_transcript.json"
+    enhanced_audio_path = cache_dir / f"{video_file.stem}_enhanced.wav"
+
+    # Check if we should enhance audio
+    audio_to_transcribe = video_file
+
+    if enhance_audio:
+        # Check if enhanced audio exists in cache
+        if enhanced_audio_path.exists():
+            print(f"✓ Using cached enhanced audio: {enhanced_audio_path.name}\n")
+            audio_to_transcribe = enhanced_audio_path
+        else:
+            print("🎧 Enhancing audio quality...")
+            print("   Applying noise reduction and volume normalization...")
+
+            try:
+                # Initialize audio enhancer (local mode)
+                enhancer = AudioEnhancer(provider="local")
+
+                # Extract and enhance audio
+                temp_audio = cache_dir / f"{video_file.stem}_temp.wav"
+
+                # Extract audio from video first
+                import subprocess
+                subprocess.run([
+                    "ffmpeg", "-i", str(video_file),
+                    "-vn", "-acodec", "pcm_s16le",
+                    "-ar", "44100", "-ac", "2",
+                    "-y", str(temp_audio)
+                ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+
+                # Enhance the extracted audio
+                enhancer.enhance(temp_audio, enhanced_audio_path)
+
+                # Clean up temp file
+                temp_audio.unlink()
+
+                audio_to_transcribe = enhanced_audio_path
+
+                print(f"✓ Audio enhanced and cached")
+                print(f"  Enhanced audio: {enhanced_audio_path.name}\n")
+
+            except Exception as e:
+                print(f"⚠️  Audio enhancement failed: {e}")
+                print(f"   Continuing with original audio...\n")
+                audio_to_transcribe = video_file
 
     if use_cached_transcript and transcript_cache.exists():
         print(f"✓ Using cached transcript: {transcript_cache.name}")
@@ -139,7 +189,7 @@ def run_arena_pipeline(
                     transcriber = Transcriber(api_key=api_key, mode='api')
                     pbar.update(20)
                     transcript_data = transcriber.transcribe(
-                        video_file,
+                        audio_to_transcribe,
                         cache_dir=cache_dir
                     )
                     pbar.update(80)
@@ -163,7 +213,7 @@ def run_arena_pipeline(
             try:
                 transcriber = Transcriber(api_key=api_key, mode='api')
                 transcript_data = transcriber.transcribe(
-                    video_file,
+                    audio_to_transcribe,  # Use enhanced audio if available
                     cache_dir=cache_dir
                 )
 
@@ -257,17 +307,25 @@ def run_arena_pipeline(
 
     try:
         # Initialize professional aligner
-        aligner = ProfessionalClipAligner(max_adjustment=max_adjustment)
+        aligner = ProfessionalClipAligner(
+            max_adjustment=max_adjustment,
+            use_scene_detection=use_scene_detection
+        )
 
         print(f"📝 Aligning clips to sentence boundaries...")
-        print(f"   Max adjustment: {max_adjustment}s\n")
+        print(f"   Max adjustment: {max_adjustment}s")
+        if use_scene_detection:
+            print(f"   Scene detection: enabled")
+        print(f"   Regenerating titles for adjusted clips...\n")
 
-        # Align clips to sentence boundaries
+        # Align clips to sentence boundaries and regenerate titles
         aligned_clips = aligner.align_clips(
             clips=top_clips,
             transcript_segments=transcript_data.get('segments', []),
             min_duration=min_duration,
-            max_duration=max_duration
+            max_duration=max_duration,
+            analyzer=ai_analyzer,
+            video_path=video_file if use_scene_detection else None
         )
 
         # Select top N after alignment
@@ -298,8 +356,14 @@ def run_arena_pipeline(
     print(f"{'='*70}\n")
 
     try:
-        # Initialize clip generator
-        generator = ClipGenerator(video_file)
+        # Initialize clip generator with enhanced audio if available
+        enhanced_audio_for_clips = None
+        if enhance_audio and audio_to_transcribe != video_file:
+            # Enhanced audio was used and is available
+            enhanced_audio_for_clips = audio_to_transcribe
+            print(f"🎧 Using enhanced audio for clips: {enhanced_audio_for_clips.name}\n")
+
+        generator = ClipGenerator(video_file, enhanced_audio_path=enhanced_audio_for_clips)
 
         # Get video info
         video_info = generator.get_video_info()

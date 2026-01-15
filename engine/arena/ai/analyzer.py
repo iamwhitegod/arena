@@ -136,8 +136,8 @@ class TranscriptAnalyzer:
             duration_guidance = f"Each clip should be no longer than {max_duration} seconds."
             duration_constraint = f"- Ensure clips are no longer than {max_duration} seconds"
         else:
-            duration_guidance = "Identify complete thoughts, stories, or insights - let the content dictate the length."
-            duration_constraint = "- Focus on complete, self-contained ideas regardless of length"
+            duration_guidance = "Identify complete thoughts, stories, or insights. Each clip MUST contain a full arc: setup/context → core statement → resolution/conclusion. A complete standalone idea typically requires at least 15-20 seconds to establish context and deliver value. Let the natural boundaries of the content determine the exact length, but ensure every clip has complete context."
+            duration_constraint = "- Each clip must be a complete, self-contained idea with full context\n- Include setup, development, and conclusion\n- Do NOT cut mid-thought or mid-explanation\n- Clips should be substantial enough that a viewer can understand and appreciate the idea without prior context"
 
         return f"""Analyze this video transcript and identify the {target_clips} most interesting segments that would make engaging short clips for social media.
 
@@ -204,7 +204,17 @@ Important:
             # Calculate duration
             duration = clip["end_time"] - clip["start_time"]
 
-            # Validate duration only if constraints are specified
+            # Sanity filter: Remove physically impossible clips
+            # This is NOT a user constraint - it's quality control
+            # A clip under 8 seconds cannot contain:
+            # - Setup/context for the idea
+            # - The core statement/insight
+            # - Resolution/conclusion
+            # This filters AI mistakes, not enforces user preferences
+            if duration < 8.0:
+                continue
+
+            # Validate user-specified duration constraints (if provided)
             if min_duration is not None and duration < min_duration:
                 continue
             if max_duration is not None and duration > max_duration:
@@ -279,3 +289,32 @@ Important:
             return [tag.strip().lstrip('#') for tag in tags[:max_tags]]
         except:
             return []
+
+    def extract_transcript_text(
+        self,
+        transcript_segments: List[Dict],
+        start_time: float,
+        end_time: float
+    ) -> str:
+        """
+        Extract transcript text for a specific time range
+
+        Args:
+            transcript_segments: List of transcript segments with 'start', 'end', 'text'
+            start_time: Start time in seconds
+            end_time: End time in seconds
+
+        Returns:
+            Concatenated transcript text for the time range
+        """
+        text_parts = []
+
+        for segment in transcript_segments:
+            seg_start = segment.get('start', 0)
+            seg_end = segment.get('end', 0)
+
+            # Check if segment overlaps with our time range
+            if seg_start < end_time and seg_end > start_time:
+                text_parts.append(segment.get('text', '').strip())
+
+        return ' '.join(text_parts)

@@ -1,7 +1,11 @@
 """Professional clip alignment for A-list editing quality"""
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING
 from arena.ai.sentence_detector import SentenceBoundaryDetector
+from arena.video.scene_detector import SceneDetector
+
+if TYPE_CHECKING:
+    from arena.ai.analyzer import TranscriptAnalyzer
 
 
 class ProfessionalClipAligner:
@@ -18,33 +22,43 @@ class ProfessionalClipAligner:
     def __init__(
         self,
         sentence_detector: Optional[SentenceBoundaryDetector] = None,
-        max_adjustment: float = 10.0
+        scene_detector: Optional[SceneDetector] = None,
+        max_adjustment: float = 10.0,
+        use_scene_detection: bool = False
     ):
         """
         Initialize professional aligner
 
         Args:
             sentence_detector: SentenceBoundaryDetector instance (creates default if None)
+            scene_detector: SceneDetector instance for visual transition detection
             max_adjustment: Maximum seconds to adjust start/end for alignment (default: 10s)
+            use_scene_detection: Enable scene detection for cut point optimization
         """
         self.detector = sentence_detector or SentenceBoundaryDetector()
+        self.scene_detector = scene_detector or SceneDetector(threshold=0.4)
         self.max_adjustment = max_adjustment
+        self.use_scene_detection = use_scene_detection
 
     def align_clips(
         self,
         clips: List[Dict],
         transcript_segments: List[Dict],
         min_duration: Optional[float] = None,
-        max_duration: Optional[float] = None
+        max_duration: Optional[float] = None,
+        analyzer: Optional['TranscriptAnalyzer'] = None,
+        video_path: Optional[Path] = None
     ) -> List[Dict]:
         """
-        Align all clips to sentence boundaries
+        Align all clips to sentence boundaries and optionally scene changes
 
         Args:
             clips: List of clips from analysis with start_time, end_time
             transcript_segments: List of transcript segments with timestamps
             min_duration: Optional minimum duration constraint
             max_duration: Optional maximum duration constraint
+            analyzer: Optional TranscriptAnalyzer to regenerate titles after alignment
+            video_path: Optional video path for scene detection
 
         Returns:
             List of professionally aligned clips with metadata
@@ -57,6 +71,26 @@ class ProfessionalClipAligner:
             return clips
 
         print(f"🔍 Found {len(boundaries)} sentence boundaries")
+
+        # Optionally detect scene changes
+        scene_boundaries = []
+        if self.use_scene_detection and video_path:
+            try:
+                print(f"🎬 Detecting scene changes...")
+                scenes = self.scene_detector.detect_scenes(video_path, min_scene_duration=2.0)
+                scene_boundaries = [{'time': s['time'], 'type': 'scene_change'} for s in scenes]
+                print(f"   Found {len(scene_boundaries)} scene changes")
+
+                # Mark boundaries that align with both sentences AND scenes
+                for boundary in boundaries:
+                    for scene in scene_boundaries:
+                        if abs(boundary['time'] - scene['time']) < 1.0:  # Within 1 second
+                            boundary['double_boundary'] = True
+                            break
+
+            except Exception as e:
+                print(f"⚠️  Scene detection failed: {e}")
+                print(f"   Continuing with sentence boundaries only")
 
         aligned_clips = []
         adjustments_made = 0
@@ -84,6 +118,25 @@ class ProfessionalClipAligner:
                 'alignment': metadata,
                 'professionally_aligned': metadata['start_aligned'] or metadata['end_aligned']
             })
+
+            # Regenerate title based on aligned content if analyzer provided
+            if analyzer and (metadata['start_aligned'] or metadata['end_aligned']):
+                try:
+                    # Extract transcript text for the aligned time range
+                    aligned_text = analyzer.extract_transcript_text(
+                        transcript_segments,
+                        aligned_start,
+                        aligned_end
+                    )
+
+                    # Generate new title based on actual aligned content
+                    if aligned_text:
+                        new_title = analyzer.generate_clip_title(aligned_text)
+                        aligned_clip['title'] = new_title
+                        aligned_clip['original_title'] = clip.get('title', '')
+                except Exception as e:
+                    # If title regeneration fails, keep original
+                    print(f"   ⚠️  Failed to regenerate title for clip {i}: {e}")
 
             aligned_clips.append(aligned_clip)
 

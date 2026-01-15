@@ -208,6 +208,16 @@ class SentenceBoundaryDetector:
         if adjusted_end <= adjusted_start:
             adjusted_end = end_time
 
+        # Check if alignment dramatically reduced clip duration
+        # If alignment shrinks clip by >80%, it's likely found bad boundaries - revert to original
+        original_duration = end_time - start_time
+        adjusted_duration = adjusted_end - adjusted_start
+
+        if original_duration > 0 and adjusted_duration < (original_duration * 0.2):
+            # Alignment destroyed the clip - revert to original timestamps
+            adjusted_start = start_time
+            adjusted_end = end_time
+
         # Apply duration constraints only if specified
         duration = adjusted_end - adjusted_start
 
@@ -228,6 +238,15 @@ class SentenceBoundaryDetector:
             )
             if end_trim:
                 adjusted_end = end_trim['time']
+
+        # Final sanity check: If alignment resulted in absurdly short clip, revert entirely
+        # This catches cases where bad sentence boundaries created unusable clips
+        final_duration = adjusted_end - adjusted_start
+        if final_duration < 8.0:
+            # Alignment failed to maintain viable clip - use original timestamps
+            adjusted_start = start_time
+            adjusted_end = end_time
+            final_duration = original_duration
 
         # Metadata about adjustments
         metadata = {

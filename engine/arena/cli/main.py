@@ -143,6 +143,16 @@ Documentation:
         default=0.3,
         help='Energy boost weight 0-1 (default: 0.3)'
     )
+    process_parser.add_argument(
+        '--no-enhance',
+        action='store_true',
+        help='Skip audio enhancement (use original audio)'
+    )
+    process_parser.add_argument(
+        '--scene-detection',
+        action='store_true',
+        help='Enable scene detection for better cut point alignment'
+    )
 
     # =========================================================================
     # arena transcribe

@@ -10,17 +10,24 @@ import re
 class ClipGenerator:
     """Generates video clips from selected segments using FFmpeg"""
 
-    def __init__(self, video_path: Path):
+    def __init__(self, video_path: Path, enhanced_audio_path: Optional[Path] = None):
         """
         Initialize clip generator
 
         Args:
             video_path: Path to source video file
+            enhanced_audio_path: Optional path to enhanced audio file (used instead of video's audio)
         """
         self.video_path = Path(video_path)
+        self.enhanced_audio_path = Path(enhanced_audio_path) if enhanced_audio_path else None
         self._video_info = None
         self._validate_video()
         self._check_ffmpeg()
+
+        if self.enhanced_audio_path and not self.enhanced_audio_path.exists():
+            print(f"⚠️  Enhanced audio not found: {self.enhanced_audio_path}")
+            print(f"   Using original video audio instead")
+            self.enhanced_audio_path = None
 
     def _validate_video(self) -> None:
         """Validate that video file exists"""
@@ -231,20 +238,42 @@ class ClipGenerator:
 
         # Build FFmpeg command
         # Using -ss before -i for fast seeking
-        command = [
-            "ffmpeg",
-            "-ss", str(actual_start),           # Seek to start (fast seek)
-            "-i", str(self.video_path),         # Input file
-            "-t", str(actual_duration),         # Duration
-            "-c:v", codec,                      # Video codec
-            "-crf", str(crf),                   # Quality
-            "-preset", preset,                  # Encoding speed
-            "-c:a", audio_codec,                # Audio codec
-            "-b:a", "128k",                     # Audio bitrate
-            "-movflags", "+faststart",          # Enable fast start for web
-            "-y",                               # Overwrite output
-            str(output_path)
-        ]
+        if self.enhanced_audio_path:
+            # Dual input: video from original, audio from enhanced file
+            command = [
+                "ffmpeg",
+                "-ss", str(actual_start),           # Seek to start in video
+                "-i", str(self.video_path),         # Input video file
+                "-ss", str(actual_start),           # Seek to same position in audio
+                "-i", str(self.enhanced_audio_path), # Input enhanced audio file
+                "-t", str(actual_duration),         # Duration
+                "-map", "0:v",                      # Use video from first input
+                "-map", "1:a",                      # Use audio from second input (enhanced)
+                "-c:v", codec,                      # Video codec
+                "-crf", str(crf),                   # Quality
+                "-preset", preset,                  # Encoding speed
+                "-c:a", audio_codec,                # Audio codec
+                "-b:a", "128k",                     # Audio bitrate
+                "-movflags", "+faststart",          # Enable fast start for web
+                "-y",                               # Overwrite output
+                str(output_path)
+            ]
+        else:
+            # Single input: both video and audio from original
+            command = [
+                "ffmpeg",
+                "-ss", str(actual_start),           # Seek to start (fast seek)
+                "-i", str(self.video_path),         # Input file
+                "-t", str(actual_duration),         # Duration
+                "-c:v", codec,                      # Video codec
+                "-crf", str(crf),                   # Quality
+                "-preset", preset,                  # Encoding speed
+                "-c:a", audio_codec,                # Audio codec
+                "-b:a", "128k",                     # Audio bitrate
+                "-movflags", "+faststart",          # Enable fast start for web
+                "-y",                               # Overwrite output
+                str(output_path)
+            ]
 
         try:
             # Run FFmpeg
@@ -310,16 +339,36 @@ class ClipGenerator:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        command = [
-            "ffmpeg",
-            "-ss", str(actual_start),
-            "-i", str(self.video_path),
-            "-t", str(actual_duration),
-            "-c", "copy",                       # Copy streams (no re-encode)
-            "-avoid_negative_ts", "1",          # Handle timing issues
-            "-y",
-            str(output_path)
-        ]
+        if self.enhanced_audio_path:
+            # Fast mode with enhanced audio: copy video, encode audio
+            command = [
+                "ffmpeg",
+                "-ss", str(actual_start),
+                "-i", str(self.video_path),
+                "-ss", str(actual_start),
+                "-i", str(self.enhanced_audio_path),
+                "-t", str(actual_duration),
+                "-map", "0:v",                      # Video from original
+                "-map", "1:a",                      # Audio from enhanced
+                "-c:v", "copy",                     # Copy video (fast)
+                "-c:a", "aac",                      # Encode audio (required for enhanced)
+                "-b:a", "128k",
+                "-avoid_negative_ts", "1",
+                "-y",
+                str(output_path)
+            ]
+        else:
+            # Pure fast mode: copy both streams
+            command = [
+                "ffmpeg",
+                "-ss", str(actual_start),
+                "-i", str(self.video_path),
+                "-t", str(actual_duration),
+                "-c", "copy",                       # Copy streams (no re-encode)
+                "-avoid_negative_ts", "1",          # Handle timing issues
+                "-y",
+                str(output_path)
+            ]
 
         try:
             subprocess.run(

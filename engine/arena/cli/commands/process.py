@@ -19,5 +19,7 @@ def run_process(args):
         use_cached_transcript=not args.no_cache,
         fast_mode=args.fast,
         padding=args.padding,
-        max_adjustment=args.max_adjustment
+        max_adjustment=args.max_adjustment,
+        enhance_audio=not args.no_enhance,
+        use_scene_detection=args.scene_detection
     )
