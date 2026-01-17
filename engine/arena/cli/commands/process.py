@@ -21,5 +21,8 @@ def run_process(args):
         padding=args.padding,
         max_adjustment=args.max_adjustment,
         enhance_audio=not args.no_enhance,
-        use_scene_detection=args.scene_detection
+        use_scene_detection=args.scene_detection,
+        use_4layer=getattr(args, 'use_4layer', False),
+        export_editorial_layers=getattr(args, 'export_editorial_layers', False),
+        editorial_model=getattr(args, 'editorial_model', 'gpt-4o')
     )

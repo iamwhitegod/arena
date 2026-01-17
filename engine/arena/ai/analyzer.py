@@ -18,27 +18,34 @@ class TranscriptAnalyzer:
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.model = model
 
+        # Chunking constants for handling large transcripts
+        self.MAX_TOKENS_PER_REQUEST = 24000      # 20% safety margin below 30k limit
+        self.PROMPT_OVERHEAD_TOKENS = 3000       # System message + instructions
+        self.MAX_TRANSCRIPT_TOKENS = 21000       # Max for transcript content
+        self.DEFAULT_OVERLAP_RATIO = 0.10        # 10% segment overlap
+        self.DEDUP_THRESHOLD = 0.7              # 70% overlap = duplicate
+
         if not self.api_key:
             raise ValueError("OpenAI API key is required")
 
-    def analyze_transcript(
+    def _analyze_single_chunk(
         self,
-        transcript_data: Dict,
-        target_clips: int = 10,
-        min_duration: Optional[int] = None,
-        max_duration: Optional[int] = None
+        formatted_transcript: str,
+        target_clips: int,
+        min_duration: Optional[int],
+        max_duration: Optional[int]
     ) -> List[Dict]:
         """
-        Analyze transcript to identify interesting segments
+        Analyze a single transcript chunk with OpenAI
 
         Args:
-            transcript_data: Transcript dict with 'text' and 'segments'
+            formatted_transcript: Formatted transcript with timestamps
             target_clips: Number of clips to identify
-            min_duration: Optional minimum clip duration in seconds (None = no constraint)
-            max_duration: Optional maximum clip duration in seconds (None = no constraint)
+            min_duration: Optional minimum clip duration in seconds
+            max_duration: Optional maximum clip duration in seconds
 
         Returns:
-            List of candidate segments with timestamps, titles, and reasons
+            List of candidate clips
         """
         try:
             from openai import OpenAI
@@ -48,11 +55,6 @@ class TranscriptAnalyzer:
             )
 
         client = OpenAI(api_key=self.api_key)
-
-        # Format transcript with timestamps for better context
-        formatted_transcript = self._format_transcript_with_timestamps(
-            transcript_data.get("segments", [])
-        )
 
         # Create the analysis prompt
         prompt = self._create_analysis_prompt(
@@ -96,7 +98,106 @@ class TranscriptAnalyzer:
             return validated_clips
 
         except Exception as e:
-            raise RuntimeError(f"Failed to analyze transcript with AI: {str(e)}")
+            raise RuntimeError(f"Failed to analyze transcript chunk with AI: {str(e)}")
+
+    def analyze_transcript(
+        self,
+        transcript_data: Dict,
+        target_clips: int = 10,
+        min_duration: Optional[int] = None,
+        max_duration: Optional[int] = None
+    ) -> List[Dict]:
+        """
+        Analyze transcript to identify interesting segments
+        Automatically chunks large transcripts to handle OpenAI rate limits
+
+        Args:
+            transcript_data: Transcript dict with 'text' and 'segments'
+            target_clips: Number of clips to identify
+            min_duration: Optional minimum clip duration in seconds (None = no constraint)
+            max_duration: Optional maximum clip duration in seconds (None = no constraint)
+
+        Returns:
+            List of candidate segments with timestamps, titles, and reasons
+        """
+        import time
+
+        segments = transcript_data.get("segments", [])
+
+        # Format transcript with timestamps for better context
+        formatted_transcript = self._format_transcript_with_timestamps(segments)
+
+        # Check if chunking is needed
+        total_tokens = self._estimate_tokens(formatted_transcript)
+
+        if total_tokens <= self.MAX_TRANSCRIPT_TOKENS:
+            # No chunking needed - use existing method
+            return self._analyze_single_chunk(
+                formatted_transcript,
+                target_clips,
+                min_duration,
+                max_duration
+            )
+
+        # Chunking needed
+        print(f"⚠️  Transcript is large ({total_tokens:,} tokens)")
+        print(f"   Splitting into chunks (max {self.MAX_TRANSCRIPT_TOKENS:,} tokens each)...\n")
+
+        chunks = self._chunk_segments(
+            segments,
+            self.MAX_TRANSCRIPT_TOKENS,
+            overlap_ratio=self.DEFAULT_OVERLAP_RATIO
+        )
+
+        print(f"   Created {len(chunks)} chunks\n")
+
+        chunk_results = []
+
+        for i, chunk_segments in enumerate(chunks, 1):
+            print(f"   Analyzing chunk {i}/{len(chunks)}...")
+
+            # Format this chunk
+            chunk_transcript = self._format_transcript_with_timestamps(chunk_segments)
+            chunk_tokens = self._estimate_tokens(chunk_transcript)
+            print(f"   Chunk {i}: {len(chunk_segments)} segments, {chunk_tokens:,} tokens")
+
+            # Analyze this chunk
+            # Ask for more clips per chunk to account for deduplication
+            chunk_target = target_clips if len(chunks) == 1 else target_clips * 2
+
+            try:
+                chunk_clips = self._analyze_single_chunk(
+                    chunk_transcript,
+                    chunk_target,
+                    min_duration,
+                    max_duration
+                )
+                chunk_results.append(chunk_clips)
+                print(f"   ✓ Found {len(chunk_clips)} clips in chunk {i}\n")
+
+            except Exception as e:
+                print(f"   ⚠️  Chunk {i} failed: {e}")
+                # Continue with other chunks
+                chunk_results.append([])
+
+            # Rate limit: Wait 60 seconds between chunks
+            if i < len(chunks):
+                print(f"   ⏳ Waiting 60s for rate limit...")
+                time.sleep(60)
+                print()
+
+        # Merge results
+        print(f"   Merging {len(chunk_results)} chunks...")
+        merged_clips = self._merge_chunk_results(
+            chunk_results,
+            dedup_threshold=self.DEDUP_THRESHOLD
+        )
+        print(f"   ✓ After deduplication: {len(merged_clips)} unique clips\n")
+
+        # Take top N by interest_score
+        final_clips = merged_clips[:target_clips]
+
+        return final_clips
 
     def _format_transcript_with_timestamps(self, segments: List[Dict]) -> str:
         """Format transcript segments with timestamps"""
@@ -235,6 +336,174 @@ Important:
             validated.append(validated_clip)
 
         return validated
+
+    def _chunk_segments(
+        self,
+        segments: List[Dict],
+        max_tokens: int,
+        overlap_ratio: float = 0.10
+    ) -> List[List[Dict]]:
+        """
+        Split segments into chunks based on token count with overlap
+
+        Args:
+            segments: List of transcript segments
+            max_tokens: Maximum tokens per chunk
+            overlap_ratio: Ratio of overlap between chunks (0.0 to 1.0)
+
+        Returns:
+            List of segment chunks
+        """
+        chunks = []
+        current_chunk = []
+        current_tokens = 0
+        overlap_segments = []
+
+        for i, segment in enumerate(segments):
+            # Format segment with timestamp
+            formatted = f"[{self._format_timestamp(segment['start'])}] {segment['text']}\n"
+            segment_tokens = self._estimate_tokens(formatted)
+
+            # Check if adding this segment would exceed limit
+            if current_tokens + segment_tokens > max_tokens and current_chunk:
+                # Save current chunk
+                chunks.append(current_chunk)
+
+                # Calculate overlap: last N% of segments
+                overlap_size = int(len(current_chunk) * overlap_ratio)
+                overlap_segments = current_chunk[-overlap_size:] if overlap_size > 0 else []
+
+                # Start new chunk with overlap
+                current_chunk = overlap_segments.copy()
+                current_tokens = sum(
+                    self._estimate_tokens(
+                        f"[{self._format_timestamp(s['start'])}] {s['text']}\n"
+                    )
+                    for s in current_chunk
+                )
+
+            # Add segment to current chunk
+            current_chunk.append(segment)
+            current_tokens += segment_tokens
+
+        # Add final chunk
+        if current_chunk:
+            chunks.append(current_chunk)
+
+        return chunks
+
+    def _merge_chunk_results(
+        self,
+        chunk_results: List[List[Dict]],
+        dedup_threshold: float = 0.7
+    ) -> List[Dict]:
+        """
+        Merge clips from multiple chunks, removing duplicates
+
+        Args:
+            chunk_results: List of clip lists from each chunk
+            dedup_threshold: Overlap threshold for considering clips as duplicates
+
+        Returns:
+            Merged and deduplicated list of clips
+        """
+        all_clips = []
+        for chunk_idx, clips in enumerate(chunk_results):
+            for clip in clips:
+                clip['source_chunk'] = chunk_idx
+                all_clips.append(clip)
+
+        # Sort by start time
+        all_clips.sort(key=lambda x: x['start_time'])
+
+        # Deduplicate
+        deduped = []
+        skip_indices = set()
+
+        for i, clip1 in enumerate(all_clips):
+            if i in skip_indices:
+                continue
+
+            # Check for overlaps with later clips
+            for j in range(i + 1, len(all_clips)):
+                if j in skip_indices:
+                    continue
+
+                clip2 = all_clips[j]
+
+                # If clip2 starts after clip1 ends, no more overlaps possible
+                if clip2['start_time'] > clip1['end_time']:
+                    break
+
+                # Calculate overlap
+                overlap = self._calculate_overlap(clip1, clip2)
+
+                if overlap > dedup_threshold:
+                    # Keep the one with higher score
+                    if clip2['interest_score'] > clip1['interest_score']:
+                        skip_indices.add(i)
+                        break  # clip1 is duplicate, move to next
+                    else:
+                        skip_indices.add(j)  # clip2 is duplicate
+
+            if i not in skip_indices:
+                deduped.append(clip1)
+
+        # Re-sort by interest_score
+        deduped.sort(key=lambda x: x['interest_score'], reverse=True)
+
+        # Re-assign IDs
+        for i, clip in enumerate(deduped):
+            clip['id'] = f"clip_{i+1:03d}"
+
+        return deduped
+
+    def _estimate_tokens(self, text: str) -> int:
+        """
+        Estimate token count for text using tiktoken
+
+        Args:
+            text: Text to estimate tokens for
+
+        Returns:
+            Estimated token count
+        """
+        try:
+            import tiktoken
+            encoding = tiktoken.encoding_for_model(self.model)
+            return len(encoding.encode(text))
+        except ImportError:
+            # Fallback: rough estimation (1 token ~= 4 characters)
+            return len(text) // 4
+        except Exception:
+            # Fallback for unknown models
+            return len(text) // 4
+
+    def _calculate_overlap(self, clip1: Dict, clip2: Dict) -> float:
+        """
+        Calculate temporal overlap ratio between two clips
+
+        Args:
+            clip1: First clip with start_time and end_time
+            clip2: Second clip with start_time and end_time
+
+        Returns:
+            Overlap ratio (0.0 to 1.0)
+        """
+        start = max(clip1['start_time'], clip2['start_time'])
+        end = min(clip1['end_time'], clip2['end_time'])
+
+        if start >= end:
+            return 0.0
+
+        overlap_duration = end - start
+        clip1_duration = clip1['end_time'] - clip1['start_time']
+        clip2_duration = clip2['end_time'] - clip2['start_time']
+
+        # Use smaller clip duration as denominator
+        min_duration = min(clip1_duration, clip2_duration)
+
+        return overlap_duration / min_duration if min_duration > 0 else 0.0
 
     def generate_clip_title(self, transcript_segment: str) -> str:
         """Generate an engaging title for a clip"""

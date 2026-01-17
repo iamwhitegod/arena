@@ -3,6 +3,7 @@ import path from 'path';
 import os from 'os';
 
 export interface GlobalConfig {
+  [key: string]: any; // Allow dynamic key access
   openai_api_key?: string;
   whisper_mode?: 'api' | 'local';
   clip_duration?: [number, number];

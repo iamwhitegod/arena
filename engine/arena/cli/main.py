@@ -153,6 +153,22 @@ Documentation:
         action='store_true',
         help='Enable scene detection for better cut point alignment'
     )
+    process_parser.add_argument(
+        '--use-4layer',
+        action='store_true',
+        help='Use 4-layer editorial system (higher quality, slower, more expensive)'
+    )
+    process_parser.add_argument(
+        '--editorial-model',
+        choices=['gpt-4o', 'gpt-4o-mini'],
+        default='gpt-4o',
+        help='Model to use for Layers 1-2 (default: gpt-4o, mini saves ~60%% cost)'
+    )
+    process_parser.add_argument(
+        '--export-editorial-layers',
+        action='store_true',
+        help='Export intermediate results from each editorial layer (requires --use-4layer)'
+    )
 
     # =========================================================================
     # arena transcribe

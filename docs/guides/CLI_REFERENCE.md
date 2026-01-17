@@ -62,7 +62,7 @@ Run the complete pipeline: transcribe → analyze → generate clips
 arena process <video> [options]
 ```
 
-**Options:**
+**Core Options:**
 - `-o, --output DIR` - Output directory (default: output)
 - `-n, --num-clips N` - Number of clips to generate (default: 5)
 - `--min SECONDS` - Minimum clip duration (default: 30)
@@ -72,23 +72,55 @@ arena process <video> [options]
 - `--no-cache` - Force re-transcription
 - `--energy-weight 0-1` - Energy boost weight (default: 0.3)
 
+**4-Layer Editorial System (New!):**
+- `--use-4layer` - Use 4-layer editorial system for professional quality
+- `--editorial-model {gpt-4o,gpt-4o-mini}` - Model for Layers 1-2 (default: gpt-4o)
+- `--export-editorial-layers` - Export intermediate results for debugging
+
 **Examples:**
+
 ```bash
-# Basic usage - generates 5 clips
+# Standard mode - fast and cheap
 arena process video.mp4
 
+# 4-Layer mode - professional quality
+arena process video.mp4 --use-4layer
+
+# 4-Layer with cost optimization (recommended)
+arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini
+
 # Generate 10 short clips for social media
-arena process video.mp4 -n 10 --min 15 --max 30
+arena process video.mp4 --use-4layer -n 10 --min 15 --max 30
 
 # Fast mode for quick iteration
 arena process video.mp4 --fast
 
 # Custom output directory
-arena process video.mp4 -o my_clips
+arena process video.mp4 --use-4layer -o my_clips
 
-# More padding for smoother transitions
-arena process video.mp4 --padding 2.0
+# Debug mode - export all layer results
+arena process video.mp4 --use-4layer --export-editorial-layers
+
+# Production workflow
+arena process podcast.mp4 \
+  --use-4layer \
+  --editorial-model gpt-4o-mini \
+  -n 8 \
+  --min 20 \
+  --max 60 \
+  -o podcast_clips
 ```
+
+**4-Layer vs Standard Mode:**
+
+| Feature | Standard | 4-Layer |
+|---------|----------|---------|
+| Quality | Good | Professional |
+| Standalone context | Basic | Validated |
+| Titles | AI-generated | Professional |
+| Cost per video | $0.05-0.10 | $0.15-0.60 |
+| Speed | 2-4 min | 5-8 min |
+| Best for | Testing | Production |
 
 ---
 

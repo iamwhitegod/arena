@@ -1,30 +1,31 @@
+/**
+ * Analyze command - Analyze video without generating clips
+ * Fast preview of what clips would be generated
+ */
+
 import path from 'path';
 import chalk from 'chalk';
 import { PythonBridge } from '../bridge/python-bridge.js';
 import { ProgressTracker } from '../ui/progress.js';
-import { Workspace } from '../core/workspace.js';
-import { ConfigManager } from '../core/config.js';
 import { runPreflightChecksWithProgress } from '../core/preflight.js';
 import { formatErrorWithHelp } from '../errors/formatter.js';
 import { isArenaError } from '../errors/index.js';
+import { displayAnalysisSummary } from '../ui/summary.js';
 
-interface ProcessOptions {
+interface AnalyzeOptions {
   output?: string;
   numClips?: string;
   min?: string;
   max?: string;
   use4layer?: boolean;
   editorialModel?: 'gpt-4o' | 'gpt-4o-mini';
-  exportLayers?: boolean;
-  fast?: boolean;
-  cache?: boolean; // Note: commander negates --no-cache to cache: false
-  padding?: string;
+  transcript?: string;
   debug?: boolean;
 }
 
-export async function processCommand(
+export async function analyzeCommand(
   videoPath: string,
-  options: ProcessOptions
+  options: AnalyzeOptions
 ): Promise<void> {
   const startTime = Date.now();
   const progress = new ProgressTracker();
@@ -32,63 +33,51 @@ export async function processCommand(
 
   try {
     const absoluteVideoPath = path.resolve(videoPath);
-    const outputDir = options.output || '.arena/output';
+    const outputFile = options.output || path.join(
+      path.dirname(absoluteVideoPath),
+      `${path.basename(absoluteVideoPath, path.extname(absoluteVideoPath))}_analysis.json`
+    );
 
     // Run pre-flight checks
     console.log(chalk.cyan('\n🔍 Running pre-flight checks...\n'));
 
     const preflightResult = await runPreflightChecksWithProgress({
       videoPath: absoluteVideoPath,
-      outputDir,
+      outputDir: path.dirname(outputFile),
       numClips: options.numClips,
       minDuration: options.min,
       maxDuration: options.max,
-      padding: options.padding,
       skipApiKeyCheck: false,
       enginePath: bridge.getEnginePath(),
     });
 
     if (!preflightResult.passed) {
-      // Display first error with help
       console.log(formatErrorWithHelp(preflightResult.errors[0], options.debug));
       process.exit(1);
     }
 
     console.log(chalk.green('✓ All pre-flight checks passed\n'));
 
-    // Initialize workspace
-    const workspace = new Workspace();
-    await workspace.initialize();
-
-    // Create config
-    const configManager = new ConfigManager();
-    await configManager.ensureGlobalConfig();
-    await configManager.createProjectConfig(absoluteVideoPath);
-
-    // Initialize processing stages for progress tracking
+    // Initialize progress stages
     progress.initializeStages([
       { id: 'transcription', name: 'Transcription', icon: '📝' },
       { id: 'analysis', name: options.use4layer ? 'AI Analysis - 4-Layer System' : 'AI Analysis', icon: '🧠' },
-      { id: 'hybrid', name: 'Hybrid Analysis', icon: '⚡' },
-      { id: 'generation', name: 'Clip Generation', icon: '✂️' },
     ]);
 
-    console.log(chalk.cyan('\n🎬 Processing video...\n'));
-    console.log(chalk.gray('This may take several minutes depending on video length...\n'));
+    console.log(chalk.cyan('\n🔎 Analyzing video...\n'));
+    console.log(chalk.gray('This will analyze the video without generating clips.\n'));
 
-    const result = await bridge.runProcess(
+    // Call Python bridge analyze command
+    const result = await bridge.runAnalyze(
       {
         videoPath: absoluteVideoPath,
-        outputDir: path.resolve(outputDir),
+        outputFile,
         minDuration: options.min ? parseInt(options.min) : undefined,
         maxDuration: options.max ? parseInt(options.max) : undefined,
         clipCount: options.numClips ? parseInt(options.numClips) : undefined,
         use4Layer: options.use4layer || false,
         editorialModel: options.editorialModel || 'gpt-4o',
-        exportLayers: options.exportLayers || false,
-        fast: options.fast || false,
-        noCache: options.cache === false, // --no-cache sets cache to false
-        padding: options.padding ? parseFloat(options.padding) : undefined,
+        transcriptPath: options.transcript,
       },
       (update) => {
         progress.updateStage(update.stage, update.progress, update.message);
@@ -102,19 +91,24 @@ export async function processCommand(
     const processingTime = (Date.now() - startTime) / 1000;
 
     // Display summary
-    progress.displaySummary({
+    progress.stop();
+    displayAnalysisSummary({
       videoPath: path.basename(videoPath),
-      clipsGenerated: result?.clips?.length || 0,
-      outputDir: outputDir,
+      videoDuration: result?.videoDuration || 0,
+      transcriptWordCount: result?.wordCount,
+      momentsFound: result?.momentsFound || 0,
+      estimatedClips: result?.estimatedClips || 0,
       processingTime,
+      outputFile,
     });
   } catch (error) {
-    // Use our error formatter for beautiful, actionable error messages
+    progress.stop();
+
+    // Use our error formatter
     if (isArenaError(error)) {
       console.log(formatErrorWithHelp(error, options.debug));
     } else {
-      // Fallback for unexpected errors
-      console.error(chalk.red('\n✗ An unexpected error occurred\n'));
+      console.error(chalk.red('\n✗ Analysis failed\n'));
       console.error(chalk.white(`  ${error instanceof Error ? error.message : String(error)}\n`));
 
       if (options.debug && error instanceof Error && error.stack) {
