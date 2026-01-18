@@ -457,10 +457,9 @@ export class PythonBridge {
     onError?: (error: string) => void
   ): Promise<any> {
     return new Promise((resolve, reject) => {
-      const arenaCliPath = path.join(this.enginePath, 'arena_cli.py');
+      const arenaCliPath = path.join(this.enginePath, 'arena-cli');
 
       const args = [
-        arenaCliPath,
         'format',
         options.inputPath,
         '--output', options.outputDir,
