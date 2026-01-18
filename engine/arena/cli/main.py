@@ -312,6 +312,52 @@ Documentation:
         help='Output as JSON'
     )
 
+    # =========================================================================
+    # arena format
+    # =========================================================================
+    format_parser = subparsers.add_parser(
+        'format',
+        help='Format clips for specific social media platforms',
+        description='Convert clips to optimal format for TikTok, Instagram, YouTube, etc.'
+    )
+    format_parser.add_argument(
+        'input',
+        help='Path to video file or directory of clips'
+    )
+    format_parser.add_argument(
+        '-o', '--output',
+        required=True,
+        help='Output directory for formatted clips'
+    )
+    format_parser.add_argument(
+        '-p', '--platform',
+        required=True,
+        choices=['tiktok', 'instagram-reels', 'youtube-shorts', 'youtube', 'instagram-feed', 'twitter', 'linkedin'],
+        help='Target platform'
+    )
+    format_parser.add_argument(
+        '--crop',
+        default='center',
+        choices=['center', 'smart', 'top', 'bottom'],
+        help='Crop strategy for aspect ratio conversion (default: center)'
+    )
+    format_parser.add_argument(
+        '--pad',
+        default='blur',
+        choices=['blur', 'black', 'white', 'color'],
+        help='Pad strategy for aspect ratio conversion (default: blur)'
+    )
+    format_parser.add_argument(
+        '--pad-color',
+        default='#000000',
+        help='Padding color in hex format (default: #000000)'
+    )
+    format_parser.add_argument(
+        '--no-quality',
+        action='store_true',
+        help='Disable high quality encoding (faster, smaller files)'
+    )
+
     # Parse arguments
     args = parser.parse_args()
 
@@ -343,6 +389,9 @@ Documentation:
         elif args.command == 'info':
             from .commands.info import run_info
             return run_info(args)
+        elif args.command == 'format':
+            from .commands.format import run_format
+            return run_format(args)
         else:
             parser.print_help()
             return 1

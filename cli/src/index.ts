@@ -9,6 +9,7 @@ import { transcribeCommand } from './commands/transcribe.js';
 import { generateCommand } from './commands/generate.js';
 import { configCommand } from './commands/config.js';
 import { extractAudioCommand } from './commands/extract-audio.js';
+import { formatCommand } from './commands/format.js';
 
 const program = new Command();
 
@@ -98,5 +99,18 @@ program
   .command('config [action] [key] [value]')
   .description('Manage Arena configuration (view, set, get, reset)')
   .action(configCommand);
+
+// Format command - Platform formatting
+program
+  .command('format')
+  .description('Format clips for specific social media platforms')
+  .argument('<input>', 'path to video file or directory of clips')
+  .requiredOption('-p, --platform <platform>', 'target platform (tiktok, instagram-reels, youtube-shorts, youtube, instagram-feed, twitter, linkedin)')
+  .option('-o, --output <dir>', 'output directory for formatted clips')
+  .option('--crop <strategy>', 'crop strategy: center, smart, top, bottom', 'center')
+  .option('--pad <strategy>', 'pad strategy: blur, black, white, color', 'blur')
+  .option('--pad-color <color>', 'padding color (hex), e.g., #000000', '#000000')
+  .option('--no-quality', 'disable high quality encoding (faster, smaller files)')
+  .action(formatCommand);
 
 program.parse();

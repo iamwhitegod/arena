@@ -1,6 +1,6 @@
 # Arena Usage Guide
 
-Complete reference for using Arena CLI - all 7 commands and workflows.
+Complete reference for using Arena CLI - all 8 commands and workflows.
 
 ## Installation
 
@@ -17,7 +17,7 @@ arena init
 
 ## Available Commands
 
-Arena CLI provides 7 commands for flexible video editing workflows:
+Arena CLI provides 8 commands for flexible video editing workflows:
 
 | Command | Purpose | Best For |
 |---------|---------|----------|
@@ -26,6 +26,7 @@ Arena CLI provides 7 commands for flexible video editing workflows:
 | `arena transcribe` | Transcription only | Reusing transcripts, debugging |
 | `arena analyze` | Find moments without generating clips | Fast preview, cost optimization |
 | `arena generate` | Generate clips from analysis | Selective generation, review workflow |
+| `arena format` | Format clips for social media platforms | Platform-specific aspect ratios, TikTok, Instagram, YouTube |
 | `arena config` | Manage configuration | API keys, preferences, debugging |
 | `arena extract-audio` | Extract audio from video | Audio-only workflows, preprocessing |
 
@@ -212,6 +213,108 @@ arena analyze video.mp4 -o moments.json
 # Step 3: Generate only the best clips
 arena generate video.mp4 moments.json --select 1,3,5
 ```
+
+### `arena format` - Platform Formatting
+
+Format video clips for specific social media platforms with optimal aspect ratios, resolutions, and bitrates.
+
+```bash
+arena format <input> [options]
+```
+
+**Options:**
+- `-p, --platform <platform>` - **Required.** Target platform (see table below)
+- `-o, --output <dir>` - Output directory for formatted clips
+- `--crop <strategy>` - Crop strategy: `center`, `smart`, `top`, `bottom` (default: `center`)
+- `--pad <strategy>` - Pad strategy: `blur`, `black`, `white`, `color` (default: `blur`)
+- `--pad-color <color>` - Padding color in hex format (default: `#000000`)
+- `--no-quality` - Disable high quality encoding (faster, smaller files)
+
+**Supported Platforms:**
+
+| Platform | Resolution | Aspect Ratio | Max Duration | Max Size | Best For |
+|----------|-----------|--------------|--------------|----------|----------|
+| `tiktok` | 1080×1920 | 9:16 | 180s | 287MB | Vertical short-form |
+| `instagram-reels` | 1080×1920 | 9:16 | 90s | 100MB | Vertical short-form |
+| `youtube-shorts` | 1080×1920 | 9:16 | 60s | 100MB | Vertical short-form |
+| `youtube` | 1920×1080 | 16:9 | Unlimited | 256GB | Horizontal long-form |
+| `instagram-feed` | 1080×1080 | 1:1 | 60s | 100MB | Square format |
+| `twitter` | 1280×720 | 16:9 | 140s | 512MB | Horizontal clips |
+| `linkedin` | 1920×1080 | 16:9 | 600s | 5GB | Professional content |
+
+**Crop & Pad Strategies:**
+
+When source and target aspect ratios differ, Arena uses these strategies:
+
+**Crop Strategies** (when source is wider):
+- `center` - Crop from center (default, safe choice)
+- `smart` - Slight bias toward center-right (better for faces)
+- `top` - Crop from top edge
+- `bottom` - Crop from bottom edge
+
+**Pad Strategies** (when source is taller):
+- `blur` - Blur background for professional letterboxing (default, looks best)
+- `black` - Black bars (classic)
+- `white` - White bars
+- `color` - Custom color bars (use `--pad-color`)
+
+**Examples:**
+
+```bash
+# Format single clip for TikTok
+arena format clip.mp4 -p tiktok -o tiktok_clips/
+
+# Format directory of clips for Instagram Reels with smart cropping
+arena format clips/ -p instagram-reels --crop smart -o reels/
+
+# Format for YouTube Shorts with blur background
+arena format video.mp4 -p youtube-shorts --pad blur -o shorts/
+
+# Format for Instagram feed (square) with custom padding color
+arena format video.mp4 -p instagram-feed --pad color --pad-color #FF5733
+
+# Format for YouTube (16:9 horizontal)
+arena format clip.mp4 -p youtube -o youtube/ --no-quality
+
+# Batch format all clips in directory for multiple platforms
+arena format clips/ -p tiktok -o formatted/tiktok/
+arena format clips/ -p youtube-shorts -o formatted/shorts/
+arena format clips/ -p instagram-reels -o formatted/reels/
+```
+
+**Use Cases:**
+
+1. **Repurpose Long-Form → Short-Form**
+   ```bash
+   # Generate clips from podcast
+   arena process podcast.mp4 --use-4layer -n 5
+
+   # Format for TikTok
+   arena format output/clips/ -p tiktok -o tiktok/
+   ```
+
+2. **Multi-Platform Distribution**
+   ```bash
+   # One source, many platforms
+   arena format source.mp4 -p tiktok -o dist/tiktok/
+   arena format source.mp4 -p instagram-reels -o dist/reels/
+   arena format source.mp4 -p youtube-shorts -o dist/shorts/
+   ```
+
+3. **Aspect Ratio Conversion**
+   ```bash
+   # Convert 16:9 horizontal → 9:16 vertical
+   arena format horizontal.mp4 -p tiktok --crop smart -o vertical/
+
+   # Convert 9:16 vertical → 16:9 horizontal with blur background
+   arena format vertical.mp4 -p youtube --pad blur -o horizontal/
+   ```
+
+**Pro Tips:**
+- Use `--crop smart` for videos with faces or people (biases slightly right of center)
+- Use `--pad blur` for professional-looking letterboxing (better than black bars)
+- Format after generating clips to save processing time
+- Check warnings about file size limits for your platform
 
 ### `arena config` - Configuration Management
 
@@ -643,13 +746,35 @@ python3 arena_process.py video.mp4 --use-4layer --editorial-model gpt-4o-mini -n
 for video in videos/*.mp4; do
   echo "Processing: $video"
   # Use gpt-4o-mini for cost savings on bulk processing
-  python3 arena_process.py "$video" \
+  arena process "$video" \
     --use-4layer \
     --editorial-model gpt-4o-mini \
     -n 5 \
     -o "output/$(basename $video .mp4)"
 done
 ```
+
+### 7. Format for Multiple Platforms
+
+Generate once, distribute everywhere:
+
+```bash
+# Generate clips in highest quality
+arena process video.mp4 --use-4layer -n 5 -o clips/
+
+# Format for each platform
+arena format clips/clips/ -p tiktok -o dist/tiktok/
+arena format clips/clips/ -p instagram-reels -o dist/reels/
+arena format clips/clips/ -p youtube-shorts -o dist/shorts/
+arena format clips/clips/ -p youtube -o dist/youtube/
+```
+
+**Best Practices:**
+- Always generate clips first in highest quality (1080p+)
+- Use `--crop smart` for content with faces or people
+- Use `--pad blur` for professional letterboxing (better than black bars)
+- Check file size warnings if clips exceed platform limits
+- Test one clip first before batch formatting
 
 ## Common Workflows
 
@@ -795,6 +920,84 @@ arena process podcast-episode.mp4 \
   --min 60 \
   --max 120
 ```
+
+### Workflow 9: Multi-Platform Distribution
+
+Generate clips once, format for multiple platforms.
+
+```bash
+# Step 1: Generate high-quality clips
+arena process video.mp4 \
+  --use-4layer \
+  --editorial-model gpt-4o-mini \
+  -n 5 \
+  --min 30 \
+  --max 60 \
+  -o clips/
+
+# Step 2: Format for TikTok (9:16 vertical)
+arena format clips/clips/ -p tiktok --crop smart -o dist/tiktok/
+
+# Step 3: Format for Instagram Reels (9:16 vertical)
+arena format clips/clips/ -p instagram-reels --crop smart -o dist/reels/
+
+# Step 4: Format for YouTube Shorts (9:16 vertical)
+arena format clips/clips/ -p youtube-shorts --crop smart -o dist/shorts/
+
+# Step 5: Format for YouTube (16:9 horizontal)
+arena format clips/clips/ -p youtube --pad blur -o dist/youtube/
+
+# Step 6: Format for Instagram Feed (1:1 square)
+arena format clips/clips/ -p instagram-feed --crop smart -o dist/instagram/
+```
+
+**Result:** 5 clips × 5 platforms = 25 optimized videos ready to upload!
+
+**Pro Tips:**
+- Generate clips once in highest quality (1080p+)
+- Format for each platform with optimal settings
+- Use `--crop smart` for videos with faces
+- Use `--pad blur` for letterboxing (looks professional)
+- Batch format saves time vs. manual editing
+
+### Workflow 10: Content Repurposing Pipeline
+
+Turn long-form content into a week's worth of social media posts.
+
+```bash
+# Step 1: Transcribe and analyze (reusable for iterations)
+arena transcribe webinar.mp4 -o webinar_transcript.json
+arena analyze webinar.mp4 \
+  --transcript webinar_transcript.json \
+  --use-4layer \
+  -n 20 \
+  -o analysis.json
+
+# Step 2: Review and select best moments
+cat analysis.json | jq '.clips[] | {id, title, duration, standalone_score}' | less
+
+# Step 3: Generate selected clips
+arena generate webinar.mp4 analysis.json \
+  --select 1,3,5,7,9,11,13 \
+  -o raw_clips/
+
+# Step 4: Format for different platforms
+# TikTok (3 clips, vertical, 15-30s)
+arena format raw_clips/ -p tiktok --crop smart -o social/tiktok/
+
+# Instagram Reels (3 clips, vertical, 30-60s)
+arena format raw_clips/ -p instagram-reels --crop smart -o social/reels/
+
+# LinkedIn (2 clips, horizontal, professional)
+arena format raw_clips/ -p linkedin --pad blur -o social/linkedin/
+
+# YouTube (1 highlight reel)
+arena format raw_clips/ -p youtube -o social/youtube/
+```
+
+**Result:** 1 webinar → 7 social media posts across 4 platforms!
+
+**Time Saved:** Manual editing would take 4-6 hours. Arena does it in ~15 minutes.
 
 ## Troubleshooting
 

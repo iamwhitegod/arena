@@ -53,6 +53,16 @@ export interface ExtractAudioOptions {
   mono: boolean;
 }
 
+export interface FormatOptions {
+  inputPath: string;
+  outputDir: string;
+  platform: string;
+  cropStrategy?: 'center' | 'smart' | 'top' | 'bottom';
+  padStrategy?: 'blur' | 'black' | 'white' | 'color';
+  padColor?: string;
+  maintainQuality?: boolean;
+}
+
 export interface ProgressUpdate {
   stage: string;
   progress: number;
@@ -439,6 +449,42 @@ export class PythonBridge {
     }
 
     return errorOutput.trim();
+  }
+
+  async runFormat(
+    options: FormatOptions,
+    onProgress?: (update: ProgressUpdate) => void,
+    onError?: (error: string) => void
+  ): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const arenaCliPath = path.join(this.enginePath, 'arena_cli.py');
+
+      const args = [
+        arenaCliPath,
+        'format',
+        options.inputPath,
+        '--output', options.outputDir,
+        '--platform', options.platform,
+      ];
+
+      if (options.cropStrategy) {
+        args.push('--crop', options.cropStrategy);
+      }
+
+      if (options.padStrategy) {
+        args.push('--pad', options.padStrategy);
+      }
+
+      if (options.padColor) {
+        args.push('--pad-color', options.padColor);
+      }
+
+      if (options.maintainQuality === false) {
+        args.push('--no-quality');
+      }
+
+      this.runCommand(arenaCliPath, args, resolve, reject, onProgress, onError);
+    });
   }
 
   async checkPythonEnvironment(): Promise<{ available: boolean; version?: string; error?: string }> {
