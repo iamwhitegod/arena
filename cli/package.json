@@ -16,6 +16,7 @@
     "clean": "rm -rf dist",
     "prebuild": "npm run clean",
     "build": "tsc",
+    "postbuild": "chmod +x dist/index.js",
     "dev": "tsx src/index.ts",
     "watch": "tsc --watch",
     "start": "node dist/index.js",
