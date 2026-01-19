@@ -1,6 +1,6 @@
 # Arena
 
-AI-powered video editing tool that runs in your terminal. Create engaging short clips from long-form content automatically.
+AI-powered video clip generation tool that runs in your terminal. Create engaging short clips from long-form content automatically.
 
 ## What is Arena?
 
