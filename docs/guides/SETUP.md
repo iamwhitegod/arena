@@ -466,7 +466,7 @@ arena --help
 - **Command help**: `arena <command> --help`
 - **Configuration**: `arena config`
 - **GitHub Issues**: Report bugs or request features
-- **Troubleshooting**: [TROUBLESHOOTING.md](../../cli/docs/TROUBLESHOOTING.md)
+- **Troubleshooting**: [TROUBLESHOOTING.md](../TROUBLESHOOTING.md)
 
 ---
 

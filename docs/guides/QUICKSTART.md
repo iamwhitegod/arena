@@ -391,7 +391,7 @@ arena format output/clips/ -p youtube -o youtube/
 - **Complete Usage Guide**: [USAGE.md](./USAGE.md)
 - **Command Reference**: [CLI_REFERENCE.md](./CLI_REFERENCE.md)
 - **Setup Guide**: [SETUP.md](./SETUP.md)
-- **Troubleshooting**: [../cli/docs/TROUBLESHOOTING.md](../../cli/docs/TROUBLESHOOTING.md)
+- **Troubleshooting**: [TROUBLESHOOTING.md](../TROUBLESHOOTING.md)
 - **Main README**: [../../README.md](../../README.md)
 
 ---

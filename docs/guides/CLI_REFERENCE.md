@@ -579,5 +579,5 @@ arena process video.mp4
 - **Usage Guide**: [USAGE.md](./USAGE.md)
 - **Quick Start**: [QUICKSTART.md](./QUICKSTART.md)
 - **Setup Guide**: [SETUP.md](./SETUP.md)
-- **Troubleshooting**: [../cli/docs/TROUBLESHOOTING.md](../../cli/docs/TROUBLESHOOTING.md)
+- **Troubleshooting**: [TROUBLESHOOTING.md](../TROUBLESHOOTING.md)
 - **Main README**: [../../README.md](../../README.md)

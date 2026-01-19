@@ -364,8 +364,8 @@ arena format output/clips/ -p youtube -o youtube/
 ## 📖 Documentation
 
 - [USAGE.md](./docs/guides/USAGE.md) - Comprehensive usage guide
-- [TROUBLESHOOTING.md](./cli/docs/TROUBLESHOOTING.md) - Common issues and solutions
-- [CONTRIBUTING.md](./cli/CONTRIBUTING.md) - Contribution guidelines
+- [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) - Common issues and solutions
+- [CONTRIBUTING.md](./docs/CONTRIBUTING.md) - Contribution guidelines
 - [EDITORIAL_ARCHITECTURE.md](./docs/architecture/EDITORIAL_ARCHITECTURE.md) - 4-layer system details
 
 ## 🛠️ Development
@@ -434,7 +434,7 @@ Your duration constraints may be too strict:
 arena process video.mp4 --use-4layer --min 20 --max 90
 ```
 
-See [TROUBLESHOOTING.md](./cli/docs/TROUBLESHOOTING.md) for more solutions.
+See [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) for more solutions.
 
 ## 🚀 Roadmap
 
@@ -456,7 +456,7 @@ See [TROUBLESHOOTING.md](./cli/docs/TROUBLESHOOTING.md) for more solutions.
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](./cli/CONTRIBUTING.md) for details.
+Contributions are welcome! Please see [CONTRIBUTING.md](./docs/CONTRIBUTING.md) for details.
 
 ## 📄 License
 
