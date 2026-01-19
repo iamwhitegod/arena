@@ -1,100 +1,104 @@
 # Arena Quick Start Guide
 
-Get started with Arena in 5 minutes!
+Get started with Arena in 5 minutes! Generate professional video clips from long-form content.
 
 ## Prerequisites
 
-1. **Python 3.9+** installed
-2. **FFmpeg** installed (`brew install ffmpeg` on macOS)
-3. **OpenAI API Key** (get from https://platform.openai.com/api-keys)
+1. **Node.js 18+** - Download from [nodejs.org](https://nodejs.org)
+2. **Python 3.9+** - Check with `python3 --version`
+3. **FFmpeg** - Install with `brew install ffmpeg` (macOS) or `apt install ffmpeg` (Ubuntu)
+4. **OpenAI API Key** - Get from [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
 
 ## Installation
 
-```bash
-cd engine
+### Option 1: Install from npm (when published)
 
-# Install Python dependencies
+```bash
+npm install -g @arena/cli
+```
+
+### Option 2: Install from source
+
+```bash
+git clone <repository-url>
+cd arena
+
+# Install CLI
+cd cli
+npm install
+npm run build
+npm link
+
+# Install Python engine
+cd ../engine
 pip install -r requirements.txt
 
-# Set your OpenAI API key
-export OPENAI_API_KEY="sk-your-key-here"
+# Verify installation
+arena --version
 ```
 
-## Option 1: Quick Demo (No API Key Needed)
+## Setup
 
-Run the demo with existing test data:
+### Interactive Setup (Recommended)
 
 ```bash
-cd engine
-python3 arena_process_demo.py
+arena init
 ```
 
-This will:
-- ✅ Use existing test audio (no API calls)
-- ✅ Generate 3 sample clips
-- ✅ Show you how everything works
-- ✅ Output to `demo_output/clips/`
+This wizard helps you:
+- Choose your workflow type (content creator, podcast, course)
+- Set clip duration preferences
+- Configure quality vs cost balance
+- Set up your OpenAI API key
 
-**Output:**
-```
-demo_output/
-├── clips/
-│   ├── clip_001.mp4
-│   ├── clip_001_thumb.jpg
-│   ├── clip_001_metadata.json
-│   ├── clip_002.mp4
-│   └── ...
-└── analysis_results.json
-```
-
-## Option 2: Process Your Own Video
-
-### Basic Usage
+### Manual Setup
 
 ```bash
-cd engine
+# Set API key via environment
+export OPENAI_API_KEY="sk-..."
 
-# Set API key (required)
-export OPENAI_API_KEY="sk-your-key-here"
-
-# Process video - generates 5 clips (30-90s each)
-python3 arena_process.py path/to/your/video.mp4
+# Or set via config
+arena config set openai_api_key "sk-..."
 ```
 
-### Custom Options
+## Quick Start: Generate Your First Clips
+
+### 1. Basic Usage (All-in-One)
 
 ```bash
-# Generate 10 shorter clips (20-60s each)
-python3 arena_process.py video.mp4 -n 10 --min 20 --max 60
+arena process video.mp4
+```
+
+This generates 5 clips (30-90s each) using standard mode.
+
+### 2. Professional Quality (Recommended)
+
+```bash
+arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini
+```
+
+Uses the 4-layer editorial system for professional-grade clips with cost optimization.
+
+### 3. Customize Parameters
+
+```bash
+# Generate 10 short clips for TikTok/Reels
+arena process video.mp4 --use-4layer -n 10 --min 15 --max 30
+
+# Generate 8 longer clips for YouTube/LinkedIn
+arena process video.mp4 --use-4layer -n 8 --min 60 --max 120
 
 # Custom output directory
-python3 arena_process.py video.mp4 -o my_clips
+arena process video.mp4 --use-4layer -o my_clips/
 
-# Fast mode (10x faster, no re-encoding)
-python3 arena_process.py video.mp4 --fast
-
-# More padding around clips
-python3 arena_process.py video.mp4 --padding 2.0
-```
-
-### Full Options
-
-```bash
-python3 arena_process.py --help
-
-Options:
-  -o, --output DIR      Output directory (default: output)
-  -n, --num-clips N     Number of clips (default: 5)
-  --min SECONDS         Minimum clip duration (default: 30)
-  --max SECONDS         Maximum clip duration (default: 90)
-  --fast                Fast mode - stream copy (10x faster)
-  --padding SECONDS     Padding before/after clips (default: 0.5)
-  --no-cache            Force re-transcription
+# Fast mode (10x faster, less precise cuts)
+arena process video.mp4 --fast
 ```
 
 ## What Happens During Processing
 
 ### Step 1: Transcription (2-5 min)
+
 ```
 🎤 Transcribing video with OpenAI Whisper...
 ✓ Transcription complete
@@ -104,289 +108,292 @@ Options:
 
 The transcript is **cached** - subsequent runs are instant!
 
-### Step 2: Analysis (30-60 sec)
+### Step 2: AI Analysis (30-60 sec or 3-5 min with 4-layer)
+
+**Standard Mode:**
 ```
 🧠 Analyzing transcript content with AI...
-   ✓ Found 17 interesting content segments
+✓ Found 17 interesting content segments
 
 ⚡ Analyzing audio energy...
-   ✓ Found 20 high-energy segments
+✓ Found 20 high-energy segments
 
 🎯 Computing hybrid scores...
-   ✓ Selected top 5 clips by hybrid score
+✓ Selected top 5 clips by hybrid score
 ```
 
-Combines:
-- **AI analysis** - identifies interesting content
-- **Energy detection** - finds enthusiastic delivery
-- **Hybrid scoring** - boosts clips with both
-
-### Step 3: Clip Generation (varies)
+**4-Layer Mode:**
 ```
-🎬 Generating 5 clips (quality mode)...
-   [1/5] ✓ clip_001 (43.5s, 8.2MB)
-   [2/5] ✓ clip_002 (38.2s, 7.1MB)
-   ...
+🎯 4-Layer Editorial System
 
-📸 Generating thumbnails and metadata...
+[1/4] 🔍 Layer 1: Candidate Detection
+  ✓ Found 25 candidate moments
+
+[2/4] 📐 Layer 2: Boundary Refinement
+  ✓ Adjusted 25 boundaries
+
+[3/4] ✅ Layer 3: Quality Validation
+  ✓ Validated: 2 clips passed (8% pass rate)
+  ✗ Rejected: 23 clips (incomplete context, references missing info)
+
+[4/4] 📝 Layer 4: Content Packaging
+  ✓ Generated professional titles and descriptions
+```
+
+The 4-layer system applies strict quality gates - only 7-10% of candidates pass!
+
+### Step 3: Clip Generation (1-3 min)
+
+```
+🎬 Generating 2 clips...
+   [1/2] ✓ questions-to-ask-before-learning-tech-skills (46s)
+   [2/2] ✓ how-to-define-your-tech-goals-as-an-engineer (46s)
+
 ✓ Clip generation complete
 ```
-
-- **Quality mode:** ~1-3x real-time (30s for 60s clip)
-- **Fast mode:** ~10-50x real-time (2s for 60s clip)
 
 ## Output Structure
 
 ```
 output/
 ├── clips/
-│   ├── clip_001.mp4              # Video clip
-│   ├── clip_001_thumb.jpg        # Thumbnail
-│   ├── clip_001_metadata.json    # Full metadata
-│   ├── clip_002.mp4
-│   ├── clip_002_thumb.jpg
+│   ├── questions-to-ask-before-learning-tech-skills.mp4
+│   ├── how-to-define-your-tech-goals-as-an-engineer.mp4
 │   └── ...
-├── analysis_results.json         # Complete analysis
+├── analysis.json                    # Complete analysis
 └── .cache/
-    └── video_transcript.json     # Cached transcript
+    └── video_transcript.json        # Cached transcript
 ```
 
-## Understanding the Output
-
-### Top Clips (Ranked by Hybrid Score)
-
+With 4-layer system (`--export-editorial-layers`):
 ```
-🎯 Top 3 Clips Generated:
-
-   1. clip_015.mp4
-      Why most startups fail at product-market fit
-      Time: 07:07 → 07:52
-      Scores: AI=0.95, Hybrid=1.00
-
-   2. clip_001.mp4
-      Getting started with AI
-      Time: 00:00 → 01:02
-      Scores: AI=0.92, Hybrid=1.00
-
-   3. clip_009.mp4
-      The key to growth
-      Time: 04:04 → 05:23
-      Scores: AI=0.85, Hybrid=0.998
+output/
+├── clips/
+│   └── ...
+├── editorial_layers/
+│   ├── layer1_candidates.json       # 25 initial moments
+│   ├── layer2_refined.json          # Boundary adjustments
+│   ├── layer3_validated.json        # Quality validation
+│   └── layer4_final.json            # Final packaged clips
+└── analysis.json
 ```
 
-### Scores Explained
+## Review Your Clips
 
-- **AI Score (0-1):** How interesting is the content?
-  - Hook, insight, advice, story, etc.
+```bash
+# List generated clips
+ls -lh output/clips/
 
-- **Hybrid Score (0-1):** Content quality + delivery energy
-  - Clips with high energy get boosted
-  - Best clips have great content AND enthusiastic delivery
+# Get clip metadata
+cat output/analysis.json | jq '.clips[] | {title, duration, scores}'
+```
 
-### Metadata JSON
-
+Example output:
 ```json
 {
-  "clip_id": "clip_001",
-  "title": "Why most startups fail",
-  "start_time": 125.5,
-  "end_time": 168.3,
-  "duration": 42.8,
-  "size_mb": 8.08,
-  "thumbnail": "clip_001_thumb.jpg",
+  "title": "Questions to ask before learning tech skills",
+  "duration": 46.2,
   "scores": {
-    "ai_score": 0.85,
-    "hybrid_score": 0.92,
-    "energy_score": 0.75
+    "ai_score": 0.92,
+    "hybrid_score": 0.95,
+    "standalone_score": 0.85
   }
 }
 ```
 
-## Examples by Use Case
+## Next Steps
 
-### Short Social Media Clips (TikTok, Reels)
-
-```bash
-# Generate 10 short clips (15-30s)
-python3 arena_process.py video.mp4 -n 10 --min 15 --max 30
-```
-
-### Medium Clips (YouTube Shorts)
+### Option 1: Try Different Parameters
 
 ```bash
-# Generate 5 medium clips (30-60s)
-python3 arena_process.py video.mp4 -n 5 --min 30 --max 60
+# Analyze without generating (fast preview)
+arena analyze video.mp4 --use-4layer -o moments.json
+
+# Review moments.json
+
+# Generate only selected clips
+arena generate video.mp4 moments.json --select 1,3,5
 ```
 
-### Longer Clips (LinkedIn, Twitter)
+### Option 2: Format for Social Media
 
 ```bash
-# Generate 3 longer clips (60-120s)
-python3 arena_process.py video.mp4 -n 3 --min 60 --max 120
+# Format clips for TikTok
+arena format output/clips/ -p tiktok --crop smart -o social/tiktok/
+
+# Format for Instagram Reels
+arena format output/clips/ -p instagram-reels --crop smart -o social/reels/
+
+# Format for YouTube
+arena format output/clips/ -p youtube -o social/youtube/
 ```
 
-### Quick Preview (Fast Mode)
+Now you have clips optimized for every platform!
+
+### Option 3: Batch Processing
 
 ```bash
-# Generate clips 10x faster (stream copy)
-python3 arena_process.py video.mp4 --fast
+# Process multiple videos
+for video in videos/*.mp4; do
+  echo "Processing: $video"
+  arena process "$video" --use-4layer --editorial-model gpt-4o-mini -n 5
+done
 ```
 
-## Common Issues
+## Understanding 4-Layer vs Standard
+
+### Standard Mode
+
+**Best for:** Testing, experimentation, quick iteration
+
+```bash
+arena process video.mp4
+```
+
+- Fast (2-4 minutes)
+- Cheap ($0.05 per 10min video)
+- Good quality
+- 50%+ clips pass basic filters
+
+### 4-Layer Mode
+
+**Best for:** Production, distribution, professional quality
+
+```bash
+arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini
+```
+
+- Professional quality (5-8 minutes)
+- Affordable ($0.20 per 10min video with gpt-4o-mini)
+- Strict quality validation
+- 7-10% clips pass all gates
+- Standalone context validated
+- Professional titles/descriptions
+
+## Common Commands Reference
+
+| Task | Command |
+|------|---------|
+| **Generate clips** | `arena process video.mp4 --use-4layer` |
+| **Analyze only** | `arena analyze video.mp4 --use-4layer -o moments.json` |
+| **Generate from analysis** | `arena generate video.mp4 moments.json --select 1,3,5` |
+| **Format for TikTok** | `arena format clips/ -p tiktok -o tiktok/` |
+| **Transcribe only** | `arena transcribe video.mp4` |
+| **Extract audio** | `arena extract-audio video.mp4` |
+| **View config** | `arena config` |
+| **Set API key** | `arena config set openai_api_key "sk-..."` |
+
+## Cost Estimates
+
+Typical costs per 10-minute video:
+
+| Mode | Model | Cost | Time |
+|------|-------|------|------|
+| Standard | gpt-4o-mini | $0.05 | 2-4 min |
+| 4-Layer | gpt-4o-mini | $0.20 | 5-8 min |
+| 4-Layer | gpt-4o | $0.50 | 5-8 min |
+
+**Cost-saving tips:**
+- Use `--editorial-model gpt-4o-mini` (60% cheaper, same quality)
+- Analyze first, generate later (reuse analysis)
+- Transcribe once, experiment with parameters
+
+## Troubleshooting
+
+### "Command not found: arena"
+
+```bash
+# Reinstall
+npm install -g @arena/cli
+
+# Or use npx
+npx @arena/cli process video.mp4
+```
 
 ### "OPENAI_API_KEY not set"
 
 ```bash
-# Set the key in your terminal
-export OPENAI_API_KEY="sk-your-key-here"
+# Set via environment
+export OPENAI_API_KEY="sk-..."
 
-# Or add to your shell profile (~/.zshrc or ~/.bashrc)
-echo 'export OPENAI_API_KEY="sk-your-key-here"' >> ~/.zshrc
+# Or via config
+arena config set openai_api_key "sk-..."
 ```
 
-### "FFmpeg is not installed"
+### "No clips passed validation" (4-layer mode)
+
+Your duration constraints may be too strict:
+
+```bash
+# Relax constraints
+arena process video.mp4 --use-4layer --min 20 --max 90
+
+# Or try standard mode first
+arena process video.mp4 -n 10
+```
+
+### "FFmpeg not found"
 
 ```bash
 # macOS
 brew install ffmpeg
 
-# Ubuntu/Debian
+# Ubuntu
 sudo apt install ffmpeg
 
-# Check installation
+# Verify
 ffmpeg -version
 ```
 
-### "Video file not found"
+## Real-World Examples
+
+### Content Creator (TikTok/Reels)
 
 ```bash
-# Use absolute paths or relative from engine/ directory
-python3 arena_process.py ../videos/my_video.mp4
+arena process video.mp4 \
+  --use-4layer \
+  --editorial-model gpt-4o-mini \
+  -n 3 \
+  --min 15 \
+  --max 30
 
-# Or with full path
-python3 arena_process.py /path/to/video.mp4
+arena format output/clips/ -p tiktok --crop smart -o social/tiktok/
 ```
 
-### Processing is slow
+### Podcast Highlights
 
 ```bash
-# Use fast mode (stream copy - 10x faster)
-python3 arena_process.py video.mp4 --fast
+arena process podcast.mp4 \
+  --use-4layer \
+  --editorial-model gpt-4o-mini \
+  -n 8 \
+  --min 60 \
+  --max 120
 
-# Transcription is cached - only slow on first run
-# Use --no-cache to force re-transcription
+arena format output/clips/ -p youtube -o youtube/
+arena format output/clips/ -p linkedin -o linkedin/
 ```
 
-### Out of disk space
-
-Generated clips can be large. Each 60s clip @ 1080p ≈ 25-40 MB.
+### Course Creator
 
 ```bash
-# Use fast mode for smaller files
-python3 arena_process.py video.mp4 --fast
+arena process lecture.mp4 \
+  --use-4layer \
+  -n 8 \
+  --min 45 \
+  --max 90
 
-# Or generate fewer clips
-python3 arena_process.py video.mp4 -n 3
+arena format output/clips/ -p youtube -o youtube/
 ```
 
-## Advanced: Python API
+## Learn More
 
-Use Arena in your own scripts:
+- **Complete Usage Guide**: [USAGE.md](./USAGE.md)
+- **Command Reference**: [CLI_REFERENCE.md](./CLI_REFERENCE.md)
+- **Setup Guide**: [SETUP.md](./SETUP.md)
+- **Troubleshooting**: [../cli/docs/TROUBLESHOOTING.md](../../cli/docs/TROUBLESHOOTING.md)
+- **Main README**: [../../README.md](../../README.md)
 
-```python
-from pathlib import Path
-from arena.audio.transcriber import Transcriber
-from arena.audio.energy import AudioEnergyAnalyzer
-from arena.ai.analyzer import TranscriptAnalyzer
-from arena.ai.hybrid import HybridAnalyzer
-from arena.clipping.generator import ClipGenerator
+---
 
-# 1. Transcribe
-transcriber = Transcriber(api_key="sk-...")
-transcript = transcriber.transcribe(Path("video.mp4"))
-
-# 2. Analyze
-ai = TranscriptAnalyzer(api_key="sk-...")
-energy = AudioEnergyAnalyzer(Path("video.mp4"))
-hybrid = HybridAnalyzer(ai, energy)
-
-results = hybrid.analyze_video(
-    Path("video.mp4"),
-    transcript,
-    target_clips=5
-)
-
-# 3. Generate
-generator = ClipGenerator(Path("video.mp4"))
-clips = generator.generate_multiple_clips(
-    segments=results['clips'],
-    output_dir=Path("output/clips")
-)
-
-print(f"Generated {len(clips)} clips!")
-```
-
-## Next Steps
-
-### Review Your Clips
-
-Open the output directory and review the generated clips:
-
-```bash
-# View clips
-open output/clips/
-
-# Or on Linux
-xdg-open output/clips/
-```
-
-### Adjust Parameters
-
-Try different settings to find what works for your content:
-
-- **More clips:** `-n 10` for more options
-- **Shorter clips:** `--min 15 --max 30` for social media
-- **Longer clips:** `--min 60 --max 120` for YouTube
-- **More padding:** `--padding 2.0` for extra context
-- **Fast mode:** `--fast` for quick iteration
-
-### Check Analysis Results
-
-View the complete analysis:
-
-```bash
-cat output/analysis_results.json | python3 -m json.tool
-```
-
-### Share on Social Media
-
-Your clips are ready to upload:
-- TikTok: 15-60s clips
-- Instagram Reels: 15-90s clips
-- YouTube Shorts: <60s clips
-- Twitter/X: Up to 2:20 clips
-- LinkedIn: Up to 10min clips
-
-## Getting Help
-
-- **Documentation:** Check the `.md` files in the project root
-- **Examples:** See `test_*.py` files for code examples
-- **Issues:** Report bugs at GitHub (when public)
-
-## Summary
-
-```bash
-# 1. Quick demo (no API key)
-python3 arena_process_demo.py
-
-# 2. Process your video
-export OPENAI_API_KEY="sk-..."
-python3 arena_process.py your-video.mp4
-
-# 3. Review output
-open output/clips/
-
-# 4. Share your clips!
-```
-
-That's it! You're ready to create engaging video clips with Arena. 🎬
+**Ready to create amazing clips?** Run `arena process video.mp4 --use-4layer` and watch the magic happen! ✨
