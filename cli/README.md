@@ -1,19 +1,20 @@
 # Arena CLI
 
-> AI-powered video editing for the terminal - Turn long-form content into viral clips
+> AI-powered video clip generation for the terminal - Turn long-form content into viral clips
 
 [![npm version](https://badge.fury.io/js/%40arena%2Fcli.svg)](https://www.npmjs.com/package/@arena/cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Arena CLI is a professional video editing tool that uses AI to automatically identify and extract the best moments from your long-form content. Perfect for content creators, podcasters, and course producers who want to repurpose their content for social media.
+Arena CLI is a professional video clip generation tool that uses AI to automatically identify and extract the best moments from your long-form content. Perfect for content creators, podcasters, and course producers who want to repurpose their content for social media.
 
 ## Features
 
 ✨ **AI-Powered Clip Detection** - Automatically finds the most engaging moments in your videos
 🎯 **4-Layer Editorial System** - Professional-grade quality validation (optional)
 ⚡ **Hybrid Analysis** - Combines AI transcript analysis with audio energy detection
+📐 **Multi-Platform Formatting** - Format clips for TikTok, Instagram, YouTube, LinkedIn (7 platforms)
 💰 **Cost-Optimized** - Support for gpt-4o-mini ($0.20/video average)
-🎬 **Social Media Ready** - Perfect for TikTok, YouTube Shorts, Instagram Reels
+🎬 **Social Media Ready** - Smart cropping, blur padding, aspect ratio conversion
 🔧 **Flexible Workflow** - Analyze, review, and generate clips in separate steps
 📝 **Whisper Transcription** - Accurate AI transcription powered by OpenAI
 
@@ -69,7 +70,7 @@ This will guide you through:
 
 ## Commands
 
-Arena provides 7 commands for flexible video editing workflows:
+Arena provides 8 commands for flexible video clip generation workflows:
 
 | Command | Purpose | Use Case |
 |---------|---------|----------|
@@ -78,6 +79,7 @@ Arena provides 7 commands for flexible video editing workflows:
 | `arena transcribe` | Transcription only | Reuse transcripts, save costs |
 | `arena analyze` | Find moments (no video) | Fast preview, review before generating |
 | `arena generate` | Generate from analysis | Selective clip generation |
+| `arena format` | Format for social platforms | TikTok, Instagram, YouTube formatting |
 | `arena config` | Manage configuration | API keys, settings |
 | `arena extract-audio` | Audio extraction | Audio-only workflows |
 
@@ -185,6 +187,38 @@ arena generate video.mp4 moments.json --fast
 - `--padding <seconds>` - Padding before/after clips (default: `0.5`)
 
 **Why use this:** Generate only the clips you want after reviewing analysis.
+
+### `arena format <input>`
+
+Format clips for specific social media platforms with optimal specs.
+
+```bash
+# Format single clip for TikTok
+arena format clip.mp4 -p tiktok -o tiktok/
+
+# Batch format directory for Instagram Reels
+arena format clips/ -p instagram-reels --crop smart -o reels/
+
+# Format for YouTube with blur padding
+arena format video.mp4 -p youtube --pad blur -o youtube/
+```
+
+**Options:**
+- `-p, --platform <platform>` - Target platform (required):
+  - `tiktok` - 1080×1920 (9:16), max 180s, 287MB
+  - `instagram-reels` - 1080×1920 (9:16), max 90s, 100MB
+  - `youtube-shorts` - 1080×1920 (9:16), max 60s, 100MB
+  - `youtube` - 1920×1080 (16:9), unlimited duration
+  - `instagram-feed` - 1080×1080 (1:1), max 60s, 100MB
+  - `twitter` - 1280×720 (16:9), max 140s, 512MB
+  - `linkedin` - 1920×1080 (16:9), max 600s, 5GB
+- `-o, --output <dir>` - Output directory for formatted clips
+- `--crop <strategy>` - Crop strategy: `center`, `smart`, `top`, `bottom` (default: `center`)
+- `--pad <strategy>` - Pad strategy: `blur`, `black`, `white`, `color` (default: `blur`)
+- `--pad-color <color>` - Padding color in hex (default: `#000000`)
+- `--no-quality` - Disable high quality encoding (faster, smaller files)
+
+**Why use this:** Automatically convert clips to platform-optimal specs with smart cropping and padding.
 
 ### `arena extract-audio <video>`
 
@@ -323,7 +357,25 @@ arena process lecture.mp4 \
 
 **Output:** 45-90 second teaching moments.
 
-### Workflow 7: Batch Processing
+### Workflow 7: Multi-Platform Distribution
+
+Generate clips once, format for every platform.
+
+```bash
+# Step 1: Generate high-quality clips
+arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini -n 5
+
+# Step 2: Format for each platform
+arena format output/clips/ -p tiktok --crop smart -o social/tiktok/
+arena format output/clips/ -p instagram-reels --crop smart -o social/reels/
+arena format output/clips/ -p youtube-shorts --crop smart -o social/shorts/
+arena format output/clips/ -p youtube -o social/youtube/
+arena format output/clips/ -p instagram-feed --crop center -o social/feed/
+```
+
+**Result:** 1 video → 5 clips → 5 platforms = 25 optimized videos!
+
+### Workflow 8: Batch Processing
 
 Process multiple videos efficiently.
 
