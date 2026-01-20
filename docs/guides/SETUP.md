@@ -48,7 +48,7 @@ That's it! Skip to [Configuration](#configuration).
 #### 1. Clone and Navigate
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/iamwhitegod/arena.git
 cd arena
 ```
 

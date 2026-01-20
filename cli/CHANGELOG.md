@@ -80,6 +80,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Limited error handling
 - Documentation incomplete
 
-[Unreleased]: https://github.com/YOUR_USERNAME/arena/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/YOUR_USERNAME/arena/releases/tag/v0.1.0
-[0.0.1]: https://github.com/YOUR_USERNAME/arena/releases/tag/v0.0.1
+[Unreleased]: https://github.com/iamwhitegod/arena/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/iamwhitegod/arena/releases/tag/v0.1.0
+[0.0.1]: https://github.com/iamwhitegod/arena/releases/tag/v0.0.1

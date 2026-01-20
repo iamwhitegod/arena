@@ -304,7 +304,7 @@ arena generate video.mp4 moments.json --select 1,3,5
 
 ## 🔗 Links
 
-- **Main Repository:** https://github.com/YOUR_USERNAME/arena
+- **Main Repository:** https://github.com/iamwhitegod/arena
 - **npm Package:** https://www.npmjs.com/package/@arena/cli (pending)
 - **Documentation:** ./docs/guides/USAGE.md
 - **Troubleshooting:** ./docs/TROUBLESHOOTING.md

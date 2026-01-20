@@ -20,7 +20,7 @@ npm install -g @arena/cli
 ### Option 2: Install from source
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/iamwhitegod/arena.git
 cd arena
 
 # Install CLI

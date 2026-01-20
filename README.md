@@ -47,7 +47,7 @@ Convert clips for any social media platform with optimal specs:
 npm install -g @arena/cli
 
 # Or clone the repository
-git clone <repository-url>
+git clone https://github.com/iamwhitegod/arena.git
 cd arena
 npm install -g ./cli
 
@@ -242,7 +242,7 @@ Arena uses a hybrid TypeScript + Python architecture:
 npm install -g @arena/cli
 
 # Option 2: Install from source
-git clone <repository-url>
+git clone https://github.com/iamwhitegod/arena.git
 cd arena
 npm install -g ./cli
 
@@ -372,7 +372,7 @@ arena format output/clips/ -p youtube -o youtube/
 
 ```bash
 # Clone repository
-git clone <repository-url>
+git clone https://github.com/iamwhitegod/arena.git
 cd arena
 
 # Install CLI dependencies
@@ -465,8 +465,8 @@ MIT © Arena Contributors
 ## 🔗 Links
 
 - **Documentation**: [docs/guides/USAGE.md](./docs/guides/USAGE.md)
-- **Issues**: [GitHub Issues](https://github.com/YOUR_USERNAME/arena/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/YOUR_USERNAME/arena/discussions)
+- **Issues**: [GitHub Issues](https://github.com/iamwhitegod/arena/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/iamwhitegod/arena/discussions)
 
 ---
 

@@ -619,7 +619,7 @@ arena generate video.mp4 moments.json --select 1,4,7
 
 ## Contributing
 
-Contributions are welcome! Please see the [GitHub repository](https://github.com/YOUR_USERNAME/arena) for details.
+Contributions are welcome! Please see the [GitHub repository](https://github.com/iamwhitegod/arena) for details.
 
 ## License
 
@@ -627,8 +627,8 @@ MIT © Arena Contributors
 
 ## Links
 
-- **GitHub**: https://github.com/YOUR_USERNAME/arena
-- **Issues**: https://github.com/YOUR_USERNAME/arena/issues
+- **GitHub**: https://github.com/iamwhitegod/arena
+- **Issues**: https://github.com/iamwhitegod/arena/issues
 - **npm**: https://www.npmjs.com/package/@arena/cli
 
 ---
