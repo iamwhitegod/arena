@@ -14,6 +14,7 @@ import { configCommand } from './commands/config.js';
 import { extractAudioCommand } from './commands/extract-audio.js';
 import { formatCommand } from './commands/format.js';
 import { detectScenesCommand } from './commands/detect-scenes.js';
+import { diagnoseCommand } from './commands/diagnose.js';
 
 // Get package.json version (ES module compatible)
 const __filename = fileURLToPath(import.meta.url);
@@ -153,5 +154,11 @@ program
   .option('--report', 'generate detailed scene report')
   .option('--debug', 'show debug information')
   .action(detectScenesCommand);
+
+// Diagnose command - System diagnostics
+program
+  .command('diagnose')
+  .description('Run system diagnostics and troubleshooting checks')
+  .action(diagnoseCommand);
 
 program.parse();

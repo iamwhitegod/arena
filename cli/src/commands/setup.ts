@@ -3,13 +3,14 @@
  */
 
 import chalk from 'chalk';
-import { spawn } from 'child_process';
 import { promisify } from 'util';
 import { exec } from 'child_process';
 import ora from 'ora';
 import inquirer from 'inquirer';
 import { existsSync } from 'fs';
 import { join } from 'path';
+import { spawnWithErrorHandling, getUserFriendlyError } from '../utils/resilience.js';
+import { logger, logCommand } from '../utils/logger.js';
 
 const execAsync = promisify(exec);
 
@@ -266,7 +267,9 @@ async function installPythonPackages(): Promise<boolean> {
 
   const spinner = ora('Installing Python dependencies').start();
 
-  return new Promise((resolve) => {
+  logger.info('Installing Python packages', { packages: pythonPackages });
+
+  try {
     // Handle "python -m pip" vs "pip" command format
     let command: string;
     let args: string[];
@@ -287,70 +290,75 @@ async function installPythonPackages(): Promise<boolean> {
       args.push('--user');
     }
 
-    const pip = spawn(command, args, {
-      stdio: ['inherit', 'pipe', 'pipe'],
-      shell: process.platform === 'win32', // Use shell on Windows for better compatibility
-    });
-
-    let output = '';
-
-    pip.stdout?.on('data', (data) => {
-      output += data.toString();
-      // Update spinner with current package
-      const match = output.match(/Collecting (\S+)/);
-      if (match) {
-        spinner.text = `Installing ${match[1]}...`;
-      }
-    });
-
-    pip.stderr?.on('data', (data) => {
-      output += data.toString();
-    });
-
-    pip.on('close', (code) => {
-      if (code === 0) {
-        spinner.succeed('Python packages installed successfully');
-        resolve(true);
-      } else {
-        spinner.fail('Failed to install Python packages');
-        console.log(chalk.red('\nError output:'));
-        console.log(chalk.gray(output));
-
-        // Detect specific errors and provide solutions
-        const errorLower = output.toLowerCase();
-
-        if (errorLower.includes('access is denied') || errorLower.includes('permission denied')) {
-          console.log(chalk.yellow('\n⚠️  Permission Error Detected:'));
-          if (process.platform === 'win32') {
-            console.log(chalk.white('Solution 1 (Recommended): Install to user directory'));
-            console.log(chalk.cyan(`  ${pipCommand} install --user ${pythonPackages.join(' ')}\n`));
-            console.log(chalk.white('Solution 2: Run PowerShell as Administrator'));
-            console.log(chalk.gray('  Right-click PowerShell → "Run as Administrator"'));
-            console.log(chalk.cyan(`  ${pipCommand} install ${pythonPackages.join(' ')}\n`));
-          } else {
-            console.log(chalk.white('Try with --user flag:'));
-            console.log(chalk.cyan(`  ${pipCommand} install --user ${pythonPackages.join(' ')}\n`));
-          }
-        } else {
-          console.log(chalk.yellow('\n💡 Tip: Try running manually:'));
-          const userFlag = process.platform === 'win32' ? ' --user' : '';
-          console.log(
-            chalk.cyan(`  ${pipCommand} install${userFlag} ${pythonPackages.join(' ')}\n`)
-          );
+    const result = await spawnWithErrorHandling(command, args, {
+      shell: process.platform === 'win32',
+      onStdout: (data) => {
+        // Update spinner with current package
+        const match = data.match(/Collecting (\S+)/);
+        if (match) {
+          spinner.text = `Installing ${match[1]}...`;
         }
+      },
+      onError: (error) => {
+        logger.error('Python package installation spawn error', error);
+      },
+    });
 
-        resolve(false);
+    if (result.code === 0) {
+      spinner.succeed('Python packages installed successfully');
+      logger.info('Python packages installed successfully');
+      return true;
+    } else {
+      spinner.fail('Failed to install Python packages');
+      logger.error('Python package installation failed', undefined, {
+        stdout: result.stdout,
+        stderr: result.stderr,
+      });
+
+      console.log(chalk.red('\nError output:'));
+      console.log(chalk.gray(result.stderr || result.stdout));
+
+      // Detect specific errors and provide solutions
+      const output = (result.stderr || result.stdout).toLowerCase();
+
+      if (output.includes('access is denied') || output.includes('permission denied')) {
+        console.log(chalk.yellow('\n⚠️  Permission Error Detected:'));
+        if (process.platform === 'win32') {
+          console.log(chalk.white('Solution 1 (Recommended): Install to user directory'));
+          console.log(chalk.cyan(`  ${pipCommand} install --user ${pythonPackages.join(' ')}\n`));
+          console.log(chalk.white('Solution 2: Run PowerShell as Administrator'));
+          console.log(chalk.gray('  Right-click PowerShell → "Run as Administrator"'));
+          console.log(chalk.cyan(`  ${pipCommand} install ${pythonPackages.join(' ')}\n`));
+        } else {
+          console.log(chalk.white('Try with --user flag:'));
+          console.log(chalk.cyan(`  ${pipCommand} install --user ${pythonPackages.join(' ')}\n`));
+        }
+      } else if (output.includes('timeout') || output.includes('timed out')) {
+        console.log(chalk.yellow('\n⚠️  Network Timeout:'));
+        console.log(chalk.white('The installation timed out. Try again with:'));
+        const userFlag = process.platform === 'win32' ? ' --user' : '';
+        console.log(
+          chalk.cyan(
+            `  ${pipCommand} install${userFlag} --timeout 300 ${pythonPackages.join(' ')}\n`
+          )
+        );
+      } else {
+        console.log(chalk.yellow('\n💡 Tip: Try running manually:'));
+        const userFlag = process.platform === 'win32' ? ' --user' : '';
+        console.log(chalk.cyan(`  ${pipCommand} install${userFlag} ${pythonPackages.join(' ')}\n`));
       }
-    });
 
-    pip.on('error', (error) => {
-      spinner.fail('Failed to start pip');
-      console.log(chalk.red(`\nError: ${error.message}`));
-      console.log(chalk.yellow('\n💡 Try installing manually:'));
-      console.log(chalk.cyan(`  ${pipCommand} install ${pythonPackages.join(' ')}\n`));
-      resolve(false);
-    });
-  });
+      return false;
+    }
+  } catch (error) {
+    spinner.fail('Failed to start pip');
+    logger.error('Python package installation error', error as Error);
+    console.log(chalk.red(`\nError: ${getUserFriendlyError(error as Error)}`));
+    console.log(chalk.yellow('\n💡 Try installing manually:'));
+    const userFlag = process.platform === 'win32' ? ' --user' : '';
+    console.log(chalk.cyan(`  ${pipCommand} install${userFlag} ${pythonPackages.join(' ')}\n`));
+    return false;
+  }
 }
 
 async function autoInstallDependency(
@@ -472,190 +480,205 @@ async function autoInstallDependency(
 }
 
 export async function setupCommand(): Promise<void> {
+  logCommand('setup', {});
+  const startTime = Date.now();
+
   console.log(chalk.cyan('\n🔧 ARENA SETUP\n'));
   console.log(chalk.white('Checking system dependencies...\n'));
 
-  const packageManager = await detectPackageManager();
-  console.log(
-    chalk.gray(`Detected package manager: ${packageManager.split('-')[1] || 'manual'}\n`)
-  );
+  try {
+    const packageManager = await detectPackageManager();
+    console.log(
+      chalk.gray(`Detected package manager: ${packageManager.split('-')[1] || 'manual'}\n`)
+    );
 
-  const results: Array<{ dep: DependencyCheck; installed: boolean; version?: string }> = [];
+    const results: Array<{ dep: DependencyCheck; installed: boolean; version?: string }> = [];
 
-  // Check all dependencies
-  for (const dep of dependencies) {
-    const spinner = ora(`Checking ${dep.name}`).start();
+    // Check all dependencies
+    for (const dep of dependencies) {
+      const spinner = ora(`Checking ${dep.name}`).start();
 
-    // Use special checks for Python, pip, and FFmpeg to handle cross-platform variations
-    let result;
-    if (dep.name.includes('Python')) {
-      result = await checkPython();
-    } else if (dep.name.includes('pip')) {
-      result = await checkPip();
-    } else if (dep.name.includes('FFmpeg')) {
-      result = await checkFFmpeg();
-    } else {
-      result = await checkCommand(dep.command);
-    }
-
-    if (result.installed) {
-      spinner.succeed(`${dep.name} ${chalk.gray(result.version || '')}`);
-    } else {
-      spinner.fail(`${dep.name} not found`);
-    }
-
-    results.push({ dep, ...result });
-  }
-
-  // Check if FFmpeg was found on Windows but not in PATH
-  if (process.platform === 'win32') {
-    const ffmpegResult = results.find((r) => r.dep.name.includes('FFmpeg'));
-    const ffmpegPath =
-      ffmpegResult && 'foundPath' in ffmpegResult
-        ? (ffmpegResult as { foundPath?: string }).foundPath
-        : undefined;
-    if (ffmpegResult && ffmpegResult.installed && ffmpegPath) {
-      console.log(chalk.yellow('\n⚠️  FFmpeg found but not in PATH'));
-      console.log(chalk.white('FFmpeg is installed at:'));
-      console.log(chalk.cyan(`  ${ffmpegPath}\n`));
-      console.log(chalk.white('To use it from anywhere, add it to your PATH:'));
-      console.log(chalk.gray('  1. Open System Properties → Environment Variables'));
-      console.log(chalk.gray(`  2. Add to PATH: ${ffmpegPath.replace('\\ffmpeg.exe', '')}\n`));
-      console.log(chalk.white('Or restart your terminal after installation.\n'));
-    }
-  }
-
-  // Summary
-  const missing = results.filter((r) => !r.installed);
-
-  console.log(chalk.cyan('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
-
-  if (missing.length === 0) {
-    console.log(chalk.green('✓ All system dependencies installed!\n'));
-
-    // Check Python packages
-    console.log(chalk.cyan('Checking Python packages...\n'));
-
-    const { installPackages } = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'installPackages',
-        message: 'Install/update required Python packages?',
-        default: true,
-      },
-    ]);
-
-    if (installPackages) {
-      const success = await installPythonPackages();
-
-      if (success) {
-        console.log(chalk.green('\n✓ Setup complete! Arena is ready to use.\n'));
-        console.log(chalk.cyan('Try it out:'));
-        console.log(chalk.white('  arena process video.mp4 -p tiktok\n'));
+      // Use special checks for Python, pip, and FFmpeg to handle cross-platform variations
+      let result;
+      if (dep.name.includes('Python')) {
+        result = await checkPython();
+      } else if (dep.name.includes('pip')) {
+        result = await checkPip();
+      } else if (dep.name.includes('FFmpeg')) {
+        result = await checkFFmpeg();
       } else {
-        console.log(chalk.yellow('\n⚠️  Setup completed with errors'));
-        console.log(chalk.white('You may need to install Python packages manually:\n'));
-        console.log(chalk.gray(`  pip3 install ${pythonPackages.join(' ')}\n`));
+        result = await checkCommand(dep.command);
       }
-    } else {
-      console.log(chalk.yellow('\nSkipped Python package installation'));
-      console.log(chalk.white('Install them later with:\n'));
-      console.log(chalk.gray(`  pip3 install ${pythonPackages.join(' ')}\n`));
+
+      if (result.installed) {
+        spinner.succeed(`${dep.name} ${chalk.gray(result.version || '')}`);
+      } else {
+        spinner.fail(`${dep.name} not found`);
+      }
+
+      results.push({ dep, ...result });
     }
-  } else {
-    console.log(chalk.red(`✗ Missing ${missing.length} dependencies:\n`));
 
-    missing.forEach(({ dep }) => {
-      console.log(chalk.white(`  • ${dep.name}`));
-      const instruction =
-        dep.installInstructions[packageManager] ||
-        dep.installInstructions[`${packageManager.split('-')[0]}-manual`] ||
-        'Manual installation required';
-      console.log(chalk.gray(`    ${instruction}\n`));
-    });
-
-    // Show platform-specific notes
+    // Check if FFmpeg was found on Windows but not in PATH
     if (process.platform === 'win32') {
-      console.log(chalk.yellow('⚠️  Windows Note:'));
-      console.log(chalk.gray('   Automatic installation may require running as Administrator'));
-      console.log(chalk.gray('   Right-click PowerShell/CMD → "Run as Administrator"\n'));
-    } else if (process.platform === 'linux') {
-      console.log(chalk.yellow('⚠️  Linux Note:'));
-      console.log(chalk.gray('   Automatic installation requires sudo privileges'));
-      console.log(chalk.gray('   You may be prompted for your password\n'));
+      const ffmpegResult = results.find((r) => r.dep.name.includes('FFmpeg'));
+      const ffmpegPath =
+        ffmpegResult && 'foundPath' in ffmpegResult
+          ? (ffmpegResult as { foundPath?: string }).foundPath
+          : undefined;
+      if (ffmpegResult && ffmpegResult.installed && ffmpegPath) {
+        console.log(chalk.yellow('\n⚠️  FFmpeg found but not in PATH'));
+        console.log(chalk.white('FFmpeg is installed at:'));
+        console.log(chalk.cyan(`  ${ffmpegPath}\n`));
+        console.log(chalk.white('To use it from anywhere, add it to your PATH:'));
+        console.log(chalk.gray('  1. Open System Properties → Environment Variables'));
+        console.log(chalk.gray(`  2. Add to PATH: ${ffmpegPath.replace('\\ffmpeg.exe', '')}\n`));
+        console.log(chalk.white('Or restart your terminal after installation.\n'));
+      }
     }
 
-    // Ask if user wants to auto-install
-    const { autoInstall } = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'autoInstall',
-        message: 'Would you like to try automatic installation?',
-        default: true,
-      },
-    ]);
+    // Summary
+    const missing = results.filter((r) => !r.installed);
 
-    if (autoInstall) {
-      for (const { dep, installed } of missing) {
-        if (!installed) {
-          await autoInstallDependency(dep, packageManager);
-        }
-      }
+    console.log(chalk.cyan('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
 
-      // Re-check
-      console.log(chalk.cyan('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
-      console.log(chalk.white('Re-checking dependencies...\n'));
+    if (missing.length === 0) {
+      console.log(chalk.green('✓ All system dependencies installed!\n'));
 
-      let allInstalled = true;
-      for (const { dep } of missing) {
-        // Use cross-platform detection for re-check
-        let result;
-        if (dep.name.includes('Python')) {
-          result = await checkPython();
-        } else if (dep.name.includes('pip')) {
-          result = await checkPip();
-        } else if (dep.name.includes('FFmpeg')) {
-          result = await checkFFmpeg();
-        } else {
-          result = await checkCommand(dep.command);
-        }
+      // Check Python packages
+      console.log(chalk.cyan('Checking Python packages...\n'));
 
-        if (result.installed) {
-          console.log(chalk.green(`✓ ${dep.name} ${chalk.gray(result.version || '')}`));
-        } else {
-          console.log(chalk.red(`✗ ${dep.name} still not found`));
-          allInstalled = false;
-        }
-      }
+      const { installPackages } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'installPackages',
+          message: 'Install/update required Python packages?',
+          default: true,
+        },
+      ]);
 
-      if (allInstalled) {
-        console.log(chalk.green('\n✓ All dependencies installed!\n'));
-
-        // Install Python packages
+      if (installPackages) {
         const success = await installPythonPackages();
 
         if (success) {
           console.log(chalk.green('\n✓ Setup complete! Arena is ready to use.\n'));
           console.log(chalk.cyan('Try it out:'));
           console.log(chalk.white('  arena process video.mp4 -p tiktok\n'));
+        } else {
+          console.log(chalk.yellow('\n⚠️  Setup completed with errors'));
+          console.log(chalk.white('You may need to install Python packages manually:\n'));
+          console.log(chalk.gray(`  pip3 install ${pythonPackages.join(' ')}\n`));
         }
       } else {
-        console.log(chalk.yellow('\n⚠️  Some dependencies could not be installed automatically'));
-        console.log(chalk.white('Please install them manually using the commands above.\n'));
-
-        // Show PATH restart warning if tools might have been installed
-        console.log(chalk.yellow('💡 If you just installed dependencies:'));
-        console.log(chalk.gray('   Restart your terminal to update PATH'));
-        if (process.platform === 'win32') {
-          console.log(chalk.gray('   - Close and reopen PowerShell/CMD'));
-        } else {
-          console.log(chalk.gray('   - Or run: source ~/.bashrc (or ~/.zshrc)'));
-        }
-        console.log(chalk.gray('   Then run: arena setup\n'));
+        console.log(chalk.yellow('\nSkipped Python package installation'));
+        console.log(chalk.white('Install them later with:\n'));
+        console.log(chalk.gray(`  pip3 install ${pythonPackages.join(' ')}\n`));
       }
     } else {
-      console.log(chalk.yellow('\nPlease install the missing dependencies manually, then run:'));
-      console.log(chalk.cyan('  arena setup\n'));
+      console.log(chalk.red(`✗ Missing ${missing.length} dependencies:\n`));
+
+      missing.forEach(({ dep }) => {
+        console.log(chalk.white(`  • ${dep.name}`));
+        const instruction =
+          dep.installInstructions[packageManager] ||
+          dep.installInstructions[`${packageManager.split('-')[0]}-manual`] ||
+          'Manual installation required';
+        console.log(chalk.gray(`    ${instruction}\n`));
+      });
+
+      // Show platform-specific notes
+      if (process.platform === 'win32') {
+        console.log(chalk.yellow('⚠️  Windows Note:'));
+        console.log(chalk.gray('   Automatic installation may require running as Administrator'));
+        console.log(chalk.gray('   Right-click PowerShell/CMD → "Run as Administrator"\n'));
+      } else if (process.platform === 'linux') {
+        console.log(chalk.yellow('⚠️  Linux Note:'));
+        console.log(chalk.gray('   Automatic installation requires sudo privileges'));
+        console.log(chalk.gray('   You may be prompted for your password\n'));
+      }
+
+      // Ask if user wants to auto-install
+      const { autoInstall } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'autoInstall',
+          message: 'Would you like to try automatic installation?',
+          default: true,
+        },
+      ]);
+
+      if (autoInstall) {
+        for (const { dep, installed } of missing) {
+          if (!installed) {
+            await autoInstallDependency(dep, packageManager);
+          }
+        }
+
+        // Re-check
+        console.log(chalk.cyan('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
+        console.log(chalk.white('Re-checking dependencies...\n'));
+
+        let allInstalled = true;
+        for (const { dep } of missing) {
+          // Use cross-platform detection for re-check
+          let result;
+          if (dep.name.includes('Python')) {
+            result = await checkPython();
+          } else if (dep.name.includes('pip')) {
+            result = await checkPip();
+          } else if (dep.name.includes('FFmpeg')) {
+            result = await checkFFmpeg();
+          } else {
+            result = await checkCommand(dep.command);
+          }
+
+          if (result.installed) {
+            console.log(chalk.green(`✓ ${dep.name} ${chalk.gray(result.version || '')}`));
+          } else {
+            console.log(chalk.red(`✗ ${dep.name} still not found`));
+            allInstalled = false;
+          }
+        }
+
+        if (allInstalled) {
+          console.log(chalk.green('\n✓ All dependencies installed!\n'));
+
+          // Install Python packages
+          const success = await installPythonPackages();
+
+          if (success) {
+            console.log(chalk.green('\n✓ Setup complete! Arena is ready to use.\n'));
+            console.log(chalk.cyan('Try it out:'));
+            console.log(chalk.white('  arena process video.mp4 -p tiktok\n'));
+          }
+        } else {
+          console.log(chalk.yellow('\n⚠️  Some dependencies could not be installed automatically'));
+          console.log(chalk.white('Please install them manually using the commands above.\n'));
+
+          // Show PATH restart warning if tools might have been installed
+          console.log(chalk.yellow('💡 If you just installed dependencies:'));
+          console.log(chalk.gray('   Restart your terminal to update PATH'));
+          if (process.platform === 'win32') {
+            console.log(chalk.gray('   - Close and reopen PowerShell/CMD'));
+          } else {
+            console.log(chalk.gray('   - Or run: source ~/.bashrc (or ~/.zshrc)'));
+          }
+          console.log(chalk.gray('   Then run: arena setup\n'));
+        }
+      } else {
+        console.log(chalk.yellow('\nPlease install the missing dependencies manually, then run:'));
+        console.log(chalk.cyan('  arena setup\n'));
+      }
     }
+
+    const duration = Date.now() - startTime;
+    logger.info('Setup completed', { durationMs: duration });
+  } catch (error) {
+    logger.error('Setup failed with unexpected error', error as Error);
+    console.log(chalk.red('\n✗ Setup failed with unexpected error:'));
+    console.log(chalk.gray(getUserFriendlyError(error as Error)));
+    console.log(chalk.yellow('\n💡 For help, run:'));
+    console.log(chalk.cyan('  arena diagnose\n'));
+    process.exit(1);
   }
 }

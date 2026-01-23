@@ -9,6 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **NEW: `arena diagnose` command** - Comprehensive system diagnostics and troubleshooting
+  - Checks system info, dependencies, Python packages, network connectivity, API key
+  - Validates disk space and configuration
+  - Generates diagnostic report with actionable solutions
+  - Saves report to arena-diagnostics.txt
+- **Resilience utilities** - Production-ready error handling framework
+  - Retry logic with exponential backoff for transient failures
+  - Timeout handling for all long operations
+  - Network connectivity checks
+  - API key validation and testing
+  - Disk space monitoring
+  - User-friendly error messages
+- **Logging system** - Debug and troubleshoot user issues
+  - Automatic log rotation (10MB max per file)
+  - Logs stored in ~/.arena/logs/
+  - Debug mode with console output
+  - Log statistics and analysis
+  - Helps diagnose hidden bugs users encounter
+
+### Improved
+- **Better error handling in setup command**
+  - Uses retry logic for network failures
+  - Better subprocess error handling with spawnWithErrorHandling
+  - Timeout detection and user-friendly messages
+  - Comprehensive logging of all operations
+  - Graceful error recovery and fallbacks
+
+### Changed
+- **Enhanced reliability** - All critical operations now have retry logic and timeouts
+- **Better diagnostics** - Users can now self-diagnose issues with `arena diagnose`
+- **Improved observability** - All commands now log to ~/.arena/logs for debugging
+
 ## [0.3.6] - 2026-01-23
 
 ### Fixed
