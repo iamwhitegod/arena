@@ -290,8 +290,12 @@ async function installPythonPackages(): Promise<boolean> {
       args.push('--user');
     }
 
+    // Add flags to avoid cache and hash issues
+    args.push('--no-cache-dir'); // Avoid stale cache causing hash mismatches
+    args.push('--upgrade'); // Ensure we get latest compatible versions
+
     const result = await spawnWithErrorHandling(command, args, {
-      shell: process.platform === 'win32',
+      shell: false, // Avoid shell for security (args are properly escaped)
       onStdout: (data) => {
         // Update spinner with current package
         const match = data.match(/Collecting (\S+)/);
@@ -342,10 +346,25 @@ async function installPythonPackages(): Promise<boolean> {
             `  ${pipCommand} install${userFlag} --timeout 300 ${pythonPackages.join(' ')}\n`
           )
         );
+      } else if (output.includes('hash') || output.includes('these packages do not match')) {
+        console.log(chalk.yellow('\n⚠️  Corrupted Cache Detected:'));
+        console.log(chalk.white('Pip cache has corrupted or outdated files. Clear it and retry:\n'));
+        console.log(chalk.cyan(`  ${pipCommand} cache purge`));
+        const userFlag = process.platform === 'win32' ? ' --user' : '';
+        console.log(
+          chalk.cyan(
+            `  ${pipCommand} install${userFlag} --no-cache-dir ${pythonPackages.join(' ')}\n`
+          )
+        );
+        console.log(
+          chalk.gray('Note: --no-cache-dir flag was added to avoid this issue in future.\n')
+        );
       } else {
         console.log(chalk.yellow('\n💡 Tip: Try running manually:'));
         const userFlag = process.platform === 'win32' ? ' --user' : '';
-        console.log(chalk.cyan(`  ${pipCommand} install${userFlag} ${pythonPackages.join(' ')}\n`));
+        console.log(
+          chalk.cyan(`  ${pipCommand} install${userFlag} --no-cache-dir ${pythonPackages.join(' ')}\n`)
+        );
       }
 
       return false;
@@ -356,7 +375,9 @@ async function installPythonPackages(): Promise<boolean> {
     console.log(chalk.red(`\nError: ${getUserFriendlyError(error as Error)}`));
     console.log(chalk.yellow('\n💡 Try installing manually:'));
     const userFlag = process.platform === 'win32' ? ' --user' : '';
-    console.log(chalk.cyan(`  ${pipCommand} install${userFlag} ${pythonPackages.join(' ')}\n`));
+    console.log(
+      chalk.cyan(`  ${pipCommand} install${userFlag} --no-cache-dir ${pythonPackages.join(' ')}\n`)
+    );
     return false;
   }
 }

@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **CRITICAL: Pip cache hash mismatch errors** - Fixed "THESE PACKAGES DO NOT MATCH THE HASHES" errors
+  - Added `--no-cache-dir` flag to avoid stale/corrupted cache files
+  - Added `--upgrade` flag to ensure latest compatible versions
+  - Detects hash errors and provides cache purge instructions
+- **Security: Shell injection warning** - Fixed deprecation warning about shell=true with args
+  - Changed to shell=false with properly escaped arguments
+  - Eliminates security vulnerability from concatenated arguments
+
+### Improved
+- **Better error messages for cache issues** - Specific guidance when pip cache is corrupted
+  - Shows cache purge command
+  - Explains why --no-cache-dir flag was added
+  - All manual installation instructions now include --no-cache-dir
+
 ## [0.3.8] - 2026-01-23
 
 ### Fixed
