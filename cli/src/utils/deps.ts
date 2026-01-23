@@ -46,15 +46,29 @@ async function loadDepsConfig(): Promise<DepsConfig> {
  */
 async function commandExists(command: string): Promise<boolean> {
   return new Promise((resolve) => {
-    const process = spawn(command, ['--version'], {
+    // Windows-specific spawn options to avoid job object errors
+    const spawnOptions: {
+      stdio: 'ignore';
+      windowsHide?: boolean;
+      detached?: boolean;
+      shell?: boolean;
+    } = {
       stdio: 'ignore',
-    });
+    };
 
-    process.on('close', (code) => {
+    if (process.platform === 'win32') {
+      spawnOptions.windowsHide = true;
+      spawnOptions.detached = false;
+      spawnOptions.shell = false;
+    }
+
+    const childProcess = spawn(command, ['--version'], spawnOptions);
+
+    childProcess.on('close', (code: number | null) => {
       resolve(code === 0);
     });
 
-    process.on('error', () => {
+    childProcess.on('error', () => {
       resolve(false);
     });
   });

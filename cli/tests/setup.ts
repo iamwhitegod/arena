@@ -31,7 +31,12 @@ beforeAll(async () => {
 // Cleanup after all tests
 afterAll(async () => {
   // Clean up temporary test directory
-  await fs.remove(TEST_DIR);
+  try {
+    await fs.remove(TEST_DIR);
+  } catch (error) {
+    // Ignore cleanup errors - they're not critical
+    console.warn('Warning: Could not clean up test directory:', error);
+  }
 
   // Restore console
   vi.restoreAllMocks();
@@ -48,5 +53,12 @@ export async function createTestDir(name: string): Promise<string> {
 
 // Helper to clean up test directory
 export async function cleanTestDir(dir: string): Promise<void> {
-  await fs.remove(dir);
+  try {
+    // Use stronger removal method
+    await fs.emptyDir(dir);
+    await fs.remove(dir);
+  } catch (error) {
+    // Ignore cleanup errors - they're not critical for test functionality
+    console.warn(`Warning: Could not clean up ${dir}:`, error);
+  }
 }

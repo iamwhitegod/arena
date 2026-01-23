@@ -125,15 +125,33 @@ export function spawnWithErrorHandling(
   } = {}
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const proc = spawn(command, args, {
+    // Build spawn options with Windows-specific settings
+    const spawnOptions: {
+      stdio: ['inherit', 'pipe', 'pipe'];
+      shell?: boolean;
+      windowsHide?: boolean;
+      detached?: boolean;
+    } = {
       stdio: ['inherit', 'pipe', 'pipe'],
-      shell: options.shell ?? process.platform === 'win32',
-    });
+      shell: options.shell ?? false,
+    };
+
+    // Windows-specific spawn options to avoid job object errors
+    if (process.platform === 'win32') {
+      spawnOptions.windowsHide = true;
+      spawnOptions.detached = false;
+      // Keep shell: false for security unless explicitly set
+      if (options.shell === undefined) {
+        spawnOptions.shell = false;
+      }
+    }
+
+    const proc = spawn(command, args, spawnOptions);
 
     let stdout = '';
     let stderr = '';
 
-    proc.stdout?.on('data', (data) => {
+    proc.stdout?.on('data', (data: Buffer) => {
       const text = data.toString();
       stdout += text;
       if (options.onStdout) {
@@ -141,7 +159,7 @@ export function spawnWithErrorHandling(
       }
     });
 
-    proc.stderr?.on('data', (data) => {
+    proc.stderr?.on('data', (data: Buffer) => {
       const text = data.toString();
       stderr += text;
       if (options.onStderr) {
@@ -149,14 +167,14 @@ export function spawnWithErrorHandling(
       }
     });
 
-    proc.on('error', (error) => {
+    proc.on('error', (error: Error) => {
       if (options.onError) {
         options.onError(error);
       }
       reject(error);
     });
 
-    proc.on('close', (code) => {
+    proc.on('close', (code: number | null) => {
       resolve({ code: code || 0, stdout, stderr });
     });
   });
