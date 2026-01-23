@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-01-23
+
 ### Added
 - **NEW: `arena diagnose` command** - Comprehensive system diagnostics and troubleshooting
   - Checks system info, dependencies, Python packages, network connectivity, API key
