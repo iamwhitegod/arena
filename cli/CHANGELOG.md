@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.9] - 2026-01-23
+## [0.3.10] - 2026-01-23
 
 ### Fixed
 - **CRITICAL: Windows AssignProcessToJobObject error** - Fixed "The parameter is incorrect" error on Windows
@@ -36,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Shows cache purge command
   - Explains why --no-cache-dir flag was added
   - All manual installation instructions now include --no-cache-dir
+
+## [0.3.9] - 2026-01-23
+
+### Fixed
+- **CRITICAL: Pip cache hash mismatch errors** - Initial fix attempt (superseded by 0.3.10)
+
+### Changed
+- Initial Windows compatibility improvements (completed in 0.3.10)
 
 ## [0.3.8] - 2026-01-23
 
