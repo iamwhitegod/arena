@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **CRITICAL: Windows AssignProcessToJobObject error** - Fixed "The parameter is incorrect" error on Windows
+  - Explicitly use `python` command on Windows instead of shebang script
+  - Added proper Windows spawn options (windowsHide, detached: false)
+  - Created helper method to handle platform-specific command execution
+  - All Python CLI calls now work correctly on Windows
+
+### Improved
+- **Cross-platform Python execution** - Unified approach for running Python scripts
+  - Windows: Uses `python arena-cli [command]` explicitly
+  - Unix: Uses `arena-cli [command]` with shebang
+  - Eliminates Windows job object conflicts
+  - Better subprocess handling on all platforms
+
 ## [0.3.9] - 2026-01-23
 
 ### Fixed

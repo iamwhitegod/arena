@@ -1,5 +1,6 @@
 import { spawn, ChildProcess } from 'child_process';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import chalk from 'chalk';
 import { ProcessingError, SystemError } from '../errors/index.js';
 
@@ -15,6 +16,7 @@ export interface ProcessOptions {
   fast?: boolean;
   noCache?: boolean;
   padding?: number;
+  sceneDetection?: boolean;
 }
 
 export interface AnalyzeOptions {
@@ -26,6 +28,7 @@ export interface AnalyzeOptions {
   use4Layer?: boolean;
   editorialModel?: 'gpt-4o' | 'gpt-4o-mini';
   transcriptPath?: string;
+  sceneDetection?: boolean;
 }
 
 export interface TranscribeOptions {
@@ -63,6 +66,14 @@ export interface FormatOptions {
   maintainQuality?: boolean;
 }
 
+export interface DetectScenesOptions {
+  videoPath: string;
+  outputFile: string;
+  threshold?: number;
+  minSceneDuration?: number;
+  generateReport?: boolean;
+}
+
 export interface ProgressUpdate {
   stage: string;
   progress: number;
@@ -76,10 +87,35 @@ export class PythonBridge {
 
   constructor() {
     // Path to the Python engine (relative to CLI directory)
+    // ES module equivalent of __dirname
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
     this.enginePath = path.join(__dirname, '../../../engine');
 
     // Setup graceful shutdown handlers
     this.setupShutdownHandlers();
+  }
+
+  /**
+   * Get the command and args to run arena-cli
+   * On Windows, explicitly use python. On Unix, use the script directly.
+   */
+  private getArenaCommand(subcommand: string, args: string[]): { command: string; args: string[] } {
+    const arenaCliPath = path.join(this.enginePath, 'arena-cli');
+
+    if (process.platform === 'win32') {
+      // Windows: Use python command
+      return {
+        command: 'python',
+        args: [arenaCliPath, subcommand, ...args],
+      };
+    } else {
+      // Unix: Use script directly with shebang
+      return {
+        command: arenaCliPath,
+        args: [subcommand, ...args],
+      };
+    }
   }
 
   /**
@@ -133,45 +169,42 @@ export class PythonBridge {
         return;
       }
 
-      // Use arena-cli directly
-      const arenaCliPath = path.join(this.enginePath, 'arena-cli');
-
-      const args = [
-        'process',
-        options.videoPath,
-        '-o',
-        options.outputDir,
-      ];
+      // Build command args
+      const cmdArgs = [options.videoPath, '-o', options.outputDir];
 
       if (options.clipCount) {
-        args.push('-n', options.clipCount.toString());
+        cmdArgs.push('-n', options.clipCount.toString());
       }
       if (options.minDuration) {
-        args.push('--min', options.minDuration.toString());
+        cmdArgs.push('--min', options.minDuration.toString());
       }
       if (options.maxDuration) {
-        args.push('--max', options.maxDuration.toString());
+        cmdArgs.push('--max', options.maxDuration.toString());
       }
       if (options.use4Layer) {
-        args.push('--use-4layer');
+        cmdArgs.push('--use-4layer');
       }
       if (options.editorialModel) {
-        args.push('--editorial-model', options.editorialModel);
+        cmdArgs.push('--editorial-model', options.editorialModel);
       }
       if (options.exportLayers) {
-        args.push('--export-editorial-layers');
+        cmdArgs.push('--export-editorial-layers');
       }
       if (options.fast) {
-        args.push('--fast');
+        cmdArgs.push('--fast');
       }
       if (options.noCache) {
-        args.push('--no-cache');
+        cmdArgs.push('--no-cache');
       }
       if (options.padding !== undefined) {
-        args.push('--padding', options.padding.toString());
+        cmdArgs.push('--padding', options.padding.toString());
+      }
+      if (options.sceneDetection) {
+        cmdArgs.push('--scene-detection');
       }
 
-      this.runCommand(arenaCliPath, args, resolve, reject, onProgress, onError);
+      const { command, args } = this.getArenaCommand('process', cmdArgs);
+      this.runCommand(command, args, resolve, reject, onProgress, onError);
     });
   }
 
@@ -186,35 +219,32 @@ export class PythonBridge {
         return;
       }
 
-      const arenaCliPath = path.join(this.enginePath, 'arena-cli');
-
-      const args = [
-        'analyze',
-        options.videoPath,
-        '-o',
-        options.outputFile,
-      ];
+      const cmdArgs = [options.videoPath, '-o', options.outputFile];
 
       if (options.clipCount) {
-        args.push('-n', options.clipCount.toString());
+        cmdArgs.push('-n', options.clipCount.toString());
       }
       if (options.minDuration) {
-        args.push('--min', options.minDuration.toString());
+        cmdArgs.push('--min', options.minDuration.toString());
       }
       if (options.maxDuration) {
-        args.push('--max', options.maxDuration.toString());
+        cmdArgs.push('--max', options.maxDuration.toString());
       }
       if (options.use4Layer) {
-        args.push('--use-4layer');
+        cmdArgs.push('--use-4layer');
       }
       if (options.editorialModel) {
-        args.push('--editorial-model', options.editorialModel);
+        cmdArgs.push('--editorial-model', options.editorialModel);
       }
       if (options.transcriptPath) {
-        args.push('--transcript', options.transcriptPath);
+        cmdArgs.push('--transcript', options.transcriptPath);
+      }
+      if (options.sceneDetection) {
+        cmdArgs.push('--scene-detection');
       }
 
-      this.runCommand(arenaCliPath, args, resolve, reject, onProgress, onError);
+      const { command, args } = this.getArenaCommand('analyze', cmdArgs);
+      this.runCommand(command, args, resolve, reject, onProgress, onError);
     });
   }
 
@@ -229,20 +259,14 @@ export class PythonBridge {
         return;
       }
 
-      const arenaCliPath = path.join(this.enginePath, 'arena-cli');
-
-      const args = [
-        'transcribe',
-        options.videoPath,
-        '-o',
-        options.outputFile,
-      ];
+      const cmdArgs = [options.videoPath, '-o', options.outputFile];
 
       if (options.noCache) {
-        args.push('--no-cache');
+        cmdArgs.push('--no-cache');
       }
 
-      this.runCommand(arenaCliPath, args, resolve, reject, onProgress, onError);
+      const { command, args } = this.getArenaCommand('transcribe', cmdArgs);
+      this.runCommand(command, args, resolve, reject, onProgress, onError);
     });
   }
 
@@ -257,30 +281,23 @@ export class PythonBridge {
         return;
       }
 
-      const arenaCliPath = path.join(this.enginePath, 'arena-cli');
-
-      const args = [
-        'generate',
-        options.videoPath,
-        options.analysisPath,
-        '-o',
-        options.outputDir,
-      ];
+      const cmdArgs = [options.videoPath, options.analysisPath, '-o', options.outputDir];
 
       if (options.clipCount) {
-        args.push('-n', options.clipCount.toString());
+        cmdArgs.push('-n', options.clipCount.toString());
       }
       if (options.selectedIndices && options.selectedIndices.length > 0) {
-        args.push('--select', options.selectedIndices.join(','));
+        cmdArgs.push('--select', options.selectedIndices.join(','));
       }
       if (options.fast) {
-        args.push('--fast');
+        cmdArgs.push('--fast');
       }
       if (options.padding !== undefined) {
-        args.push('--padding', options.padding.toString());
+        cmdArgs.push('--padding', options.padding.toString());
       }
 
-      this.runCommand(arenaCliPath, args, resolve, reject, onProgress, onError);
+      const { command, args } = this.getArenaCommand('generate', cmdArgs);
+      this.runCommand(command, args, resolve, reject, onProgress, onError);
     });
   }
 
@@ -295,10 +312,7 @@ export class PythonBridge {
         return;
       }
 
-      const arenaCliPath = path.join(this.enginePath, 'arena-cli');
-
-      const args = [
-        'extract-audio',
+      const cmdArgs = [
         options.videoPath,
         '-o',
         options.outputFile,
@@ -307,16 +321,17 @@ export class PythonBridge {
       ];
 
       if (options.bitrate) {
-        args.push('--bitrate', options.bitrate);
+        cmdArgs.push('--bitrate', options.bitrate);
       }
       if (options.sampleRate) {
-        args.push('--sample-rate', options.sampleRate.toString());
+        cmdArgs.push('--sample-rate', options.sampleRate.toString());
       }
       if (options.mono) {
-        args.push('--mono');
+        cmdArgs.push('--mono');
       }
 
-      this.runCommand(arenaCliPath, args, resolve, reject, onProgress, onError);
+      const { command, args } = this.getArenaCommand('extract-audio', cmdArgs);
+      this.runCommand(command, args, resolve, reject, onProgress, onError);
     });
   }
 
@@ -331,10 +346,24 @@ export class PythonBridge {
     onProgress?: (update: ProgressUpdate) => void,
     onError?: (error: string) => void
   ): void {
-    const pythonProcess = spawn(arenaCliPath, args, {
+    // Windows-specific spawn options to avoid job object errors
+    const spawnOptions: any = {
       cwd: this.enginePath,
       env: { ...process.env },
-    });
+    };
+
+    // Fix for Windows "AssignProcessToJobObject" error
+    // This error occurs when the parent process is already in a job object
+    if (process.platform === 'win32') {
+      // Don't create a new window console
+      spawnOptions.windowsHide = true;
+      // Don't try to assign to job object (requires Windows 8+)
+      spawnOptions.detached = false;
+      // Use shell mode to avoid job object issues
+      spawnOptions.shell = false;
+    }
+
+    const pythonProcess = spawn(arenaCliPath, args, spawnOptions);
 
     // Store process for shutdown handling
     this.currentProcess = pythonProcess;
@@ -457,32 +486,58 @@ export class PythonBridge {
     onError?: (error: string) => void
   ): Promise<any> {
     return new Promise((resolve, reject) => {
-      const arenaCliPath = path.join(this.enginePath, 'arena-cli');
-
-      const args = [
-        'format',
+      const cmdArgs = [
         options.inputPath,
         '--output', options.outputDir,
         '--platform', options.platform,
       ];
 
       if (options.cropStrategy) {
-        args.push('--crop', options.cropStrategy);
+        cmdArgs.push('--crop', options.cropStrategy);
       }
 
       if (options.padStrategy) {
-        args.push('--pad', options.padStrategy);
+        cmdArgs.push('--pad', options.padStrategy);
       }
 
       if (options.padColor) {
-        args.push('--pad-color', options.padColor);
+        cmdArgs.push('--pad-color', options.padColor);
       }
 
       if (options.maintainQuality === false) {
-        args.push('--no-quality');
+        cmdArgs.push('--no-quality');
       }
 
-      this.runCommand(arenaCliPath, args, resolve, reject, onProgress, onError);
+      const { command, args } = this.getArenaCommand('format', cmdArgs);
+      this.runCommand(command, args, resolve, reject, onProgress, onError);
+    });
+  }
+
+  async runDetectScenes(
+    options: DetectScenesOptions,
+    onProgress?: (update: ProgressUpdate) => void,
+    onError?: (error: string) => void
+  ): Promise<any> {
+    return new Promise((resolve, reject) => {
+      if (this.isShuttingDown) {
+        reject(new SystemError('INTERRUPTED', 'Process was interrupted by user'));
+        return;
+      }
+
+      const cmdArgs = [options.videoPath, '-o', options.outputFile];
+
+      if (options.threshold !== undefined) {
+        cmdArgs.push('--threshold', options.threshold.toString());
+      }
+      if (options.minSceneDuration !== undefined) {
+        cmdArgs.push('--min-duration', options.minSceneDuration.toString());
+      }
+      if (options.generateReport) {
+        cmdArgs.push('--report');
+      }
+
+      const { command, args } = this.getArenaCommand('detect-scenes', cmdArgs);
+      this.runCommand(command, args, resolve, reject, onProgress, onError);
     });
   }
 
