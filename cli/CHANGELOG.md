@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-01-23
+
 ### Fixed
 - **CRITICAL: PATH refresh issues after Python installation** - Fixed pip installation failing when Python just installed
   - Smart installation sequencing: Python installs first, then waits for PATH refresh
