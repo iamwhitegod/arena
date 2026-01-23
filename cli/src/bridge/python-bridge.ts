@@ -543,7 +543,18 @@ export class PythonBridge {
 
   async checkPythonEnvironment(): Promise<{ available: boolean; version?: string; error?: string }> {
     return new Promise((resolve) => {
-      const pythonProcess = spawn('python3', ['--version']);
+      // Use python on Windows, python3 on Unix
+      const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+
+      // Windows-specific spawn options to avoid job object errors
+      const spawnOptions: any = {};
+      if (process.platform === 'win32') {
+        spawnOptions.windowsHide = true;
+        spawnOptions.detached = false;
+        spawnOptions.shell = false;
+      }
+
+      const pythonProcess = spawn(pythonCmd, ['--version'], spawnOptions);
 
       let output = '';
 
@@ -578,10 +589,22 @@ export class PythonBridge {
 
   async checkDependencies(): Promise<{ installed: boolean; missing?: string[] }> {
     return new Promise((resolve) => {
-      const pythonProcess = spawn('python3', ['-c', 'import arena; print("ok")'], {
+      // Use python on Windows, python3 on Unix
+      const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+
+      // Windows-specific spawn options to avoid job object errors
+      const spawnOptions: any = {
         cwd: this.enginePath,
         env: { ...process.env, PYTHONPATH: this.enginePath },
-      });
+      };
+
+      if (process.platform === 'win32') {
+        spawnOptions.windowsHide = true;
+        spawnOptions.detached = false;
+        spawnOptions.shell = false;
+      }
+
+      const pythonProcess = spawn(pythonCmd, ['-c', 'import arena; print("ok")'], spawnOptions);
 
       let output = '';
 

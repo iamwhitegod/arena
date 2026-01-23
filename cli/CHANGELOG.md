@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **CRITICAL: AssignProcessToJobObject in preflight checks** - Fixed error during Python environment check
+  - Applied Windows spawn options to `checkPythonEnvironment()` method
+  - Applied Windows spawn options to `checkDependencies()` method
+  - Changed from `python3` to `python` command on Windows
+  - All subprocess spawns now use consistent Windows-safe options
+
 ## [0.3.10] - 2026-01-23
 
 ### Fixed
