@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.10] - 2026-01-23
+
 ### Fixed
 - **CRITICAL: Windows AssignProcessToJobObject error** - Fixed "The parameter is incorrect" error on Windows
   - Explicitly use `python` command on Windows instead of shebang script
