@@ -337,13 +337,36 @@ async function autoInstallDependency(
   const spinner = ora(`Installing ${dep.name}`).start();
 
   try {
+    // Use shell mode for better compatibility (especially on Windows)
     await execAsync(installCommand);
     spinner.succeed(`${dep.name} installed successfully`);
     return true;
   } catch (error) {
     spinner.fail(`Failed to install ${dep.name}`);
-    console.log(chalk.yellow(`\nPlease install manually:`));
+
+    const err = error as { stderr?: string; stdout?: string };
+    if (err.stderr || err.stdout) {
+      console.log(chalk.red('\nError details:'));
+      console.log(chalk.gray(err.stderr || err.stdout || ''));
+    }
+
+    console.log(chalk.yellow('\n💡 Please install manually:'));
     console.log(chalk.cyan(`  ${installCommand}\n`));
+
+    // Show additional help for common issues
+    if (installCommand.includes('sudo') && process.platform !== 'win32') {
+      console.log(chalk.gray('Note: This command requires administrator privileges (sudo)'));
+    } else if (installCommand.includes('brew') && process.platform === 'darwin') {
+      console.log(
+        chalk.gray(
+          'Note: Make sure Homebrew is installed: /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+        )
+      );
+    } else if (installCommand.includes('winget') && process.platform === 'win32') {
+      console.log(chalk.gray('Note: winget requires Windows 10 1809 or later'));
+      console.log(chalk.gray('      You may need to run PowerShell/CMD as Administrator'));
+    }
+
     return false;
   }
 }
@@ -451,6 +474,17 @@ export async function setupCommand(): Promise<void> {
       console.log(chalk.gray(`    ${instruction}\n`));
     });
 
+    // Show platform-specific notes
+    if (process.platform === 'win32') {
+      console.log(chalk.yellow('⚠️  Windows Note:'));
+      console.log(chalk.gray('   Automatic installation may require running as Administrator'));
+      console.log(chalk.gray('   Right-click PowerShell/CMD → "Run as Administrator"\n'));
+    } else if (process.platform === 'linux') {
+      console.log(chalk.yellow('⚠️  Linux Note:'));
+      console.log(chalk.gray('   Automatic installation requires sudo privileges'));
+      console.log(chalk.gray('   You may be prompted for your password\n'));
+    }
+
     // Ask if user wants to auto-install
     const { autoInstall } = await inquirer.prompt([
       {
@@ -474,7 +508,18 @@ export async function setupCommand(): Promise<void> {
 
       let allInstalled = true;
       for (const { dep } of missing) {
-        const result = await checkCommand(dep.command);
+        // Use cross-platform detection for re-check
+        let result;
+        if (dep.name.includes('Python')) {
+          result = await checkPython();
+        } else if (dep.name.includes('pip')) {
+          result = await checkPip();
+        } else if (dep.name.includes('FFmpeg')) {
+          result = await checkFFmpeg();
+        } else {
+          result = await checkCommand(dep.command);
+        }
+
         if (result.installed) {
           console.log(chalk.green(`✓ ${dep.name} ${chalk.gray(result.version || '')}`));
         } else {

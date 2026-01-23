@@ -9,8 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.4] - 2026-01-23
 
-### Changed
-- Version bump for continued development
+### Fixed
+- **Auto-installation improvements** - Fixed automatic dependency installation
+  - Re-check now uses proper cross-platform detection (checkPython, checkPip, checkFFmpeg)
+  - Added detailed error messages showing stderr/stdout from failed installations
+  - Added platform-specific guidance (Windows: run as Admin, Linux: sudo required)
+  - Better error handling with helpful tips for common issues (Homebrew, winget, sudo)
+
+### Improved
+- **Better user guidance** - Shows platform-specific notes before auto-installation
+- **Error details** - Failed installations now show detailed error output
+- **Windows support** - Added note about Administrator privileges for winget/chocolatey
+- **Linux support** - Added note about sudo password prompts
 
 ## [0.3.3] - 2026-01-23
 
