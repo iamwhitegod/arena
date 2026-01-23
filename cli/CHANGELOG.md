@@ -12,15 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.10] - 2026-01-23
 
 ### Fixed
-- **CRITICAL: Windows AssignProcessToJobObject error** - Fixed "The parameter is incorrect" error on Windows
-  - Explicitly use `python` command on Windows instead of shebang script
-  - Added proper Windows spawn options (windowsHide, detached: false, shell: false)
-  - Created helper method to handle platform-specific command execution
-  - Applied Windows spawn options to all subprocess calls including:
-    - Main command execution (python-bridge.ts)
-    - Preflight checks (python-bridge.ts)
-    - Validation module (validation/index.ts)
-  - All Python CLI calls now work correctly on Windows
+- **CRITICAL: Windows AssignProcessToJobObject error - ROOT CAUSE RESOLVED** - Fixed "The parameter is incorrect" error on Windows
+  - **ROOT CAUSE #1**: `utils/deps.ts` - `commandExists()` function spawned without Windows options
+    - Used by getPythonPath(), getFFmpegPath(), getPipPath(), checkDependencies()
+    - This was the source of the "Checking Python environment..." error
+  - **ROOT CAUSE #2**: `utils/resilience.ts` - `spawnWithErrorHandling()` lacked proper Windows options
+    - Used by setup.ts for Python package installation
+  - **SOLUTION**: Fixed utility functions once instead of patching individual spawn calls
+  - All subprocess spawning now uses proper Windows options (windowsHide, detached:false, shell:false)
+  - Also fixed: python-bridge.ts, validation/index.ts spawn calls
+  - This is the definitive fix - all Windows subprocess issues resolved
 - **CRITICAL: Pip cache hash mismatch errors** - Fixed "THESE PACKAGES DO NOT MATCH THE HASHES" errors
   - Added `--no-cache-dir` flag to avoid stale/corrupted cache files
   - Added `--upgrade` flag to ensure latest compatible versions
