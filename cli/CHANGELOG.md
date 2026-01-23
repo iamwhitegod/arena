@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-01-23
+
 ### Fixed
 - **CRITICAL: Windows Python package installation** - Fixed permission errors on Windows
   - Added `--user` flag to pip install on Windows to avoid "Access is denied" errors
