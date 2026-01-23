@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Unreleased]
+
+### Fixed
+- **CRITICAL: Windows Python package installation** - Fixed permission errors on Windows
+  - Added `--user` flag to pip install on Windows to avoid "Access is denied" errors
+  - Packages now install to user directory instead of requiring Administrator privileges
+  - Added time expectation warning (5-10 minutes for torch) to prevent premature cancellation
+  - Enhanced error detection for permission issues with specific solutions
+  - Users no longer need to run as Administrator for Python package installation
+
+### Improved
+- **Better Windows UX** - Installation process now provides clear feedback
+  - Shows expected installation time before starting (prevents confusion)
+  - Detects permission errors and provides two solutions (--user or Admin)
+  - Clearer guidance when installations take longer than expected
+
 ## [0.3.5] - 2026-01-23
 
 ### Fixed

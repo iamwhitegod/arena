@@ -257,6 +257,13 @@ async function installPythonPackages(): Promise<boolean> {
   console.log(chalk.cyan('\n📦 Installing Python packages...\n'));
 
   const pipCommand = await getPipCommand();
+
+  // On Windows, show warning about installation time
+  if (process.platform === 'win32') {
+    console.log(chalk.yellow('⏱️  Note: This may take 5-10 minutes (torch is a large package)'));
+    console.log(chalk.gray('   You can watch progress below...\n'));
+  }
+
   const spinner = ora('Installing Python dependencies').start();
 
   return new Promise((resolve) => {
@@ -273,6 +280,11 @@ async function installPythonPackages(): Promise<boolean> {
       // pip or pip3
       command = pipCommand;
       args = ['install', ...pythonPackages];
+    }
+
+    // Add --user flag on Windows to avoid permission issues
+    if (process.platform === 'win32') {
+      args.push('--user');
     }
 
     const pip = spawn(command, args, {
@@ -303,8 +315,30 @@ async function installPythonPackages(): Promise<boolean> {
         spinner.fail('Failed to install Python packages');
         console.log(chalk.red('\nError output:'));
         console.log(chalk.gray(output));
-        console.log(chalk.yellow('\n💡 Tip: Try running manually:'));
-        console.log(chalk.cyan(`  ${pipCommand} install ${pythonPackages.join(' ')}\n`));
+
+        // Detect specific errors and provide solutions
+        const errorLower = output.toLowerCase();
+
+        if (errorLower.includes('access is denied') || errorLower.includes('permission denied')) {
+          console.log(chalk.yellow('\n⚠️  Permission Error Detected:'));
+          if (process.platform === 'win32') {
+            console.log(chalk.white('Solution 1 (Recommended): Install to user directory'));
+            console.log(chalk.cyan(`  ${pipCommand} install --user ${pythonPackages.join(' ')}\n`));
+            console.log(chalk.white('Solution 2: Run PowerShell as Administrator'));
+            console.log(chalk.gray('  Right-click PowerShell → "Run as Administrator"'));
+            console.log(chalk.cyan(`  ${pipCommand} install ${pythonPackages.join(' ')}\n`));
+          } else {
+            console.log(chalk.white('Try with --user flag:'));
+            console.log(chalk.cyan(`  ${pipCommand} install --user ${pythonPackages.join(' ')}\n`));
+          }
+        } else {
+          console.log(chalk.yellow('\n💡 Tip: Try running manually:'));
+          const userFlag = process.platform === 'win32' ? ' --user' : '';
+          console.log(
+            chalk.cyan(`  ${pipCommand} install${userFlag} ${pythonPackages.join(' ')}\n`)
+          );
+        }
+
         resolve(false);
       }
     });
