@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-01-23
+
+### Fixed
+- **Universal OS installation support** - Complete overhaul for Windows, macOS, and Linux
+  - All changes from 0.3.4 consolidated and production-ready
+
+### Added
+- Comprehensive TEST_SETUP_ALL_PLATFORMS.md documentation
+
 ## [0.3.4] - 2026-01-23
 
 ### Fixed
