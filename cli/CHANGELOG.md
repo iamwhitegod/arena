@@ -7,7 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [Unreleased]
+## [0.3.11] - 2026-01-23
+
+### Fixed
+- **CRITICAL: Windows AssignProcessToJobObject - DEFINITIVE ROOT CAUSE FIX** - Complete resolution of Windows subprocess errors
+  - **ROOT CAUSE #1**: `src/utils/deps.ts` - `commandExists()` spawned without Windows options
+    - Used by getPythonPath(), getFFmpegPath(), getPipPath(), checkDependencies()
+    - Source of "Checking Python environment..." error during preflight
+  - **ROOT CAUSE #2**: `src/utils/resilience.ts` - `spawnWithErrorHandling()` lacked proper Windows options
+    - Used by setup.ts for Python package installation
+  - **SOLUTION**: Fixed utility functions once instead of patching 20+ individual spawn calls
+  - All subprocess spawning now uses proper Windows options (windowsHide, detached:false, shell:false)
+  - Verified safe for macOS/Linux - platform conditionals prevent any Unix behavior changes
+  - This is the definitive, complete fix for all Windows subprocess issues
+
+### Added
+- **Technical Documentation**: Created WINDOWS_FIX_ROOT_CAUSE.md with comprehensive analysis
+  - Explains why previous attempts failed
+  - Details root cause identification process
+  - Documents lessons learned and best practices
+  - Serves as reference for understanding the Windows fix
+
+### Improved
+- **TypeScript Configuration**: Separated build and ESLint configurations
+  - Created tsconfig.eslint.json for linting tests without building them
+  - Fixed ESLint to properly handle test files
+  - Build now correctly excludes tests from npm package
+- **Test Cleanup**: Made test directory cleanup more robust
+  - Handles ENOTEMPTY errors gracefully
+  - Uses emptyDir before remove for thorough cleanup
 
 ## [0.3.10] - 2026-01-23
 
