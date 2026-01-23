@@ -6,7 +6,6 @@
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { ConfigManager } from '../core/config.js';
-import { displayInfo } from '../ui/summary.js';
 
 interface InitAnswers {
   workflow: 'content-creator' | 'podcast' | 'course' | 'custom';
@@ -17,7 +16,7 @@ interface InitAnswers {
 
 export async function initCommand(): Promise<void> {
   console.log(chalk.cyan('\n✨ Welcome to Arena!\n'));
-  console.log(chalk.white('Let\'s set up your video editing workspace.\n'));
+  console.log(chalk.white("Let's set up your video clip generation workspace.\n"));
 
   // Check if config already exists
   const configManager = new ConfigManager();
@@ -161,11 +160,22 @@ export async function initCommand(): Promise<void> {
   displayNextSteps(answers, hasApiKey || !!answers.apiKey);
 }
 
+interface ConfigurationObject {
+  workflow: string;
+  minDuration?: number;
+  maxDuration?: number;
+  use4Layer?: boolean;
+  editorialModel?: string;
+  numClips?: number;
+  padding?: number;
+  openai_api_key?: string;
+}
+
 /**
  * Build configuration object from answers
  */
-function buildConfiguration(answers: InitAnswers): any {
-  const config: any = {
+function buildConfiguration(answers: InitAnswers): ConfigurationObject {
+  const config: ConfigurationObject = {
     workflow: answers.workflow,
   };
 

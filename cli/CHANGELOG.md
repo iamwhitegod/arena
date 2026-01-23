@@ -16,7 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Explicitly use `python` command on Windows instead of shebang script
   - Added proper Windows spawn options (windowsHide, detached: false, shell: false)
   - Created helper method to handle platform-specific command execution
-  - Applied Windows spawn options to all subprocess calls including preflight checks
+  - Applied Windows spawn options to all subprocess calls including:
+    - Main command execution (python-bridge.ts)
+    - Preflight checks (python-bridge.ts)
+    - Validation module (validation/index.ts)
   - All Python CLI calls now work correctly on Windows
 - **CRITICAL: Pip cache hash mismatch errors** - Fixed "THESE PACKAGES DO NOT MATCH THE HASHES" errors
   - Added `--no-cache-dir` flag to avoid stale/corrupted cache files

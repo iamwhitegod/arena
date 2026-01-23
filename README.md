@@ -27,8 +27,13 @@ Convert clips for any social media platform with optimal specs:
 - Audio energy detection identifies enthusiastic delivery
 - Combined scoring for clips with great content AND delivery
 
+### 🎥 **Scene Detection**
+- Automatic detection of visual scene changes
+- Align clip boundaries to natural scene transitions
+- Standalone scene analysis for video structure insights
+
 ### 🚀 **Production-Ready CLI**
-- 8 powerful commands for flexible workflows
+- 9 powerful commands for flexible workflows
 - Beautiful progress tracking with multi-stage visualization
 - Automatic rate limit handling with intelligent retry
 - TypeScript + Python architecture for speed and power
@@ -44,7 +49,7 @@ Convert clips for any social media platform with optimal specs:
 
 ```bash
 # Install CLI globally via npm
-npm install -g @arena/cli
+npm install -g @whitegodkingsley/arena-cli
 
 # Or clone the repository
 git clone https://github.com/iamwhitegod/arena.git
@@ -81,7 +86,7 @@ arena format output/clips/ -p instagram-reels -o reels/
 
 ## 📚 Commands
 
-Arena provides 8 commands for flexible video clip generation workflows:
+Arena provides 9 commands for flexible video clip generation workflows:
 
 | Command | Purpose | Example |
 |---------|---------|---------|
@@ -91,6 +96,7 @@ Arena provides 8 commands for flexible video clip generation workflows:
 | `arena analyze` | Find moments (no video generation) | `arena analyze video.mp4 --use-4layer` |
 | `arena generate` | Generate clips from analysis | `arena generate video.mp4 analysis.json` |
 | `arena format` | Format for social platforms | `arena format clips/ -p tiktok` |
+| `arena detect-scenes` | Detect scene changes | `arena detect-scenes video.mp4` |
 | `arena config` | Manage configuration | `arena config set openai_api_key "sk-..."` |
 | `arena extract-audio` | Extract audio from video | `arena extract-audio video.mp4` |
 
@@ -399,10 +405,10 @@ arena --version  # Test immediately
 
 ```bash
 # Reinstall globally
-npm install -g @arena/cli
+npm install -g @whitegodkingsley/arena-cli
 
 # Or use npx
-npx @arena/cli process video.mp4
+npx @whitegodkingsley/arena-cli process video.mp4
 ```
 
 ### "Python not found"
@@ -439,17 +445,17 @@ See [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) for more solutions.
 ## 🚀 Roadmap
 
 **Current (v0.1.0):**
-- ✅ 8-command CLI
+- ✅ 9-command CLI
 - ✅ 4-layer editorial system
 - ✅ Multi-platform formatting
 - ✅ Hybrid AI + energy analysis
+- ✅ Scene change detection
 - ✅ Automatic rate limit handling
 - ✅ Cost optimization with gpt-4o-mini
 
 **Coming Soon:**
 - [ ] Interactive clip review TUI
 - [ ] Subtitle burning with custom styles
-- [ ] Scene change detection
 - [ ] Cloud processing option
 - [ ] Web dashboard
 - [ ] Plugin system

@@ -2,7 +2,7 @@
 
 ## ✅ Status: Production Ready
 
-Arena CLI is now feature-complete with all 8 commands fully implemented and production-tested.
+Arena CLI is now feature-complete with all 9 commands fully implemented and production-tested.
 
 ## 📦 Version: 0.1.0
 
@@ -11,13 +11,14 @@ Arena CLI is now feature-complete with all 8 commands fully implemented and prod
 
 ## ✅ Completed Features
 
-### 1. All 8 Commands Implemented
+### 1. All 9 Commands Implemented
 - ✅ `arena init` - Interactive setup wizard
 - ✅ `arena process` - All-in-one clip generation
 - ✅ `arena transcribe` - Transcription only
 - ✅ `arena analyze` - Analysis without video generation
 - ✅ `arena generate` - Generate clips from analysis
 - ✅ `arena format` - Platform formatting for social media
+- ✅ `arena detect-scenes` - Scene change detection
 - ✅ `arena config` - Configuration management
 - ✅ `arena extract-audio` - Audio extraction
 
@@ -42,33 +43,41 @@ Arena CLI is now feature-complete with all 8 commands fully implemented and prod
 - ✅ Automatic aspect ratio conversion
 - ✅ Batch processing support
 
-### 4. Python Bridge
+### 4. Scene Detection System
+- ✅ Automatic visual scene change detection
+- ✅ Standalone `detect-scenes` command
+- ✅ `--scene-detection` flag for process and analyze commands
+- ✅ Configurable threshold and minimum duration
+- ✅ Detailed scene report generation
+- ✅ FFmpeg-based scene detection filter
+
+### 5. Python Bridge
 - ✅ Robust subprocess communication
 - ✅ Progress tracking with JSON protocol
 - ✅ Error handling and formatting
 - ✅ Graceful shutdown (Ctrl+C)
 - ✅ All commands integrated
 
-### 5. User Experience
+### 6. User Experience
 - ✅ Beautiful terminal UI
 - ✅ Multi-stage progress visualization
 - ✅ Actionable error messages
 - ✅ Helpful suggestions and tips
 - ✅ Interactive setup wizard
 
-### 6. Configuration System
+### 7. Configuration System
 - ✅ Global config at `~/.arena/config.json`
 - ✅ Config command for management
 - ✅ Environment variable support
 - ✅ Persistent settings
 
-### 7. Build System
+### 8. Build System
 - ✅ TypeScript compilation working
 - ✅ Execute permissions automatically set (`postbuild` script)
 - ✅ npm link support for development
 - ✅ Ready for npm publishing
 
-### 8. Documentation
+### 9. Documentation
 - ✅ Main README.md (comprehensive)
 - ✅ CLI-specific README.md (npm package)
 - ✅ USAGE.md guide (complete)
@@ -86,10 +95,11 @@ Arena CLI is now feature-complete with all 8 commands fully implemented and prod
 | `arena analyze` | ✅ Complete | Analysis without video generation |
 | `arena generate` | ✅ Complete | Generate clips from analysis |
 | `arena format` | ✅ Complete | Format for 7 social platforms |
+| `arena detect-scenes` | ✅ Complete | Detect visual scene changes |
 | `arena config` | ✅ Complete | View and manage configuration |
 | `arena extract-audio` | ✅ Complete | Audio extraction in multiple formats |
 
-**Total:** 8/8 commands (100% complete)
+**Total:** 9/9 commands (100% complete)
 
 ## 🎯 Testing Status
 
@@ -114,14 +124,16 @@ Both CLIs now support identical features:
 
 **Python CLI (Direct):**
 ```bash
-./engine/arena-cli process video.mp4 --use-4layer
+./engine/arena-cli process video.mp4 --use-4layer --scene-detection
 ./engine/arena-cli format video.mp4 --platform tiktok --output out/
+./engine/arena-cli detect-scenes video.mp4 -o scenes.json
 ```
 
 **Node CLI (User-Friendly):**
 ```bash
-arena process video.mp4 --use-4layer
+arena process video.mp4 --use-4layer --scene-detection
 arena format video.mp4 -p tiktok -o out/
+arena detect-scenes video.mp4 -o scenes.json
 ```
 
 **Key Differences:**
@@ -176,9 +188,18 @@ arena init
 
 ## 💻 Usage Examples
 
-### Generate Clips with 4-Layer
+### Generate Clips with 4-Layer and Scene Detection
 ```bash
-arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini -n 5
+arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini -n 5 --scene-detection
+```
+
+### Scene Analysis Workflow
+```bash
+# Analyze scene structure first
+arena detect-scenes video.mp4 -o scenes.json --report
+
+# Then process with scene-aware boundaries
+arena process video.mp4 --use-4layer --scene-detection
 ```
 
 ### Multi-Platform Distribution
@@ -220,7 +241,6 @@ arena generate video.mp4 moments.json --select 1,3,5
 ### Future Enhancements
 - [ ] Interactive clip review TUI
 - [ ] Subtitle burning with custom styles
-- [ ] Scene change detection
 - [ ] Cloud processing option
 - [ ] Web dashboard
 - [ ] Plugin system
@@ -290,9 +310,9 @@ arena generate video.mp4 moments.json --select 1,3,5
 ### Long Term (Future Versions)
 1. [ ] Interactive clip review TUI
 2. [ ] Subtitle burning
-3. [ ] Scene detection
-4. [ ] Cloud processing
-5. [ ] Web dashboard
+3. [ ] Cloud processing
+4. [ ] Web dashboard
+5. [ ] Plugin system
 
 ## 📝 Notes
 
@@ -305,12 +325,12 @@ arena generate video.mp4 moments.json --select 1,3,5
 ## 🔗 Links
 
 - **Main Repository:** https://github.com/iamwhitegod/arena
-- **npm Package:** https://www.npmjs.com/package/@arena/cli (pending)
+- **npm Package:** https://www.npmjs.com/package/@whitegodkingsley/arena-cli (pending)
 - **Documentation:** ./docs/guides/USAGE.md
 - **Troubleshooting:** ./docs/TROUBLESHOOTING.md
 
 ---
 
-**Status:** ✅ Production Ready - All 8 commands implemented and tested
+**Status:** ✅ Production Ready - All 9 commands implemented and tested
 
-**Last Updated:** January 19, 2026
+**Last Updated:** January 20, 2026

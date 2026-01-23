@@ -20,23 +20,23 @@ interface AnalyzeOptions {
   use4layer?: boolean;
   editorialModel?: 'gpt-4o' | 'gpt-4o-mini';
   transcript?: string;
+  sceneDetection?: boolean;
   debug?: boolean;
 }
 
-export async function analyzeCommand(
-  videoPath: string,
-  options: AnalyzeOptions
-): Promise<void> {
+export async function analyzeCommand(videoPath: string, options: AnalyzeOptions): Promise<void> {
   const startTime = Date.now();
   const progress = new ProgressTracker();
   const bridge = new PythonBridge();
 
   try {
     const absoluteVideoPath = path.resolve(videoPath);
-    const outputFile = options.output || path.join(
-      path.dirname(absoluteVideoPath),
-      `${path.basename(absoluteVideoPath, path.extname(absoluteVideoPath))}_analysis.json`
-    );
+    const outputFile =
+      options.output ||
+      path.join(
+        path.dirname(absoluteVideoPath),
+        `${path.basename(absoluteVideoPath, path.extname(absoluteVideoPath))}_analysis.json`
+      );
 
     // Run pre-flight checks
     console.log(chalk.cyan('\n🔍 Running pre-flight checks...\n'));
@@ -61,7 +61,11 @@ export async function analyzeCommand(
     // Initialize progress stages
     progress.initializeStages([
       { id: 'transcription', name: 'Transcription', icon: '📝' },
-      { id: 'analysis', name: options.use4layer ? 'AI Analysis - 4-Layer System' : 'AI Analysis', icon: '🧠' },
+      {
+        id: 'analysis',
+        name: options.use4layer ? 'AI Analysis - 4-Layer System' : 'AI Analysis',
+        icon: '🧠',
+      },
     ]);
 
     console.log(chalk.cyan('\n🔎 Analyzing video...\n'));
@@ -78,6 +82,7 @@ export async function analyzeCommand(
         use4Layer: options.use4layer || false,
         editorialModel: options.editorialModel || 'gpt-4o',
         transcriptPath: options.transcript,
+        sceneDetection: options.sceneDetection || false,
       },
       (update) => {
         progress.updateStage(update.stage, update.progress, update.message);

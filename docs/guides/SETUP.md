@@ -38,7 +38,7 @@ ffmpeg -version
 ### Option 1: Install from npm (when published)
 
 ```bash
-npm install -g @arena/cli
+npm install -g @whitegodkingsley/arena-cli
 ```
 
 That's it! Skip to [Configuration](#configuration).
@@ -220,7 +220,7 @@ npm test
 cd engine
 
 # Run Python CLI directly
-./arena-cli process video.mp4 --use-4layer
+./@whitegodkingsley/arena-cli process video.mp4 --use-4layer
 
 # Or via Python module
 python3 -m arena.cli.main process video.mp4
@@ -280,7 +280,7 @@ arena/
 │   │   │   ├── exporter.py
 │   │   │   └── platform_formatter.py  # 7 platforms
 │   │   └── transcription/ # Whisper integration
-│   ├── arena-cli          # Executable entry point
+│   ├── @whitegodkingsley/arena-cli          # Executable entry point
 │   └── requirements.txt
 │
 ├── docs/                   # Documentation
@@ -314,10 +314,10 @@ arena --version
 
 **If installed from npm:**
 ```bash
-npm install -g @arena/cli
+npm install -g @whitegodkingsley/arena-cli
 
 # Or use npx
-npx @arena/cli process video.mp4
+npx @whitegodkingsley/arena-cli process video.mp4
 ```
 
 ### "Python 3 is not installed"
@@ -384,7 +384,7 @@ Make sure you're running from the correct directory:
 cd engine
 
 # Python CLI should be executable
-./arena-cli --help
+./@whitegodkingsley/arena-cli --help
 
 # Or use Python module
 python3 -m arena.cli.main --help

@@ -1,6 +1,6 @@
 # Sprint 5: Professional A-List Editing Quality
 
-Sprint 5 brings professional video editing intelligence to Arena. Clips now start and end at natural sentence boundaries instead of arbitrary timestamps, producing A-list quality cuts.
+Sprint 5 brings professional video clip generation intelligence to Arena. Clips now start and end at natural sentence boundaries instead of arbitrary timestamps, producing A-list quality cuts.
 
 ## What's New
 
@@ -77,13 +77,13 @@ Same as Sprint 2 - ensure you have:
 cd engine
 
 # Process video with professional editing (no duration constraints)
-./arena-cli process video.mp4
+./@whitegodkingsley/arena-cli process video.mp4
 
 # Process with user-specified duration constraints
-./arena-cli process video.mp4 --min 30 --max 60
+./@whitegodkingsley/arena-cli process video.mp4 --min 30 --max 60
 
 # Control boundary alignment tolerance
-./arena-cli process video.mp4 --max-adjustment 5
+./@whitegodkingsley/arena-cli process video.mp4 --max-adjustment 5
 ```
 
 ### What You'll See
@@ -190,14 +190,14 @@ of solving real problems. That's the fundamental mistake."
 
 ### "Clips are too short/long"
 - Don't rely on defaults - use explicit `--min` and `--max` flags
-- Example: `./arena-cli process video.mp4 --min 30 --max 60`
+- Example: `./@whitegodkingsley/arena-cli process video.mp4 --min 30 --max 60`
 
 ### "Progress bar doesn't show"
 - Ensure you're using the updated CLI commands
 - Check that `tqdm` package is installed: `pip install tqdm`
 
 ### "Alignment adjustments are too aggressive"
-- Reduce max adjustment: `./arena-cli process video.mp4 --max-adjustment 5`
+- Reduce max adjustment: `./@whitegodkingsley/arena-cli process video.mp4 --max-adjustment 5`
 - Default is 10s, try 5s or 3s for tighter control
 
 ## Testing Checklist

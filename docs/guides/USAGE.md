@@ -6,7 +6,7 @@ Complete reference for using Arena CLI - all 8 commands and workflows.
 
 ```bash
 # Install globally via npm
-npm install -g @arena/cli
+npm install -g @whitegodkingsley/arena-cli
 
 # Set up your environment
 export OPENAI_API_KEY="sk-..."
@@ -17,7 +17,7 @@ arena init
 
 ## Available Commands
 
-Arena CLI provides 8 commands for flexible video editing workflows:
+Arena CLI provides 9 commands for flexible video clip generation workflows:
 
 | Command | Purpose | Best For |
 |---------|---------|----------|
@@ -1111,10 +1111,10 @@ The CLI may not be in your PATH:
 
 ```bash
 # Reinstall globally
-npm install -g @arena/cli
+npm install -g @whitegodkingsley/arena-cli
 
 # Or use npx
-npx @arena/cli process video.mp4
+npx @whitegodkingsley/arena-cli process video.mp4
 
 # Check installation
 which arena

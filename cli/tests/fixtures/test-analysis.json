@@ -1,0 +1,36 @@
+{
+  "video_path": "/path/to/test.mp4",
+  "duration": 520.3,
+  "transcript_word_count": 920,
+  "moments": [
+    {
+      "id": 1,
+      "title": "Introduction to the topic",
+      "start_time": 10.0,
+      "end_time": 55.5,
+      "duration": 45.5,
+      "ai_score": 0.92,
+      "energy_score": 0.85,
+      "hybrid_score": 0.88
+    },
+    {
+      "id": 2,
+      "title": "Main concept explanation",
+      "start_time": 60.0,
+      "end_time": 110.0,
+      "duration": 50.0,
+      "ai_score": 0.95,
+      "energy_score": 0.90,
+      "hybrid_score": 0.92
+    }
+  ],
+  "clips": [
+    {
+      "id": 1,
+      "title": "introduction-to-the-topic",
+      "start": 10.0,
+      "end": 55.5,
+      "duration": 45.5
+    }
+  ]
+}

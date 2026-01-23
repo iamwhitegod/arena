@@ -15,13 +15,13 @@ Common issues and solutions for Arena CLI.
 
 ## Installation Issues
 
-### "npm install -g @arena/cli" fails
+### "npm install -g @whitegodkingsley/arena-cli" fails
 
 **Symptoms**: Installation fails with permission errors
 
 **Solution 1**: Use sudo (not recommended)
 ```bash
-sudo npm install -g @arena/cli
+sudo npm install -g @whitegodkingsley/arena-cli
 ```
 
 **Solution 2**: Configure npm to use a different directory (recommended)
@@ -36,12 +36,12 @@ npm config set prefix '~/.npm-global'
 export PATH=~/.npm-global/bin:$PATH
 
 # Install without sudo
-npm install -g @arena/cli
+npm install -g @whitegodkingsley/arena-cli
 ```
 
 **Solution 3**: Use npx (no installation)
 ```bash
-npx @arena/cli process video.mp4
+npx @whitegodkingsley/arena-cli process video.mp4
 ```
 
 ### "arena: command not found"

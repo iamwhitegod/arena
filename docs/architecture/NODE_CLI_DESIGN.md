@@ -142,7 +142,7 @@ $ arena init
 
 ✨ Welcome to Arena!
 
-Let's set up your video editing workspace.
+Let's set up your video clip generation workspace.
 
 ? Select your workflow:
   ❯ Content Creator (social media clips)
@@ -378,14 +378,14 @@ Error: APIError: 401 Unauthorized
 
 ### NPM Package
 
-**Package name:** `@arena/cli` or `arena-cli`
+**Package name:** `@whitegodkingsley/arena-cli` or `@whitegodkingsley/arena-cli`
 
 **Install:**
 ```bash
-npm install -g arena-cli
+npm install -g @whitegodkingsley/arena-cli
 
 # Or run without installing:
-npx arena-cli process video.mp4
+npx @whitegodkingsley/arena-cli process video.mp4
 ```
 
 ### Standalone Binary (Future)

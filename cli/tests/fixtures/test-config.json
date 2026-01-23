@@ -1,0 +1,8 @@
+{
+  "openai_api_key": "sk-test1234567890abcdef1234567890abcdef12345678",
+  "whisper_mode": "api",
+  "minDuration": 30,
+  "maxDuration": 90,
+  "use4Layer": true,
+  "editorialModel": "gpt-4o-mini"
+}

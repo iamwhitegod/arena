@@ -169,8 +169,25 @@ export function validateApiKey(): void {
  * Validate Python is installed and accessible
  */
 export async function validatePython(): Promise<string> {
+  // Use getPythonPath from deps utility
+  const { getPythonPath } = await import('../utils/deps.js');
+  const pythonCmd = await getPythonPath();
+
   return new Promise((resolve, reject) => {
-    const pythonProcess = spawn('python3', ['--version']);
+    // Windows-specific spawn options to avoid job object errors
+    interface SpawnOptionsWithWindowsProps {
+      windowsHide?: boolean;
+      detached?: boolean;
+      shell?: boolean;
+    }
+    const spawnOptions: SpawnOptionsWithWindowsProps = {};
+    if (process.platform === 'win32') {
+      spawnOptions.windowsHide = true;
+      spawnOptions.detached = false;
+      spawnOptions.shell = false;
+    }
+
+    const pythonProcess = spawn(pythonCmd, ['--version'], spawnOptions);
 
     let output = '';
 
@@ -234,11 +251,30 @@ export async function validatePython(): Promise<string> {
  * Validate Python dependencies are installed
  */
 export async function validateDependencies(enginePath: string): Promise<void> {
+  // Use getPythonPath to get platform-specific python command
+  const { getPythonPath } = await import('../utils/deps.js');
+  const pythonCmd = await getPythonPath();
+
   return new Promise((resolve, reject) => {
-    const pythonProcess = spawn('python3', ['-c', 'import arena; print("ok")'], {
+    // Windows-specific spawn options to avoid job object errors
+    interface SpawnOptionsWithWindowsProps {
+      cwd: string;
+      env: NodeJS.ProcessEnv;
+      windowsHide?: boolean;
+      detached?: boolean;
+      shell?: boolean;
+    }
+    const spawnOptions: SpawnOptionsWithWindowsProps = {
       cwd: enginePath,
       env: { ...process.env, PYTHONPATH: enginePath },
-    });
+    };
+    if (process.platform === 'win32') {
+      spawnOptions.windowsHide = true;
+      spawnOptions.detached = false;
+      spawnOptions.shell = false;
+    }
+
+    const pythonProcess = spawn(pythonCmd, ['-c', 'import arena; print("ok")'], spawnOptions);
 
     let output = '';
 

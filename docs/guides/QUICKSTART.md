@@ -14,7 +14,7 @@ Get started with Arena in 5 minutes! Generate professional video clips from long
 ### Option 1: Install from npm (when published)
 
 ```bash
-npm install -g @arena/cli
+npm install -g @whitegodkingsley/arena-cli
 ```
 
 ### Option 2: Install from source
@@ -304,10 +304,10 @@ Typical costs per 10-minute video:
 
 ```bash
 # Reinstall
-npm install -g @arena/cli
+npm install -g @whitegodkingsley/arena-cli
 
 # Or use npx
-npx @arena/cli process video.mp4
+npx @whitegodkingsley/arena-cli process video.mp4
 ```
 
 ### "OPENAI_API_KEY not set"

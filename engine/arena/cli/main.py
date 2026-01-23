@@ -358,6 +358,41 @@ Documentation:
         help='Disable high quality encoding (faster, smaller files)'
     )
 
+    # =========================================================================
+    # arena detect-scenes
+    # =========================================================================
+    detect_scenes_parser = subparsers.add_parser(
+        'detect-scenes',
+        help='Detect scene changes in video',
+        description='Analyze video to find scene boundaries for better clip alignment'
+    )
+    detect_scenes_parser.add_argument(
+        'video',
+        help='Path to video file'
+    )
+    detect_scenes_parser.add_argument(
+        '-o', '--output',
+        required=True,
+        help='Output JSON file for scene data'
+    )
+    detect_scenes_parser.add_argument(
+        '--threshold',
+        type=float,
+        default=0.4,
+        help='Scene detection threshold (0.0-1.0, default: 0.4)'
+    )
+    detect_scenes_parser.add_argument(
+        '--min-duration',
+        type=float,
+        default=2.0,
+        help='Minimum scene duration in seconds (default: 2.0)'
+    )
+    detect_scenes_parser.add_argument(
+        '--report',
+        action='store_true',
+        help='Generate detailed scene report'
+    )
+
     # Parse arguments
     args = parser.parse_args()
 
@@ -392,6 +427,9 @@ Documentation:
         elif args.command == 'format':
             from .commands.format import run_format
             return run_format(args)
+        elif args.command == 'detect-scenes':
+            from .commands.detect_scenes import run_detect_scenes
+            return run_detect_scenes(args)
         else:
             parser.print_help()
             return 1

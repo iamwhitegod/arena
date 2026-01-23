@@ -19,13 +19,15 @@ interface ProcessOptions {
   fast?: boolean;
   cache?: boolean; // Note: commander negates --no-cache to cache: false
   padding?: string;
+  sceneDetection?: boolean;
+  platform?: string;
+  crop?: 'center' | 'smart' | 'top' | 'bottom';
+  pad?: 'blur' | 'black' | 'white' | 'color';
+  padColor?: string;
   debug?: boolean;
 }
 
-export async function processCommand(
-  videoPath: string,
-  options: ProcessOptions
-): Promise<void> {
+export async function processCommand(videoPath: string, options: ProcessOptions): Promise<void> {
   const startTime = Date.now();
   const progress = new ProgressTracker();
   const bridge = new PythonBridge();
@@ -68,7 +70,11 @@ export async function processCommand(
     // Initialize processing stages for progress tracking
     progress.initializeStages([
       { id: 'transcription', name: 'Transcription', icon: '📝' },
-      { id: 'analysis', name: options.use4layer ? 'AI Analysis - 4-Layer System' : 'AI Analysis', icon: '🧠' },
+      {
+        id: 'analysis',
+        name: options.use4layer ? 'AI Analysis - 4-Layer System' : 'AI Analysis',
+        icon: '🧠',
+      },
       { id: 'hybrid', name: 'Hybrid Analysis', icon: '⚡' },
       { id: 'generation', name: 'Clip Generation', icon: '✂️' },
     ]);
@@ -89,6 +95,7 @@ export async function processCommand(
         fast: options.fast || false,
         noCache: options.cache === false, // --no-cache sets cache to false
         padding: options.padding ? parseFloat(options.padding) : undefined,
+        sceneDetection: options.sceneDetection || false,
       },
       (update) => {
         progress.updateStage(update.stage, update.progress, update.message);
@@ -108,6 +115,44 @@ export async function processCommand(
       outputDir: outputDir,
       processingTime,
     });
+
+    // Auto-format for platform if specified
+    if (options.platform && result?.clips?.length > 0) {
+      console.log(chalk.cyan(`\n📐 Auto-formatting clips for ${options.platform}...\n`));
+
+      const clipsDir = path.join(path.resolve(outputDir), 'clips');
+      const formattedDir = path.join(path.resolve(outputDir), 'formatted');
+
+      const formatResult = await bridge.runFormat(
+        {
+          inputPath: clipsDir,
+          outputDir: formattedDir,
+          platform: options.platform,
+          cropStrategy: options.crop || 'center',
+          padStrategy: options.pad || 'blur',
+          padColor: options.padColor || '#000000',
+          maintainQuality: true,
+        },
+        (update) => {
+          if (update.message) {
+            console.log(chalk.gray(`  ${update.message}`));
+          }
+        },
+        (error) => {
+          console.error(chalk.red(`  ⚠️  ${error}`));
+        }
+      );
+
+      if (formatResult.success) {
+        console.log(chalk.green('\n✓ Platform formatting complete!\n'));
+        console.log(chalk.white('Formatted clips location:'));
+        console.log(chalk.cyan(`  ${formattedDir}\n`));
+      } else {
+        console.log(
+          chalk.yellow('\n⚠️  Platform formatting failed, but original clips are still available\n')
+        );
+      }
+    }
   } catch (error) {
     // Use our error formatter for beautiful, actionable error messages
     if (isArenaError(error)) {
