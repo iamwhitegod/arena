@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.9] - 2026-01-23
+
 ### Fixed
 - **CRITICAL: Pip cache hash mismatch errors** - Fixed "THESE PACKAGES DO NOT MATCH THE HASHES" errors
   - Added `--no-cache-dir` flag to avoid stale/corrupted cache files
