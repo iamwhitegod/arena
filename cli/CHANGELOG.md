@@ -10,17 +10,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.4] - 2026-01-23
 
 ### Fixed
-- **Auto-installation improvements** - Fixed automatic dependency installation
+- **CRITICAL: Auto-installation on all platforms** - Fixed automatic dependency installation across Windows, macOS, and Linux
   - Re-check now uses proper cross-platform detection (checkPython, checkPip, checkFFmpeg)
-  - Added detailed error messages showing stderr/stdout from failed installations
-  - Added platform-specific guidance (Windows: run as Admin, Linux: sudo required)
-  - Better error handling with helpful tips for common issues (Homebrew, winget, sudo)
+  - Added non-interactive flags for all package managers:
+    - Linux apt: `-y` flag and `apt-get update` before install
+    - Linux dnf/yum: `-y` flag for auto-confirmation
+    - Linux pacman: `--noconfirm` flag
+    - Linux zypper: `-n` flag (non-interactive)
+    - Windows winget: `--accept-source-agreements --accept-package-agreements`
+    - Windows chocolatey: `-y` flag
+  - Added intelligent error detection with specific solutions:
+    - Repository not found → Shows how to enable universe/EPEL/RPM Fusion
+    - Permission denied → Shows how to run as Admin or use sudo
+    - Command not found → Shows how to install Homebrew/Chocolatey
+    - Package not available → Shows repository enablement commands
+  - Added PATH restart warnings when dependencies not found after installation
 
 ### Improved
 - **Better user guidance** - Shows platform-specific notes before auto-installation
-- **Error details** - Failed installations now show detailed error output
-- **Windows support** - Added note about Administrator privileges for winget/chocolatey
-- **Linux support** - Added note about sudo password prompts
+  - Windows: Warns about Administrator privileges requirement
+  - Linux: Warns about sudo password prompts
+- **Comprehensive error detection** - Detects and provides solutions for:
+  - Ubuntu/Debian: Missing universe repository
+  - RHEL/CentOS: Missing EPEL repository
+  - Fedora: Missing RPM Fusion for FFmpeg
+  - macOS: Missing Homebrew
+  - Windows: Missing Chocolatey or winget version requirements
+- **PATH restart guidance** - Clear instructions to restart terminal after installation
+  - Windows: Close/reopen PowerShell/CMD
+  - macOS/Linux: Source ~/.bashrc or ~/.zshrc
+- **Testing documentation** - Added comprehensive TEST_SETUP_ALL_PLATFORMS.md with:
+  - Test scenarios for each platform
+  - Known issues and workarounds
+  - Test results template
 
 ## [0.3.3] - 2026-01-23
 

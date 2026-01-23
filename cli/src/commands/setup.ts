@@ -32,13 +32,14 @@ const dependencies: DependencyCheck[] = [
     installInstructions: {
       'darwin-brew': 'brew install python3',
       'darwin-port': 'sudo port install python311',
-      'linux-apt': 'sudo apt-get install python3 python3-pip',
-      'linux-yum': 'sudo yum install python3 python3-pip',
-      'linux-dnf': 'sudo dnf install python3 python3-pip',
-      'linux-pacman': 'sudo pacman -S python python-pip',
-      'linux-zypper': 'sudo zypper install python3 python3-pip',
-      'win32-winget': 'winget install Python.Python.3.11',
-      'win32-choco': 'choco install python',
+      'linux-apt': 'sudo apt-get update && sudo apt-get install -y python3 python3-pip',
+      'linux-yum': 'sudo yum install -y python3 python3-pip',
+      'linux-dnf': 'sudo dnf install -y python3 python3-pip',
+      'linux-pacman': 'sudo pacman -S --noconfirm python python-pip',
+      'linux-zypper': 'sudo zypper install -n python3 python3-pip',
+      'win32-winget':
+        'winget install --accept-source-agreements --accept-package-agreements Python.Python.3.11',
+      'win32-choco': 'choco install -y python',
       'win32-manual': 'https://www.python.org/downloads/',
     },
   },
@@ -48,11 +49,11 @@ const dependencies: DependencyCheck[] = [
     installInstructions: {
       'darwin-brew': 'python3 -m ensurepip --upgrade',
       'darwin-port': 'python3 -m ensurepip --upgrade',
-      'linux-apt': 'sudo apt-get install python3-pip',
-      'linux-yum': 'sudo yum install python3-pip',
-      'linux-dnf': 'sudo dnf install python3-pip',
-      'linux-pacman': 'sudo pacman -S python-pip',
-      'linux-zypper': 'sudo zypper install python3-pip',
+      'linux-apt': 'sudo apt-get install -y python3-pip',
+      'linux-yum': 'sudo yum install -y python3-pip',
+      'linux-dnf': 'sudo dnf install -y python3-pip',
+      'linux-pacman': 'sudo pacman -S --noconfirm python-pip',
+      'linux-zypper': 'sudo zypper install -n python3-pip',
       'win32-winget': 'python -m ensurepip --upgrade',
       'win32-choco': 'python -m ensurepip --upgrade',
       'win32-manual': 'python -m ensurepip --upgrade',
@@ -64,13 +65,14 @@ const dependencies: DependencyCheck[] = [
     installInstructions: {
       'darwin-brew': 'brew install ffmpeg',
       'darwin-port': 'sudo port install ffmpeg',
-      'linux-apt': 'sudo apt-get install ffmpeg',
-      'linux-yum': 'sudo yum install ffmpeg',
-      'linux-dnf': 'sudo dnf install ffmpeg',
-      'linux-pacman': 'sudo pacman -S ffmpeg',
-      'linux-zypper': 'sudo zypper install ffmpeg',
-      'win32-winget': 'winget install Gyan.FFmpeg',
-      'win32-choco': 'choco install ffmpeg',
+      'linux-apt': 'sudo apt-get install -y ffmpeg',
+      'linux-yum': 'sudo yum install -y ffmpeg',
+      'linux-dnf': 'sudo dnf install -y ffmpeg',
+      'linux-pacman': 'sudo pacman -S --noconfirm ffmpeg',
+      'linux-zypper': 'sudo zypper install -n ffmpeg',
+      'win32-winget':
+        'winget install --accept-source-agreements --accept-package-agreements Gyan.FFmpeg',
+      'win32-choco': 'choco install -y ffmpeg',
       'win32-manual': 'https://ffmpeg.org/download.html',
     },
   },
@@ -344,24 +346,88 @@ async function autoInstallDependency(
   } catch (error) {
     spinner.fail(`Failed to install ${dep.name}`);
 
-    const err = error as { stderr?: string; stdout?: string };
-    if (err.stderr || err.stdout) {
+    const err = error as { stderr?: string; stdout?: string; message?: string };
+    const errorMessage = err.stderr || err.stdout || err.message || '';
+
+    if (errorMessage) {
       console.log(chalk.red('\nError details:'));
-      console.log(chalk.gray(err.stderr || err.stdout || ''));
+      console.log(chalk.gray(errorMessage));
     }
 
     console.log(chalk.yellow('\n💡 Please install manually:'));
     console.log(chalk.cyan(`  ${installCommand}\n`));
 
-    // Show additional help for common issues
-    if (installCommand.includes('sudo') && process.platform !== 'win32') {
-      console.log(chalk.gray('Note: This command requires administrator privileges (sudo)'));
-    } else if (installCommand.includes('brew') && process.platform === 'darwin') {
+    // Detect and provide specific solutions for common errors
+    const errorLower = errorMessage.toLowerCase();
+
+    // Repository/package not found errors
+    if (errorLower.includes('unable to locate package') || errorLower.includes('no package')) {
+      console.log(chalk.yellow('Repository Issue Detected:'));
+      if (process.platform === 'linux') {
+        console.log(chalk.gray('Ubuntu/Debian: Enable universe repository:'));
+        console.log(chalk.cyan('  sudo add-apt-repository universe'));
+        console.log(chalk.cyan('  sudo apt-get update\n'));
+      }
+    }
+
+    // EPEL needed (RHEL/CentOS)
+    if (errorLower.includes('no match for argument') && installCommand.includes('yum')) {
+      console.log(chalk.yellow('EPEL Repository Needed:'));
+      console.log(chalk.gray('RHEL/CentOS: Install EPEL first:'));
+      console.log(chalk.cyan('  sudo yum install -y epel-release\n'));
+    }
+
+    // RPM Fusion needed (Fedora)
+    if (
+      errorLower.includes('no match') &&
+      installCommand.includes('ffmpeg') &&
+      installCommand.includes('dnf')
+    ) {
+      console.log(chalk.yellow('RPM Fusion Repository Needed:'));
+      console.log(chalk.gray('Fedora: Enable RPM Fusion:'));
       console.log(
-        chalk.gray(
-          'Note: Make sure Homebrew is installed: /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+        chalk.cyan(
+          '  sudo dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm\n'
         )
       );
+    }
+
+    // Permission denied
+    if (errorLower.includes('permission denied') || errorLower.includes('access denied')) {
+      console.log(chalk.yellow('Permission Issue:'));
+      if (process.platform === 'win32') {
+        console.log(chalk.gray('Run PowerShell/CMD as Administrator:'));
+        console.log(chalk.gray('  Right-click → "Run as Administrator"\n'));
+      } else {
+        console.log(chalk.gray('This command needs sudo privileges'));
+        console.log(chalk.gray('Make sure your user has sudo access\n'));
+      }
+    }
+
+    // Command not found
+    if (errorLower.includes('command not found') || errorLower.includes('not recognized')) {
+      if (installCommand.includes('brew') && process.platform === 'darwin') {
+        console.log(chalk.yellow('Homebrew Not Installed:'));
+        console.log(chalk.gray('Install Homebrew first:'));
+        console.log(
+          chalk.cyan(
+            '  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"\n'
+          )
+        );
+      } else if (installCommand.includes('choco') && process.platform === 'win32') {
+        console.log(chalk.yellow('Chocolatey Not Installed:'));
+        console.log(chalk.gray('Install Chocolatey first:'));
+        console.log(chalk.cyan('  Visit: https://chocolatey.org/install\n'));
+      }
+    }
+
+    // Show additional help for common issues
+    if (
+      installCommand.includes('sudo') &&
+      process.platform !== 'win32' &&
+      !errorLower.includes('password')
+    ) {
+      console.log(chalk.gray('Note: This command requires administrator privileges (sudo)'));
     } else if (installCommand.includes('winget') && process.platform === 'win32') {
       console.log(chalk.gray('Note: winget requires Windows 10 1809 or later'));
       console.log(chalk.gray('      You may need to run PowerShell/CMD as Administrator'));
@@ -536,10 +602,22 @@ export async function setupCommand(): Promise<void> {
 
         if (success) {
           console.log(chalk.green('\n✓ Setup complete! Arena is ready to use.\n'));
+          console.log(chalk.cyan('Try it out:'));
+          console.log(chalk.white('  arena process video.mp4 -p tiktok\n'));
         }
       } else {
         console.log(chalk.yellow('\n⚠️  Some dependencies could not be installed automatically'));
         console.log(chalk.white('Please install them manually using the commands above.\n'));
+
+        // Show PATH restart warning if tools might have been installed
+        console.log(chalk.yellow('💡 If you just installed dependencies:'));
+        console.log(chalk.gray('   Restart your terminal to update PATH'));
+        if (process.platform === 'win32') {
+          console.log(chalk.gray('   - Close and reopen PowerShell/CMD'));
+        } else {
+          console.log(chalk.gray('   - Or run: source ~/.bashrc (or ~/.zshrc)'));
+        }
+        console.log(chalk.gray('   Then run: arena setup\n'));
       }
     } else {
       console.log(chalk.yellow('\nPlease install the missing dependencies manually, then run:'));
