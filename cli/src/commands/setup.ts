@@ -608,9 +608,78 @@ export async function setupCommand(): Promise<void> {
       ]);
 
       if (autoInstall) {
+        const installResults = new Map<string, boolean>();
+
+        // Install dependencies with smart sequencing
+        // Install Python first if needed (pip depends on it)
+        const pythonDep = missing.find(({ dep }) => dep.name.includes('Python'));
+        if (pythonDep && !pythonDep.installed) {
+          const success = await autoInstallDependency(pythonDep.dep, packageManager);
+          installResults.set('Python', success);
+
+          if (success) {
+            console.log(
+              chalk.yellow('\n⏳ Waiting for Python to be available in PATH...')
+            );
+            console.log(chalk.gray('   (This may take a few seconds)\n'));
+
+            // Wait and retry to detect Python
+            let pythonFound = false;
+            for (let i = 0; i < 5; i++) {
+              await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
+              const result = await checkPython();
+              if (result.installed) {
+                console.log(chalk.green('✓ Python is now available!\n'));
+                pythonFound = true;
+                break;
+              }
+            }
+
+            if (!pythonFound) {
+              console.log(chalk.yellow('⚠️  Python installed but not yet in PATH\n'));
+              console.log(chalk.white('You need to restart your terminal for Python to be available.\n'));
+
+              const { restartNow } = await inquirer.prompt([
+                {
+                  type: 'confirm',
+                  name: 'restartNow',
+                  message: 'Do you want to restart your terminal now and continue setup later?',
+                  default: true,
+                },
+              ]);
+
+              if (restartNow) {
+                console.log(chalk.cyan('\n📋 After restarting your terminal, run:\n'));
+                console.log(chalk.white('  arena setup\n'));
+                console.log(chalk.yellow('Instructions to restart:'));
+                if (process.platform === 'win32') {
+                  console.log(chalk.gray('  1. Close this PowerShell/CMD window'));
+                  console.log(chalk.gray('  2. Open a new PowerShell/CMD window'));
+                  console.log(chalk.gray('  3. Run: arena setup\n'));
+                } else {
+                  console.log(chalk.gray('  1. Close this terminal'));
+                  console.log(chalk.gray('  2. Open a new terminal'));
+                  console.log(chalk.gray('  3. Run: arena setup\n'));
+                }
+                return;
+              } else {
+                console.log(chalk.yellow('\nContinuing anyway (pip installation may fail)...\n'));
+              }
+            }
+          }
+        }
+
+        // Install remaining dependencies
         for (const { dep, installed } of missing) {
-          if (!installed) {
-            await autoInstallDependency(dep, packageManager);
+          if (!installed && !dep.name.includes('Python')) {
+            const success = await autoInstallDependency(dep, packageManager);
+            installResults.set(dep.name, success);
+
+            // If pip was just installed, wait for it to be available
+            if (success && dep.name.includes('pip')) {
+              console.log(chalk.yellow('\n⏳ Verifying pip is available...\n'));
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+            }
           }
         }
 
@@ -619,6 +688,8 @@ export async function setupCommand(): Promise<void> {
         console.log(chalk.white('Re-checking dependencies...\n'));
 
         let allInstalled = true;
+        const stillMissing: string[] = [];
+
         for (const { dep } of missing) {
           // Use cross-platform detection for re-check
           let result;
@@ -636,6 +707,7 @@ export async function setupCommand(): Promise<void> {
             console.log(chalk.green(`✓ ${dep.name} ${chalk.gray(result.version || '')}`));
           } else {
             console.log(chalk.red(`✗ ${dep.name} still not found`));
+            stillMissing.push(dep.name);
             allInstalled = false;
           }
         }
@@ -652,18 +724,55 @@ export async function setupCommand(): Promise<void> {
             console.log(chalk.white('  arena process video.mp4 -p tiktok\n'));
           }
         } else {
-          console.log(chalk.yellow('\n⚠️  Some dependencies could not be installed automatically'));
-          console.log(chalk.white('Please install them manually using the commands above.\n'));
+          console.log(chalk.yellow('\n⚠️  Some dependencies could not be installed automatically\n'));
 
-          // Show PATH restart warning if tools might have been installed
-          console.log(chalk.yellow('💡 If you just installed dependencies:'));
-          console.log(chalk.gray('   Restart your terminal to update PATH'));
-          if (process.platform === 'win32') {
-            console.log(chalk.gray('   - Close and reopen PowerShell/CMD'));
+          // Check if any were actually installed but not found (PATH issue)
+          const installedButNotFound = stillMissing.filter((name) => installResults.get(name));
+
+          if (installedButNotFound.length > 0) {
+            console.log(
+              chalk.yellow(`⚠️  These were installed but not found in PATH:`)
+            );
+            installedButNotFound.forEach((name) => {
+              console.log(chalk.white(`   • ${name}`));
+            });
+            console.log();
+
+            console.log(chalk.white('This usually means you need to restart your terminal.\n'));
+            console.log(chalk.cyan('To fix this:\n'));
+
+            if (process.platform === 'win32') {
+              console.log(chalk.white('  1. Close this PowerShell/CMD window'));
+              console.log(chalk.white('  2. Open a new PowerShell/CMD window'));
+              console.log(chalk.white('  3. Run: arena setup\n'));
+            } else {
+              console.log(chalk.white('  Option 1 (Recommended):'));
+              console.log(chalk.gray('    - Close and reopen your terminal'));
+              console.log(chalk.gray('    - Run: arena setup\n'));
+
+              console.log(chalk.white('  Option 2 (Quick):'));
+              if (existsSync(`${process.env.HOME}/.zshrc`)) {
+                console.log(chalk.gray('    - Run: source ~/.zshrc && arena setup'));
+              } else if (existsSync(`${process.env.HOME}/.bashrc`)) {
+                console.log(chalk.gray('    - Run: source ~/.bashrc && arena setup'));
+              } else {
+                console.log(chalk.gray('    - Run: source ~/.profile && arena setup'));
+              }
+              console.log();
+            }
           } else {
-            console.log(chalk.gray('   - Or run: source ~/.bashrc (or ~/.zshrc)'));
+            console.log(chalk.white('Please install them manually using the commands above.\n'));
+
+            // Show PATH restart warning
+            console.log(chalk.yellow('💡 After manual installation:'));
+            console.log(chalk.gray('   Restart your terminal to update PATH'));
+            if (process.platform === 'win32') {
+              console.log(chalk.gray('   - Close and reopen PowerShell/CMD'));
+            } else {
+              console.log(chalk.gray('   - Or run: source ~/.bashrc (or ~/.zshrc)'));
+            }
+            console.log(chalk.gray('   Then run: arena setup\n'));
           }
-          console.log(chalk.gray('   Then run: arena setup\n'));
         }
       } else {
         console.log(chalk.yellow('\nPlease install the missing dependencies manually, then run:'));

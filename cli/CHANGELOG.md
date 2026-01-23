@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **CRITICAL: PATH refresh issues after Python installation** - Fixed pip installation failing when Python just installed
+  - Smart installation sequencing: Python installs first, then waits for PATH refresh
+  - Automatic retry with delay (up to 10 seconds) to detect newly installed Python
+  - Terminal restart prompt when Python installed but not in PATH
+  - Detects which dependencies were installed but not found (PATH issue)
+  - Platform-specific instructions to restart terminal or source shell config
+
+### Improved
+- **Better post-installation guidance** - Clear instructions when dependencies installed but not in PATH
+  - Shows which specific tools need PATH refresh
+  - Provides option to restart terminal or source config file
+  - Detects shell type (.bashrc, .zshrc, .profile) and provides exact command
+
 ## [0.3.7] - 2026-01-23
 
 ### Added
