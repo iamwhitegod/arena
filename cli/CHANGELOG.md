@@ -9,23 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.11] - 2026-01-23
-
-### Fixed
-- **CRITICAL: AssignProcessToJobObject in preflight checks** - Fixed error during Python environment check
-  - Applied Windows spawn options to `checkPythonEnvironment()` method
-  - Applied Windows spawn options to `checkDependencies()` method
-  - Changed from `python3` to `python` command on Windows
-  - All subprocess spawns now use consistent Windows-safe options
-
-## [0.3.10] - 2026-01-23
+## [0.3.9] - 2026-01-23
 
 ### Fixed
 - **CRITICAL: Windows AssignProcessToJobObject error** - Fixed "The parameter is incorrect" error on Windows
   - Explicitly use `python` command on Windows instead of shebang script
-  - Added proper Windows spawn options (windowsHide, detached: false)
+  - Added proper Windows spawn options (windowsHide, detached: false, shell: false)
   - Created helper method to handle platform-specific command execution
+  - Applied Windows spawn options to all subprocess calls including preflight checks
   - All Python CLI calls now work correctly on Windows
+- **CRITICAL: Pip cache hash mismatch errors** - Fixed "THESE PACKAGES DO NOT MATCH THE HASHES" errors
+  - Added `--no-cache-dir` flag to avoid stale/corrupted cache files
+  - Added `--upgrade` flag to ensure latest compatible versions
+  - Detects hash errors and provides cache purge instructions
+- **Security: Shell injection warning** - Fixed deprecation warning about shell=true with args
+  - Changed to shell=false with properly escaped arguments for pip install
+  - Eliminates security vulnerability from concatenated arguments
 
 ### Improved
 - **Cross-platform Python execution** - Unified approach for running Python scripts
@@ -33,19 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Unix: Uses `arena-cli [command]` with shebang
   - Eliminates Windows job object conflicts
   - Better subprocess handling on all platforms
-
-## [0.3.9] - 2026-01-23
-
-### Fixed
-- **CRITICAL: Pip cache hash mismatch errors** - Fixed "THESE PACKAGES DO NOT MATCH THE HASHES" errors
-  - Added `--no-cache-dir` flag to avoid stale/corrupted cache files
-  - Added `--upgrade` flag to ensure latest compatible versions
-  - Detects hash errors and provides cache purge instructions
-- **Security: Shell injection warning** - Fixed deprecation warning about shell=true with args
-  - Changed to shell=false with properly escaped arguments
-  - Eliminates security vulnerability from concatenated arguments
-
-### Improved
 - **Better error messages for cache issues** - Specific guidance when pip cache is corrupted
   - Shows cache purge command
   - Explains why --no-cache-dir flag was added
