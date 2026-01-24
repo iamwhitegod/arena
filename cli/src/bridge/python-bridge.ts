@@ -357,10 +357,13 @@ export class PythonBridge {
     if (process.platform === 'win32') {
       // Don't create a new window console
       spawnOptions.windowsHide = true;
-      // Don't try to assign to job object (requires Windows 8+)
-      spawnOptions.detached = false;
-      // Use shell mode to avoid job object issues
+      // Create new process group to avoid job object assignment
+      spawnOptions.detached = true;
+      // Use shell to ensure proper process handling
       spawnOptions.shell = false;
+      // Enable UTF-8 encoding for Python output (emoji support)
+      spawnOptions.env.PYTHONUTF8 = '1';
+      spawnOptions.env.PYTHONIOENCODING = 'utf-8';
     }
 
     const pythonProcess = spawn(arenaCliPath, args, spawnOptions);
@@ -550,7 +553,7 @@ export class PythonBridge {
       const spawnOptions: any = {};
       if (process.platform === 'win32') {
         spawnOptions.windowsHide = true;
-        spawnOptions.detached = false;
+        spawnOptions.detached = true;
         spawnOptions.shell = false;
       }
 
@@ -600,7 +603,7 @@ export class PythonBridge {
 
       if (process.platform === 'win32') {
         spawnOptions.windowsHide = true;
-        spawnOptions.detached = false;
+        spawnOptions.detached = true;
         spawnOptions.shell = false;
       }
 

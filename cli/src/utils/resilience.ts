@@ -139,7 +139,7 @@ export function spawnWithErrorHandling(
     // Windows-specific spawn options to avoid job object errors
     if (process.platform === 'win32') {
       spawnOptions.windowsHide = true;
-      spawnOptions.detached = false;
+      spawnOptions.detached = true;
       // Keep shell: false for security unless explicitly set
       if (options.shell === undefined) {
         spawnOptions.shell = false;

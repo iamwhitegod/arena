@@ -17,6 +17,11 @@ from pathlib import Path
 from typing import Optional
 import argparse
 
+# Fix Windows console encoding for emoji support
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 try:
     from tqdm import tqdm
     HAS_TQDM = True

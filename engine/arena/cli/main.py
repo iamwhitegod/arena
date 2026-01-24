@@ -4,6 +4,11 @@ import sys
 import argparse
 from pathlib import Path
 
+# Fix Windows console encoding for emoji support
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 from . import __version__
 
 
