@@ -348,7 +348,9 @@ async function installPythonPackages(): Promise<boolean> {
         );
       } else if (output.includes('hash') || output.includes('these packages do not match')) {
         console.log(chalk.yellow('\n⚠️  Corrupted Cache Detected:'));
-        console.log(chalk.white('Pip cache has corrupted or outdated files. Clear it and retry:\n'));
+        console.log(
+          chalk.white('Pip cache has corrupted or outdated files. Clear it and retry:\n')
+        );
         console.log(chalk.cyan(`  ${pipCommand} cache purge`));
         const userFlag = process.platform === 'win32' ? ' --user' : '';
         console.log(
@@ -363,7 +365,9 @@ async function installPythonPackages(): Promise<boolean> {
         console.log(chalk.yellow('\n💡 Tip: Try running manually:'));
         const userFlag = process.platform === 'win32' ? ' --user' : '';
         console.log(
-          chalk.cyan(`  ${pipCommand} install${userFlag} --no-cache-dir ${pythonPackages.join(' ')}\n`)
+          chalk.cyan(
+            `  ${pipCommand} install${userFlag} --no-cache-dir ${pythonPackages.join(' ')}\n`
+          )
         );
       }
 
@@ -379,6 +383,75 @@ async function installPythonPackages(): Promise<boolean> {
       chalk.cyan(`  ${pipCommand} install${userFlag} --no-cache-dir ${pythonPackages.join(' ')}\n`)
     );
     return false;
+  }
+}
+
+/**
+ * Install Arena engine package
+ */
+async function installArenaEngine(): Promise<boolean> {
+  console.log(chalk.cyan('\n📦 Installing Arena engine package...\n'));
+
+  const pipCommand = await getPipCommand();
+  const spinner = ora('Installing Arena engine').start();
+
+  try {
+    // Get engine path
+    const enginePath = join(process.cwd(), '../../engine');
+
+    // Check if engine directory exists
+    if (!existsSync(enginePath)) {
+      spinner.warn('Engine directory not found, skipping');
+      console.log(chalk.yellow('⚠️  Could not find engine directory'));
+      console.log(chalk.gray('   Expected location: engine/'));
+      console.log(chalk.gray('   This is optional if running from npm package\n'));
+      return true; // Non-fatal, return true to continue
+    }
+
+    let command: string;
+    let args: string[];
+
+    if (pipCommand.includes(' -m ')) {
+      const parts = pipCommand.split(' ');
+      command = parts[0];
+      args = [...parts.slice(1), 'install', '-e', enginePath];
+    } else {
+      command = pipCommand;
+      args = ['install', '-e', enginePath];
+    }
+
+    // Add --user flag on Windows
+    if (process.platform === 'win32') {
+      args.push('--user');
+    }
+
+    args.push('--no-cache-dir');
+
+    const result = await spawnWithErrorHandling(command, args, {
+      shell: false,
+      onStdout: (data) => {
+        if (data.includes('Successfully installed')) {
+          spinner.text = 'Arena engine installed';
+        }
+      },
+    });
+
+    if (result.code === 0) {
+      spinner.succeed('Arena engine installed successfully');
+      return true;
+    } else {
+      spinner.warn('Arena engine installation had issues');
+      console.log(chalk.yellow('\n⚠️  Arena engine installation failed'));
+      console.log(chalk.gray('   You can install it manually:'));
+      console.log(chalk.cyan(`   cd engine && ${pipCommand} install -e .`));
+      return true; // Non-fatal, return true to continue
+    }
+  } catch (error) {
+    spinner.warn('Could not install Arena engine');
+    console.log(chalk.yellow('\n⚠️  Arena engine installation skipped'));
+    console.log(chalk.gray('   You can install it manually:'));
+    console.log(chalk.cyan(`   cd engine && ${pipCommand} install -e .`));
+    return true; // Non-fatal, return true to continue
   }
 }
 
@@ -582,6 +655,9 @@ export async function setupCommand(): Promise<void> {
         const success = await installPythonPackages();
 
         if (success) {
+          // Install Arena engine package
+          await installArenaEngine();
+
           console.log(chalk.green('\n✓ Setup complete! Arena is ready to use.\n'));
           console.log(chalk.cyan('Try it out:'));
           console.log(chalk.white('  arena process video.mp4 -p tiktok\n'));
@@ -639,9 +715,7 @@ export async function setupCommand(): Promise<void> {
           installResults.set('Python', success);
 
           if (success) {
-            console.log(
-              chalk.yellow('\n⏳ Waiting for Python to be available in PATH...')
-            );
+            console.log(chalk.yellow('\n⏳ Waiting for Python to be available in PATH...'));
             console.log(chalk.gray('   (This may take a few seconds)\n'));
 
             // Wait and retry to detect Python
@@ -658,7 +732,9 @@ export async function setupCommand(): Promise<void> {
 
             if (!pythonFound) {
               console.log(chalk.yellow('⚠️  Python installed but not yet in PATH\n'));
-              console.log(chalk.white('You need to restart your terminal for Python to be available.\n'));
+              console.log(
+                chalk.white('You need to restart your terminal for Python to be available.\n')
+              );
 
               const { restartNow } = await inquirer.prompt([
                 {
@@ -740,20 +816,23 @@ export async function setupCommand(): Promise<void> {
           const success = await installPythonPackages();
 
           if (success) {
+            // Install Arena engine package
+            await installArenaEngine();
+
             console.log(chalk.green('\n✓ Setup complete! Arena is ready to use.\n'));
             console.log(chalk.cyan('Try it out:'));
             console.log(chalk.white('  arena process video.mp4 -p tiktok\n'));
           }
         } else {
-          console.log(chalk.yellow('\n⚠️  Some dependencies could not be installed automatically\n'));
+          console.log(
+            chalk.yellow('\n⚠️  Some dependencies could not be installed automatically\n')
+          );
 
           // Check if any were actually installed but not found (PATH issue)
           const installedButNotFound = stillMissing.filter((name) => installResults.get(name));
 
           if (installedButNotFound.length > 0) {
-            console.log(
-              chalk.yellow(`⚠️  These were installed but not found in PATH:`)
-            );
+            console.log(chalk.yellow(`⚠️  These were installed but not found in PATH:`));
             installedButNotFound.forEach((name) => {
               console.log(chalk.white(`   • ${name}`));
             });
