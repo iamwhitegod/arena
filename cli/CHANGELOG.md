@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.12] - 2026-01-23
+
+### Verified
+- **Windows subprocess fix confirmed working** - Tested on Windows, AssignProcessToJobObject error resolved
+  - Preflight checks now pass successfully on Windows
+  - Python environment validation works correctly
+  - Video file validation works correctly
+  - All subprocess spawning operations functioning as expected
+
 ## [0.3.11] - 2026-01-23
 
 ### Fixed
