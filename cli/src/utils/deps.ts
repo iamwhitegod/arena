@@ -58,7 +58,7 @@ async function commandExists(command: string): Promise<boolean> {
 
     if (process.platform === 'win32') {
       spawnOptions.windowsHide = true;
-      spawnOptions.detached = false;
+      spawnOptions.detached = true;
       spawnOptions.shell = false;
     }
 

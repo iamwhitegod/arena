@@ -183,7 +183,7 @@ export async function validatePython(): Promise<string> {
     const spawnOptions: SpawnOptionsWithWindowsProps = {};
     if (process.platform === 'win32') {
       spawnOptions.windowsHide = true;
-      spawnOptions.detached = false;
+      spawnOptions.detached = true;
       spawnOptions.shell = false;
     }
 
@@ -270,7 +270,7 @@ export async function validateDependencies(enginePath: string): Promise<void> {
     };
     if (process.platform === 'win32') {
       spawnOptions.windowsHide = true;
-      spawnOptions.detached = false;
+      spawnOptions.detached = true;
       spawnOptions.shell = false;
     }
 
