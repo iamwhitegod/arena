@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.15] - 2026-01-26
+
+### Fixed
+- **Dependencies check now works correctly** - Fixed preflight validation error
+  - Removed incorrect PYTHONPATH and cwd settings in validateDependencies()
+  - Arena package is installed globally via pip, doesn't need local path
+  - Fixes "Dependencies check failed" error during arena process command
+  - Users can now run `arena process` successfully after `arena setup`
+
 ## [0.3.14] - 2026-01-26
 
 ### Fixed

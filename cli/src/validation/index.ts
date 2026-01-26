@@ -250,7 +250,7 @@ export async function validatePython(): Promise<string> {
 /**
  * Validate Python dependencies are installed
  */
-export async function validateDependencies(enginePath: string): Promise<void> {
+export async function validateDependencies(_enginePath: string): Promise<void> {
   // Use getPythonPath to get platform-specific python command
   const { getPythonPath } = await import('../utils/deps.js');
   const pythonCmd = await getPythonPath();
@@ -258,15 +258,13 @@ export async function validateDependencies(enginePath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     // Windows-specific spawn options to avoid job object errors
     interface SpawnOptionsWithWindowsProps {
-      cwd: string;
       env: NodeJS.ProcessEnv;
       windowsHide?: boolean;
       detached?: boolean;
       shell?: boolean;
     }
     const spawnOptions: SpawnOptionsWithWindowsProps = {
-      cwd: enginePath,
-      env: { ...process.env, PYTHONPATH: enginePath },
+      env: { ...process.env },
     };
     if (process.platform === 'win32') {
       spawnOptions.windowsHide = true;
