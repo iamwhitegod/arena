@@ -1,6 +1,6 @@
 {
   "name": "@whitegodkingsley/arena-cli",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "description": "AI-powered video clip generation tool for the terminal - Turn long-form content into viral clips",
   "type": "module",
   "main": "dist/index.js",

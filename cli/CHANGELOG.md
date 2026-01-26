@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.13] - 2026-01-26
+
+### Fixed
+- **Setup command now installs all required Python packages** - Fixed incomplete dependency installation
+  - Changed `installPythonPackages()` to use `pip install -r requirements.txt` instead of hardcoded 6-package list
+  - Now installs all 26 required packages including librosa, noisereduce, pyloudnorm, moviepy, opencv-python, scenedetect, soundfile, numba, pillow, tqdm, tiktoken
+  - Fixes "ModuleNotFoundError: No module named 'librosa'" and similar import errors
+  - Falls back to hardcoded packages if requirements.txt not found
+  - Updated all error messages to reference requirements.txt for manual installation
+  - **IMPORTANT**: Users who ran `arena setup` before this version must run it again to get all dependencies
+
 ## [0.3.12] - 2026-01-23
 
 ### Verified
