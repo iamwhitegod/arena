@@ -1,6 +1,6 @@
 {
   "name": "@whitegodkingsley/arena-cli",
-  "version": "0.3.13",
+  "version": "0.3.14",
   "description": "AI-powered video clip generation tool for the terminal - Turn long-form content into viral clips",
   "type": "module",
   "main": "dist/index.js",
@@ -11,6 +11,8 @@
   "files": [
     "dist/",
     "scripts/",
+    "engine/",
+    "requirements.txt",
     "README.md",
     "LICENSE"
   ],
@@ -32,8 +34,9 @@
     "format:check": "prettier --check \"src/**/*.ts\"",
     "prepare": "husky",
     "postinstall": "node scripts/postinstall.cjs",
-    "prepublishOnly": "npm run build",
-    "prepack": "npm run build"
+    "prepublishOnly": "npm run build && node scripts/prepare-package.cjs",
+    "prepack": "npm run build && node scripts/prepare-package.cjs",
+    "postpack": "node scripts/cleanup-package.cjs"
   },
   "lint-staged": {
     "src/**/*.ts": [

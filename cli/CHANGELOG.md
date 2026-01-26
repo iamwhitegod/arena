@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.14] - 2026-01-26
+
+### Fixed
+- **NPM package now includes all required files** - Fixed for npm package users
+  - Added `engine/` directory and `requirements.txt` to npm package distribution
+  - Created `prepare-package.cjs` script to copy engine files before publishing
+  - Created `cleanup-package.cjs` script to remove copied files after publishing
+  - Updated `setup.ts` to check multiple locations for engine and requirements.txt (npm vs development)
+  - NPM users can now run `arena setup` successfully without errors
+  - Fixes "Engine directory not found" error for npm package users
+
+### Added
+- Package preparation scripts for npm publishing workflow
+- Dual path resolution for npm package vs development environments
+
 ## [0.3.13] - 2026-01-26
 
 ### Fixed

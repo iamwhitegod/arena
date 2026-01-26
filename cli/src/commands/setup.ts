@@ -257,14 +257,29 @@ async function installPythonPackages(): Promise<boolean> {
 
   const pipCommand = await getPipCommand();
 
-  // Check if requirements.txt exists relative to CLI installation directory
-  // From dist/commands/setup.js -> ../../../engine/requirements.txt
+  // Check if requirements.txt exists
+  // Try npm package location first (../../requirements.txt from dist/commands/setup.js)
+  // Then try development location (../../../engine/requirements.txt)
   const { fileURLToPath } = await import('url');
   const { dirname } = await import('path');
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = dirname(__filename);
-  const requirementsPath = join(__dirname, '../../../engine/requirements.txt');
-  const hasRequirementsFile = existsSync(requirementsPath);
+
+  const npmRequirementsPath = join(__dirname, '../../requirements.txt');
+  const devRequirementsPath = join(__dirname, '../../../engine/requirements.txt');
+
+  let requirementsPath: string;
+  let hasRequirementsFile = false;
+
+  if (existsSync(npmRequirementsPath)) {
+    requirementsPath = npmRequirementsPath;
+    hasRequirementsFile = true;
+  } else if (existsSync(devRequirementsPath)) {
+    requirementsPath = devRequirementsPath;
+    hasRequirementsFile = true;
+  } else {
+    requirementsPath = npmRequirementsPath; // Default for error messages
+  }
 
   if (hasRequirementsFile) {
     console.log(chalk.gray('   Using engine/requirements.txt\n'));
@@ -424,21 +439,28 @@ async function installArenaEngine(): Promise<boolean> {
   const spinner = ora('Installing Arena engine').start();
 
   try {
-    // Get engine path relative to CLI installation directory
-    // From dist/commands/setup.js -> ../../../engine
+    // Get engine path
+    // Try npm package location first (../../engine from dist/commands/setup.js)
+    // Then try development location (../../../engine)
     const { fileURLToPath } = await import('url');
     const { dirname } = await import('path');
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = dirname(__filename);
-    const enginePath = join(__dirname, '../../../engine');
 
-    // Check if engine directory exists
-    if (!existsSync(enginePath)) {
+    const npmEnginePath = join(__dirname, '../../engine');
+    const devEnginePath = join(__dirname, '../../../engine');
+
+    let enginePath: string;
+
+    if (existsSync(npmEnginePath)) {
+      enginePath = npmEnginePath;
+    } else if (existsSync(devEnginePath)) {
+      enginePath = devEnginePath;
+    } else {
       spinner.warn('Engine directory not found, skipping');
       console.log(chalk.yellow('⚠️  Could not find engine directory'));
-      console.log(chalk.gray('   Expected location: engine/'));
       console.log(chalk.gray('   This is optional if running from npm package\n'));
-      return true; // Non-fatal, return true to continue
+      return true; // Non-fatal
     }
 
     let command: string;
