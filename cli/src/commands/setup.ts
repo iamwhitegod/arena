@@ -257,8 +257,13 @@ async function installPythonPackages(): Promise<boolean> {
 
   const pipCommand = await getPipCommand();
 
-  // Check if requirements.txt exists
-  const requirementsPath = join(process.cwd(), '../../engine/requirements.txt');
+  // Check if requirements.txt exists relative to CLI installation directory
+  // From dist/commands/setup.js -> ../../../engine/requirements.txt
+  const { fileURLToPath } = await import('url');
+  const { dirname } = await import('path');
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  const requirementsPath = join(__dirname, '../../../engine/requirements.txt');
   const hasRequirementsFile = existsSync(requirementsPath);
 
   if (hasRequirementsFile) {
@@ -419,8 +424,13 @@ async function installArenaEngine(): Promise<boolean> {
   const spinner = ora('Installing Arena engine').start();
 
   try {
-    // Get engine path
-    const enginePath = join(process.cwd(), '../../engine');
+    // Get engine path relative to CLI installation directory
+    // From dist/commands/setup.js -> ../../../engine
+    const { fileURLToPath } = await import('url');
+    const { dirname } = await import('path');
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const enginePath = join(__dirname, '../../../engine');
 
     // Check if engine directory exists
     if (!existsSync(enginePath)) {
