@@ -79,8 +79,6 @@ const dependencies: DependencyCheck[] = [
   },
 ];
 
-const pythonPackages = ['openai-whisper', 'openai', 'ffmpeg-python', 'torch', 'numpy', 'scipy'];
-
 async function detectPackageManager(): Promise<string> {
   const platform = process.platform;
 
@@ -259,30 +257,61 @@ async function installPythonPackages(): Promise<boolean> {
 
   const pipCommand = await getPipCommand();
 
+  // Check if requirements.txt exists
+  const requirementsPath = join(process.cwd(), '../../engine/requirements.txt');
+  const hasRequirementsFile = existsSync(requirementsPath);
+
+  if (hasRequirementsFile) {
+    console.log(chalk.gray('   Using engine/requirements.txt\n'));
+  }
+
   // On Windows, show warning about installation time
   if (process.platform === 'win32') {
-    console.log(chalk.yellow('⏱️  Note: This may take 5-10 minutes (torch is a large package)'));
+    console.log(
+      chalk.yellow('⏱️  Note: This may take 5-10 minutes (torch, librosa are large packages)')
+    );
     console.log(chalk.gray('   You can watch progress below...\n'));
   }
 
   const spinner = ora('Installing Python dependencies').start();
 
-  logger.info('Installing Python packages', { packages: pythonPackages });
+  logger.info('Installing Python packages', {
+    source: hasRequirementsFile ? 'requirements.txt' : 'hardcoded packages',
+  });
 
   try {
     // Handle "python -m pip" vs "pip" command format
     let command: string;
     let args: string[];
 
-    if (pipCommand.includes(' -m ')) {
-      // python -m pip or python3 -m pip
-      const parts = pipCommand.split(' ');
-      command = parts[0]; // python or python3
-      args = [...parts.slice(1), 'install', ...pythonPackages]; // -m pip install ...
+    if (hasRequirementsFile) {
+      // Install from requirements.txt
+      if (pipCommand.includes(' -m ')) {
+        const parts = pipCommand.split(' ');
+        command = parts[0];
+        args = [...parts.slice(1), 'install', '-r', requirementsPath];
+      } else {
+        command = pipCommand;
+        args = ['install', '-r', requirementsPath];
+      }
     } else {
-      // pip or pip3
-      command = pipCommand;
-      args = ['install', ...pythonPackages];
+      // Fallback to hardcoded packages
+      const fallbackPackages = [
+        'openai-whisper',
+        'openai',
+        'ffmpeg-python',
+        'torch',
+        'numpy',
+        'scipy',
+      ];
+      if (pipCommand.includes(' -m ')) {
+        const parts = pipCommand.split(' ');
+        command = parts[0];
+        args = [...parts.slice(1), 'install', ...fallbackPackages];
+      } else {
+        command = pipCommand;
+        args = ['install', ...fallbackPackages];
+      }
     }
 
     // Add --user flag on Windows to avoid permission issues
@@ -329,22 +358,20 @@ async function installPythonPackages(): Promise<boolean> {
         console.log(chalk.yellow('\n⚠️  Permission Error Detected:'));
         if (process.platform === 'win32') {
           console.log(chalk.white('Solution 1 (Recommended): Install to user directory'));
-          console.log(chalk.cyan(`  ${pipCommand} install --user ${pythonPackages.join(' ')}\n`));
+          console.log(chalk.cyan(`  ${pipCommand} install --user -r requirements.txt\n`));
           console.log(chalk.white('Solution 2: Run PowerShell as Administrator'));
           console.log(chalk.gray('  Right-click PowerShell → "Run as Administrator"'));
-          console.log(chalk.cyan(`  ${pipCommand} install ${pythonPackages.join(' ')}\n`));
+          console.log(chalk.cyan(`  ${pipCommand} install -r requirements.txt\n`));
         } else {
           console.log(chalk.white('Try with --user flag:'));
-          console.log(chalk.cyan(`  ${pipCommand} install --user ${pythonPackages.join(' ')}\n`));
+          console.log(chalk.cyan(`  ${pipCommand} install --user -r requirements.txt\n`));
         }
       } else if (output.includes('timeout') || output.includes('timed out')) {
         console.log(chalk.yellow('\n⚠️  Network Timeout:'));
         console.log(chalk.white('The installation timed out. Try again with:'));
         const userFlag = process.platform === 'win32' ? ' --user' : '';
         console.log(
-          chalk.cyan(
-            `  ${pipCommand} install${userFlag} --timeout 300 ${pythonPackages.join(' ')}\n`
-          )
+          chalk.cyan(`  ${pipCommand} install${userFlag} --timeout 300 -r requirements.txt\n`)
         );
       } else if (output.includes('hash') || output.includes('these packages do not match')) {
         console.log(chalk.yellow('\n⚠️  Corrupted Cache Detected:'));
@@ -354,9 +381,7 @@ async function installPythonPackages(): Promise<boolean> {
         console.log(chalk.cyan(`  ${pipCommand} cache purge`));
         const userFlag = process.platform === 'win32' ? ' --user' : '';
         console.log(
-          chalk.cyan(
-            `  ${pipCommand} install${userFlag} --no-cache-dir ${pythonPackages.join(' ')}\n`
-          )
+          chalk.cyan(`  ${pipCommand} install${userFlag} --no-cache-dir -r requirements.txt\n`)
         );
         console.log(
           chalk.gray('Note: --no-cache-dir flag was added to avoid this issue in future.\n')
@@ -365,9 +390,7 @@ async function installPythonPackages(): Promise<boolean> {
         console.log(chalk.yellow('\n💡 Tip: Try running manually:'));
         const userFlag = process.platform === 'win32' ? ' --user' : '';
         console.log(
-          chalk.cyan(
-            `  ${pipCommand} install${userFlag} --no-cache-dir ${pythonPackages.join(' ')}\n`
-          )
+          chalk.cyan(`  ${pipCommand} install${userFlag} --no-cache-dir -r requirements.txt\n`)
         );
       }
 
@@ -380,7 +403,7 @@ async function installPythonPackages(): Promise<boolean> {
     console.log(chalk.yellow('\n💡 Try installing manually:'));
     const userFlag = process.platform === 'win32' ? ' --user' : '';
     console.log(
-      chalk.cyan(`  ${pipCommand} install${userFlag} --no-cache-dir ${pythonPackages.join(' ')}\n`)
+      chalk.cyan(`  ${pipCommand} install${userFlag} --no-cache-dir -r requirements.txt\n`)
     );
     return false;
   }
@@ -664,12 +687,12 @@ export async function setupCommand(): Promise<void> {
         } else {
           console.log(chalk.yellow('\n⚠️  Setup completed with errors'));
           console.log(chalk.white('You may need to install Python packages manually:\n'));
-          console.log(chalk.gray(`  pip3 install ${pythonPackages.join(' ')}\n`));
+          console.log(chalk.gray(`  pip3 install -r engine/requirements.txt\n`));
         }
       } else {
         console.log(chalk.yellow('\nSkipped Python package installation'));
         console.log(chalk.white('Install them later with:\n'));
-        console.log(chalk.gray(`  pip3 install ${pythonPackages.join(' ')}\n`));
+        console.log(chalk.gray(`  pip3 install -r engine/requirements.txt\n`));
       }
     } else {
       console.log(chalk.red(`✗ Missing ${missing.length} dependencies:\n`));
