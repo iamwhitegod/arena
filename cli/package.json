@@ -68,7 +68,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/iamwhitegod/arena"
+    "url": "git+https://github.com/iamwhitegod/arena.git"
   },
   "bugs": {
     "url": "https://github.com/iamwhitegod/arena/issues"
