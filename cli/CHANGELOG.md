@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.16] - 2026-01-26
+
+### Fixed
+- **Platform formatting now works in process command** - Fixed auto-format feature
+  - Process command now checks clips directory for generated files
+  - Platform formatting triggers correctly when -p/--platform flag is used
+  - Clips are auto-formatted to platform specs (TikTok, Instagram, YouTube, etc.)
+  - Formatted clips saved to output/formatted/ directory
+  - Fixes issue where platform formatting never ran despite -p flag
+
 ## [0.3.15] - 2026-01-26
 
 ### Fixed

@@ -1,0 +1,46 @@
+ARENA DIAGNOSTICS REPORT
+Generated: 2026-01-26T08:23:14.678Z
+Platform: darwin 25.2.0 (arm64)
+Node.js: v20.19.0
+============================================================
+
+📊 System Information
+------------------------------------------------------------
+ℹ Operating System: darwin 25.2.0 (arm64)
+✓ Node.js Version: v20.19.0
+⚠ Available Memory: 83.55 MB free of 16.00 GB
+  Solution: Close some applications to free up memory
+
+🔧 System Dependencies
+------------------------------------------------------------
+✓ Python: v3.12.4 installed
+✓ pip: vundefined installed
+✓ FFmpeg: v8.0.1 installed
+
+🐍 Python Environment
+------------------------------------------------------------
+✗ whisper: Not installed
+  Solution: Run: pip3 install openai-whisper
+✓ openai: Installed
+✗ ffmpeg: Not installed
+  Solution: Run: pip3 install ffmpeg
+✓ torch: Installed
+✓ numpy: Installed
+✓ scipy: Installed
+
+🌐 Network & API
+------------------------------------------------------------
+✗ Internet Connectivity: No connection
+  Solution: Check your internet connection
+⚠ OpenAI API Key: Not set
+  Solution: Set OPENAI_API_KEY environment variable
+
+💾 Storage
+------------------------------------------------------------
+✓ Disk Space: 363.70 GB available (39.3% free)
+
+⚙️  Configuration
+------------------------------------------------------------
+ℹ Configuration File: Found at /Users/whitegodkingsley/.arena/config.json
+ℹ Workspace Directory: Will be created on first use
+

@@ -82,7 +82,7 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
     console.log(chalk.cyan('\n🎬 Processing video...\n'));
     console.log(chalk.gray('This may take several minutes depending on video length...\n'));
 
-    const result = await bridge.runProcess(
+    const _result = await bridge.runProcess(
       {
         videoPath: absoluteVideoPath,
         outputDir: path.resolve(outputDir),
@@ -108,19 +108,31 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
     // Calculate processing time
     const processingTime = (Date.now() - startTime) / 1000;
 
+    // Check if clips were generated
+    const clipsDir = path.join(path.resolve(outputDir), 'clips');
+    let clipsGenerated = 0;
+    try {
+      const fs = await import('fs-extra');
+      if (await fs.pathExists(clipsDir)) {
+        const files = await fs.readdir(clipsDir);
+        clipsGenerated = files.filter((f) => f.endsWith('.mp4')).length;
+      }
+    } catch (error) {
+      // Ignore errors
+    }
+
     // Display summary
     progress.displaySummary({
       videoPath: path.basename(videoPath),
-      clipsGenerated: result?.clips?.length || 0,
+      clipsGenerated,
       outputDir: outputDir,
       processingTime,
     });
 
     // Auto-format for platform if specified
-    if (options.platform && result?.clips?.length > 0) {
+    if (options.platform && clipsGenerated > 0) {
       console.log(chalk.cyan(`\n📐 Auto-formatting clips for ${options.platform}...\n`));
 
-      const clipsDir = path.join(path.resolve(outputDir), 'clips');
       const formattedDir = path.join(path.resolve(outputDir), 'formatted');
 
       const formatResult = await bridge.runFormat(
