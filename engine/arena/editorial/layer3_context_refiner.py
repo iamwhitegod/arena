@@ -513,31 +513,39 @@ CLIP TRANSCRIPT:
 
 EVALUATION CRITERIA:
 
-1. **Who/What Context:**
-   - Is it clear WHO is speaking or who/what this is about?
-   - If pronouns are used ("he", "she", "they", "it"), is the referent clear?
-   - Score 0.0 if critical context is missing
+⚠️  CRITICAL: Evaluate RHETORICAL COMPLETENESS - Does this clip tell a complete thought?
 
-2. **Topic/Situation:**
-   - Is the topic or situation explained within the clip?
-   - Can a viewer understand what's being discussed?
-   - Score 0.0 if viewer would be confused about the topic
+1. **BEGINNING (Setup/Premise):**
+   - Does the clip START with context/setup that orients the viewer?
+   - Is the premise or problem clearly stated AT THE START?
+   - Can someone understand what this is about WITHOUT prior context?
+   - RED FLAGS: Starts with "That's why...", "So...", "And that's when..."
+   - Score 0.0-0.3 if missing premise/setup
 
-3. **Stakes/Relevance:**
-   - Is it clear WHY this matters or why the viewer should care?
-   - Are the stakes or implications explained?
-   - Lower score if motivation is unclear
+2. **MIDDLE (Development/Claim):**
+   - Is the core idea, claim, or insight clearly articulated?
+   - Does the clip develop its main point with reasoning or examples?
+   - Is it clear WHAT is being said and WHY it matters?
+   - Score 0.0-0.3 if the core message is unclear
 
-4. **Unresolved References:**
-   - Are there references to "this", "that", "the problem", "the solution" without explanation?
-   - Are there assumed facts not stated in the clip?
-   - Significantly reduce score for vague references
+3. **END (Resolution/Closure):**
+   - Does the clip COMPLETE the thought before ending?
+   - Is there cognitive closure (viewer feels satisfied, not left hanging)?
+   - Does it resolve what was set up, or conclude the argument?
+   - RED FLAGS: Ends mid-thought, trails off, cuts before payoff
+   - Score 0.0-0.3 if incomplete resolution
 
-5. **Beginning/Middle/End:**
-   - Does the clip have a clear beginning (setup)?
-   - Does it have substance (middle)?
-   - Does it have resolution or payoff (end)?
-   - Reduce score if clip feels incomplete
+4. **Unresolved References (CRITICAL):**
+   - Are there pronouns without clear referents ("he", "she", "they", "it")?
+   - References to "this", "that", "the problem", "the approach" without explanation?
+   - Assumed facts or prior context not stated in the clip?
+   - AUTOMATIC FAIL (≤0.3) if critical references are unresolved
+
+5. **Standalone Context:**
+   - WHO: Is it clear who is speaking or who/what this is about?
+   - WHAT: Is the topic or situation explained within the clip?
+   - WHY: Is it clear why this matters or why viewer should care?
+   - Score must be ≥0.7 for all three to pass
 
 SCORING GUIDE WITH CONCRETE EXAMPLES:
 
@@ -594,6 +602,12 @@ Example unacceptable adjustments:
 OUTPUT JSON ONLY:
 {{
   "standalone_score": 0.75,
+  "rhetorical_scores": {{
+    "beginning_score": 8,
+    "middle_score": 9,
+    "ending_score": 7,
+    "has_unresolved_refs": false
+  }},
   "refined_start": {start},
   "refined_end": {end},
   "changes_made": false,
@@ -606,9 +620,28 @@ OUTPUT JSON ONLY:
 }}
 
 FIELD DEFINITIONS:
+- standalone_score: Overall 0.0-1.0 score for standalone quality
+- rhetorical_scores:
+  * beginning_score: 1-10, how well does it set up/provide premise?
+  * middle_score: 1-10, how clear is the core claim/development?
+  * ending_score: 1-10, how complete is the resolution/closure?
+  * has_unresolved_refs: boolean, are there critical unresolved references?
 - changes_made: boolean - Did you adjust the boundaries at all?
 - adjustment_type: null | "expanded_start" | "expanded_end" | "both" - What changed?
 - rejection_reason: null | "missing_premise" | "dangling_reference" | "incomplete_resolution" | "topic_drift" | "duration_constraint" | "structural_issue" - Why rejected (if score < 0.4)
+
+SCORING FORMULA:
+Calculate standalone_score as:
+- If has_unresolved_refs = true: MAX score is 0.4 (auto-fail)
+- Otherwise: (beginning_score + middle_score + ending_score) / 30
+- Minimum 7/10 on ALL three dimensions to pass (score ≥ 0.7)
+- If any dimension < 7/10, score will be < 0.7 → needs revision or rejection
+
+Examples:
+- Beginning: 9, Middle: 9, End: 8, No refs → (9+9+8)/30 = 0.87 → PASS ✓
+- Beginning: 5, Middle: 9, End: 9, No refs → (5+9+9)/30 = 0.77 → REVISE (weak start)
+- Beginning: 9, Middle: 9, End: 9, Has refs → 0.3 → REJECT ✗ (unresolved references)
+- Beginning: 4, Middle: 6, End: 5, No refs → (4+6+5)/30 = 0.50 → REJECT ✗ (structurally incomplete)
 
 RULES:
 - Be honest and strict - we want GREAT standalone clips, not mediocre ones
@@ -617,6 +650,8 @@ RULES:
 - Editor notes should be actionable and specific
 - Score based on what's IN the clip, not what COULD be added
 - REJECT clips needing >15s adjustment rather than expanding them
+- If clip starts mid-thought or ends mid-thought, score beginning/ending ≤ 4
+- If critical context is missing (who/what/why), score beginning ≤ 4
 """
 
     def get_metrics_summary(self) -> str:

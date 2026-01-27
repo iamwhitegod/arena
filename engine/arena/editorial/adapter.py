@@ -153,21 +153,32 @@ class FourLayerAdapter:
 
         # Filter to only PASS clips
         passed_clips = [c for c in validated_clips if c['verdict'] == 'PASS']
+        rejected_clips = [c for c in validated_clips if c['verdict'] == 'REJECT']
+        revised_clips = [c for c in validated_clips if c['verdict'] == 'REVISE']
+
         print(f"      ✓ {len(passed_clips)} clips passed validation")
-        print(f"      ✗ {len(validated_clips) - len(passed_clips)} clips rejected/revised")
+        print(f"      ↻ {len(revised_clips)} clips need revision (marginal quality)")
+        print(f"      ✗ {len(rejected_clips)} clips rejected")
 
         if not passed_clips:
             print("      ❌ No clips passed standalone validation")
             return []
 
-        # Store Layer 3 output
+        # Store Layer 3 output (including rejections for analysis)
         if self.export_layers:
             self.layer_outputs['layer3_validated'] = validated_clips
+            self.layer_outputs['layer3_rejected'] = rejected_clips
+            self.layer_outputs['layer3_revised'] = revised_clips
 
         # Layer 4: Package top clips
         print("\n[4/4] 📦 Packaging clips...")
         self.packager = PackagingLayer(self.api_key, model="gpt-4o-mini")
         packaged_clips = self.packager.package_all(passed_clips, transcript_data)
+
+        # Deduplicate: Remove clips expressing the same core idea
+        print("      Deduplicating similar ideas...")
+        unique_clips = self._deduplicate_ideas(packaged_clips)
+        print(f"      ✓ Removed {len(packaged_clips) - len(unique_clips)} duplicate ideas")
 
         # Select top N by combined score (configurable weights)
         def combined_score(c):
@@ -176,9 +187,9 @@ class FourLayerAdapter:
                 c['standalone_score'] * self.score_weights['standalone']
             )
 
-        top_clips = sorted(packaged_clips, key=combined_score, reverse=True)[:target_clips]
+        top_clips = sorted(unique_clips, key=combined_score, reverse=True)[:target_clips]
 
-        print(f"      ✓ Packaged {len(top_clips)} final clips")
+        print(f"      ✓ Selected {len(top_clips)} unique clips")
 
         # Store Layer 4 output
         if self.export_layers:
@@ -244,6 +255,85 @@ class FourLayerAdapter:
                 text_parts.append(segment.get('text', '').strip())
 
         return ' '.join(text_parts)
+
+    def _deduplicate_ideas(self, clips: List[Dict]) -> List[Dict]:
+        """
+        Remove clips that express the same core idea using semantic similarity.
+
+        Uses OpenAI embeddings to cluster clips by similarity, keeping only the
+        best clip from each cluster (highest combined score).
+
+        Args:
+            clips: List of packaged clips from Layer 4
+
+        Returns:
+            List of unique clips (duplicates removed)
+        """
+        if len(clips) <= 1:
+            return clips
+
+        try:
+            from openai import OpenAI
+            import numpy as np
+        except ImportError:
+            print("      ⚠️  openai or numpy not available, skipping deduplication")
+            return clips
+
+        client = OpenAI(api_key=self.api_key)
+
+        # Get embeddings for each clip's title + description
+        texts = [f"{clip['title']}. {clip['description']}" for clip in clips]
+
+        try:
+            response = client.embeddings.create(
+                input=texts,
+                model="text-embedding-3-small"
+            )
+            embeddings = np.array([e.embedding for e in response.data])
+        except Exception as e:
+            print(f"      ⚠️  Failed to generate embeddings: {e}")
+            return clips
+
+        # Calculate cosine similarity matrix
+        from numpy.linalg import norm
+        similarities = np.dot(embeddings, embeddings.T) / (
+            norm(embeddings, axis=1)[:, np.newaxis] *
+            norm(embeddings, axis=1)[np.newaxis, :]
+        )
+
+        # Cluster clips by similarity (threshold: 80% similar = duplicate)
+        SIMILARITY_THRESHOLD = 0.80
+        unique_clips = []
+        used_indices = set()
+
+        # Sort by combined score (best first)
+        def combined_score(c):
+            return (
+                c['interest_score'] * self.score_weights['interest'] +
+                c['standalone_score'] * self.score_weights['standalone']
+            )
+
+        sorted_indices = sorted(
+            range(len(clips)),
+            key=lambda i: combined_score(clips[i]),
+            reverse=True
+        )
+
+        for i in sorted_indices:
+            if i in used_indices:
+                continue
+
+            # This clip is unique (so far)
+            unique_clips.append(clips[i])
+            used_indices.add(i)
+
+            # Mark all similar clips as duplicates
+            for j in range(len(clips)):
+                if j != i and j not in used_indices:
+                    if similarities[i][j] >= SIMILARITY_THRESHOLD:
+                        used_indices.add(j)
+
+        return unique_clips
 
     def export_layer_outputs(self, output_dir: Path):
         """
