@@ -32,10 +32,16 @@ beforeAll(async () => {
 afterAll(async () => {
   // Clean up temporary test directory
   try {
-    await fs.remove(TEST_DIR);
+    // Check if directory exists before trying to remove
+    if (await fs.pathExists(TEST_DIR)) {
+      // First empty the directory to remove all contents
+      await fs.emptyDir(TEST_DIR);
+      // Then remove the directory itself
+      await fs.remove(TEST_DIR);
+    }
   } catch (error) {
     // Ignore cleanup errors - they're not critical
-    console.warn('Warning: Could not clean up test directory:', error);
+    // Most common errors are ENOENT (already removed) or ENOTEMPTY (race condition)
   }
 
   // Restore console
@@ -54,11 +60,14 @@ export async function createTestDir(name: string): Promise<string> {
 // Helper to clean up test directory
 export async function cleanTestDir(dir: string): Promise<void> {
   try {
-    // Use stronger removal method
-    await fs.emptyDir(dir);
-    await fs.remove(dir);
+    // Check if directory exists before trying to remove
+    if (await fs.pathExists(dir)) {
+      // Use stronger removal method
+      await fs.emptyDir(dir);
+      await fs.remove(dir);
+    }
   } catch (error) {
     // Ignore cleanup errors - they're not critical for test functionality
-    console.warn(`Warning: Could not clean up ${dir}:`, error);
+    // Most common errors are ENOENT (already removed) or ENOTEMPTY (race condition)
   }
 }
