@@ -21,11 +21,19 @@ from .layer1_moment_detector import MomentDetector
 from .layer2_boundary_analyzer import ThoughtBoundaryAnalyzer
 from .layer3_context_refiner import StandaloneContextRefiner
 from .layer4_packaging import PackagingLayer
+from .checkpoint import CheckpointManager, CheckpointContext
+from .retry import call_api_with_retry, call_api_with_smart_retry, with_retry, APIRetryError
 
 __all__ = [
     'FourLayerAdapter',
     'MomentDetector',
     'ThoughtBoundaryAnalyzer',
     'StandaloneContextRefiner',
-    'PackagingLayer'
+    'PackagingLayer',
+    'CheckpointManager',
+    'CheckpointContext',
+    'call_api_with_retry',
+    'call_api_with_smart_retry',
+    'with_retry',
+    'APIRetryError'
 ]

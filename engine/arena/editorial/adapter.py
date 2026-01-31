@@ -2,27 +2,36 @@
 FourLayerAdapter - Drop-in replacement for TranscriptAnalyzer
 
 This adapter maintains the same interface as TranscriptAnalyzer but uses
-the 4-layer editorial architecture internally for higher quality clips.
+the new ThoughtUnit editorial system (Weeks 1-4) internally for higher quality clips.
+
+New Architecture (Weeks 1-4):
+    Week 1: Seed Detection → Find 40 interesting moment seeds
+    Week 2: Construction → Expand to complete ThoughtUnits (premise/claim/resolution)
+    Week 3: Validation → Score completeness + validate standalone context
+    Week 4: Deduplication → Cluster similar units and select best variants
+
+This replaces the old 4-layer system with a more robust approach.
 """
 
 from typing import List, Dict, Optional
 from pathlib import Path
 import json
+import sys
 
 
 class FourLayerAdapter:
     """
-    Drop-in replacement for TranscriptAnalyzer using 4-layer editorial system.
+    Drop-in replacement for TranscriptAnalyzer using new ThoughtUnit system.
 
     Maintains exact same interface for backward compatibility with HybridAnalyzer:
     - analyze_transcript(transcript_data, target_clips, min_duration, max_duration)
     - generate_clip_title(transcript_segment)  # For ProfessionalClipAligner
 
-    The 4-layer system:
-        Layer 1: Find interesting moments (25 candidates)
-        Layer 2: Expand to complete thought boundaries (18 candidates)
-        Layer 3: Validate standalone context (12 pass, quality gate)
-        Layer 4: Package with titles/descriptions/metadata
+    The new system (Weeks 1-4):
+        Week 1: Detect 40 thought seeds (interesting moments)
+        Week 2: Construct ThoughtUnits with premise/claim/resolution
+        Week 3: Score completeness + validate standalone context
+        Week 4: Deduplicate semantically similar units, select best variants
 
     Example:
         >>> from arena.editorial import FourLayerAdapter
@@ -33,31 +42,42 @@ class FourLayerAdapter:
     def __init__(
         self,
         api_key: str,
-        model: str = "gpt-4o",
+        model: str = "gpt-4o-mini",
         export_layers: bool = False,
-        score_weights: Optional[Dict[str, float]] = None
+        score_weights: Optional[Dict[str, float]] = None,
+        enable_checkpoints: bool = True,
+        checkpoint_dir: str = ".checkpoint",
+        max_workers: int = 5
     ):
         """
-        Initialize 4-layer editorial adapter
+        Initialize editorial adapter
 
         Args:
             api_key: OpenAI API key
-            model: Base model to use (default: gpt-4o)
-            export_layers: Whether to export intermediate layer results for debugging
-            score_weights: Custom scoring weights (default: {'interest': 0.6, 'standalone': 0.4})
+            model: Base model to use (default: gpt-4o-mini for cost efficiency)
+            export_layers: Whether to export intermediate results for debugging
+            score_weights: Custom scoring weights (default: {'completeness': 0.6, 'standalone': 0.4})
+            enable_checkpoints: Enable progress checkpointing (default: True)
+            checkpoint_dir: Directory for checkpoints (default: .checkpoint)
+            max_workers: Max parallel API calls for scoring/validation (default: 5)
+                        Higher = faster but more API pressure. Recommended: 5-10.
+                        Performance: 5 workers = ~3-5x speedup on batch operations.
         """
         self.api_key = api_key
         self.model = model
         self.export_layers = export_layers
         self.layer_outputs = {}  # Store for export
+        self.enable_checkpoints = enable_checkpoints
+        self.checkpoint_dir = checkpoint_dir
+        self.max_workers = max_workers
 
-        # Default scoring weights (60% interest, 40% standalone)
+        # Default scoring weights (60% completeness, 40% standalone)
         self.score_weights = score_weights or {
-            'interest': 0.6,
+            'completeness': 0.6,
             'standalone': 0.4
         }
 
-        # Layers will be initialized on first use
+        # Modules will be initialized on first use
         # (lazy initialization to avoid loading if not needed)
 
     def analyze_transcript(
@@ -68,7 +88,7 @@ class FourLayerAdapter:
         max_duration: Optional[int] = None
     ) -> List[Dict]:
         """
-        Run 4-layer editorial analysis and return clips compatible with HybridAnalyzer.
+        Run ThoughtUnit editorial analysis and return clips compatible with HybridAnalyzer.
 
         Args:
             transcript_data: Transcript dict with 'segments', 'text', 'duration'
@@ -77,7 +97,7 @@ class FourLayerAdapter:
             max_duration: Optional maximum clip duration in seconds
 
         Returns:
-            List[Dict] with format:
+            List[Dict] with format compatible with TranscriptAnalyzer:
             {
                 'id': str,              # "clip_001"
                 'start_time': float,
@@ -89,117 +109,346 @@ class FourLayerAdapter:
                 'content_type': str,
                 # Metadata for debugging
                 '_4layer_metadata': {
+                    'completeness_score': float,
                     'standalone_score': float,
-                    'hashtags': List[str],
-                    'thumbnail_time': float,
-                    'layer1': Dict,
-                    'layer2': Dict,
-                    'layer3': Dict
+                    'premise_clarity': float,
+                    'claim_strength': float,
+                    'resolution_closure': float,
+                    'rhetorical_type': str
                 }
             }
         """
-        from .layer1_moment_detector import MomentDetector
-        from .layer2_boundary_analyzer import ThoughtBoundaryAnalyzer
-        from .layer3_context_refiner import StandaloneContextRefiner
-        from .layer4_packaging import PackagingLayer
+        from .thought_seed_detector import ThoughtSeedDetector
+        from .thought_unit_constructor import ThoughtUnitConstructor
+        from .completeness_scorer import CompletenessScorer
+        from .standalone_validator import StandaloneValidator
+        from .semantic_deduplicator import SemanticDeduplicator
+        from .variant_selector import VariantSelector
+        from .checkpoint import CheckpointManager
 
-        print("\n🎬 4-LAYER EDITORIAL ANALYSIS")
+        print("\n🎬 THOUGHTUNIT EDITORIAL SYSTEM")
         print("="*70)
+        print(f"Model: {self.model} | Target clips: {target_clips}")
+        if min_duration or max_duration:
+            print(f"Duration constraints: {min_duration or 'any'}-{max_duration or 'any'}s")
+        print()
+        sys.stdout.flush()
 
-        # Layer 1: Find interesting moments (over-detect 2.5x)
-        print("\n[1/4] 🔍 Detecting interesting moments...")
-        self.moment_detector = MomentDetector(self.api_key, model=self.model)
-        moments = self.moment_detector.detect(
-            transcript_data,
-            target_moments=int(target_clips * 2.5)
+        # Initialize checkpoint manager
+        checkpoint_mgr = CheckpointManager(
+            checkpoint_dir=self.checkpoint_dir,
+            enabled=self.enable_checkpoints
         )
-        print(f"      ✓ Found {len(moments)} candidate moments")
+        job_id = CheckpointManager.generate_job_id(transcript_data)
 
-        if not moments:
-            print("      ❌ No interesting moments found")
-            return []
+        if self.enable_checkpoints:
+            existing_checkpoints = checkpoint_mgr.list_checkpoints(job_id)
+            if existing_checkpoints:
+                print(f"      ♻️  Found {len(existing_checkpoints)} existing checkpoint(s)")
+                sys.stdout.flush()
 
-        # Store Layer 1 output
-        if self.export_layers:
-            self.layer_outputs['layer1_moments'] = moments
+        # =========================================================================
+        # WEEK 1: Seed Detection
+        # =========================================================================
+        print("[1/4] 🌱 Week 1: Detecting Thought Seeds")
+        print("-" * 70)
+        sys.stdout.flush()
 
-        # Layer 2: Expand to complete thought boundaries
-        print("\n[2/4] 🧠 Analyzing thought boundaries...")
-        self.boundary_analyzer = ThoughtBoundaryAnalyzer(self.api_key, model=self.model)
-        thoughts = self.boundary_analyzer.analyze_all(
-            moments,
-            transcript_data,
-            parallel=True
-        )
-        print(f"      ✓ Analyzed {len(thoughts)} complete thoughts")
+        # Try to load from checkpoint
+        seeds = checkpoint_mgr.load_checkpoint(job_id, "seed_detection")
 
-        if not thoughts:
-            print("      ❌ No complete thoughts identified")
-            return []
-
-        # Store Layer 2 output
-        if self.export_layers:
-            self.layer_outputs['layer2_boundaries'] = thoughts
-
-        # Layer 3: Validate standalone context (QUALITY GATE)
-        print("\n[3/4] ✂️  Validating standalone context...")
-        self.context_refiner = StandaloneContextRefiner(self.api_key, model="gpt-4o-mini")
-        validated_clips = self.context_refiner.refine_all(
-            thoughts,
-            transcript_data,
-            min_duration,
-            max_duration
-        )
-
-        # Filter to only PASS clips
-        passed_clips = [c for c in validated_clips if c['verdict'] == 'PASS']
-        rejected_clips = [c for c in validated_clips if c['verdict'] == 'REJECT']
-        revised_clips = [c for c in validated_clips if c['verdict'] == 'REVISE']
-
-        print(f"      ✓ {len(passed_clips)} clips passed validation")
-        print(f"      ↻ {len(revised_clips)} clips need revision (marginal quality)")
-        print(f"      ✗ {len(rejected_clips)} clips rejected")
-
-        if not passed_clips:
-            print("      ❌ No clips passed standalone validation")
-            return []
-
-        # Store Layer 3 output (including rejections for analysis)
-        if self.export_layers:
-            self.layer_outputs['layer3_validated'] = validated_clips
-            self.layer_outputs['layer3_rejected'] = rejected_clips
-            self.layer_outputs['layer3_revised'] = revised_clips
-
-        # Layer 4: Package top clips
-        print("\n[4/4] 📦 Packaging clips...")
-        self.packager = PackagingLayer(self.api_key, model="gpt-4o-mini")
-        packaged_clips = self.packager.package_all(passed_clips, transcript_data)
-
-        # Deduplicate: Remove clips expressing the same core idea
-        print("      Deduplicating similar ideas...")
-        unique_clips = self._deduplicate_ideas(packaged_clips)
-        print(f"      ✓ Removed {len(packaged_clips) - len(unique_clips)} duplicate ideas")
-
-        # Select top N by combined score (configurable weights)
-        def combined_score(c):
-            return (
-                c['interest_score'] * self.score_weights['interest'] +
-                c['standalone_score'] * self.score_weights['standalone']
+        if seeds is None:
+            # Run seed detection
+            self.seed_detector = ThoughtSeedDetector(self.api_key, model=self.model)
+            seeds = self.seed_detector.detect_seeds(
+                transcript_data,
+                target_count=target_clips
             )
 
-        top_clips = sorted(unique_clips, key=combined_score, reverse=True)[:target_clips]
+            # Save checkpoint
+            checkpoint_mgr.save_checkpoint(
+                job_id,
+                "seed_detection",
+                seeds,
+                metadata={'count': len(seeds)}
+            )
+        else:
+            print(f"      ♻️  Resumed from checkpoint")
+            sys.stdout.flush()
 
-        print(f"      ✓ Selected {len(top_clips)} unique clips")
+        print(f"      ✓ Found {len(seeds)} thought seeds")
+        sys.stdout.flush()
 
-        # Store Layer 4 output
+        if not seeds:
+            print("      ❌ No interesting moments found")
+            sys.stdout.flush()
+            return []
+
+        # Store Week 1 output
         if self.export_layers:
-            self.layer_outputs['layer4_packaged'] = packaged_clips
+            self.layer_outputs['week1_seeds'] = seeds
 
-        # Convert to TranscriptAnalyzer format
-        legacy_clips = self._convert_to_legacy_format(top_clips)
+        # =========================================================================
+        # WEEK 2: ThoughtUnit Construction
+        # =========================================================================
+        print("\n[2/4] 🏗️  Week 2: Constructing ThoughtUnits")
+        print("-" * 70)
+        sys.stdout.flush()
+
+        # Try to load from checkpoint
+        thought_units_data = checkpoint_mgr.load_checkpoint(job_id, "construction")
+
+        if thought_units_data is None:
+            # Run construction
+            self.constructor = ThoughtUnitConstructor(
+                self.api_key,
+                model=self.model,
+                verbose=False
+            )
+
+            thought_units = self.constructor.construct_from_seeds(
+                seeds,
+                transcript_data['segments']
+            )
+
+            # Save checkpoint (serialize ThoughtUnits)
+            checkpoint_mgr.save_checkpoint(
+                job_id,
+                "construction",
+                [
+                    {
+                        'premise_start': u.premise_start,
+                        'claim_peak': u.claim_peak,
+                        'resolution_end': u.resolution_end,
+                        'premise_text': u.premise_text,
+                        'claim_text': u.claim_text,
+                        'resolution_text': u.resolution_text,
+                        'rhetorical_type': u.rhetorical_type.value,
+                        'dependency_level': u.dependency_level.value,
+                        'has_unresolved_refs': u.has_unresolved_refs
+                    }
+                    for u in thought_units
+                ],
+                metadata={'count': len(thought_units)}
+            )
+        else:
+            # Reconstruct ThoughtUnits from checkpoint
+            from .thought_unit import ThoughtUnit, RhetoricalType, DependencyLevel
+            print(f"      ♻️  Resumed from checkpoint")
+            thought_units = [
+                ThoughtUnit(
+                    premise_start=u['premise_start'],
+                    claim_peak=u['claim_peak'],
+                    resolution_end=u['resolution_end'],
+                    premise_text=u['premise_text'],
+                    claim_text=u['claim_text'],
+                    resolution_text=u['resolution_text'],
+                    rhetorical_type=RhetoricalType(u['rhetorical_type']),
+                    dependency_level=DependencyLevel(u['dependency_level']),
+                    has_unresolved_refs=u['has_unresolved_refs']
+                )
+                for u in thought_units_data
+            ]
+            sys.stdout.flush()
+
+        print(f"      ✓ Constructed {len(thought_units)} ThoughtUnits")
+        sys.stdout.flush()
+
+        if not thought_units:
+            print("      ❌ No complete ThoughtUnits identified")
+            sys.stdout.flush()
+            return []
+
+        # Filter by duration constraints
+        if min_duration or max_duration:
+            before_count = len(thought_units)
+            thought_units = [
+                u for u in thought_units
+                if (min_duration is None or u.duration >= min_duration) and
+                   (max_duration is None or u.duration <= max_duration)
+            ]
+            filtered = before_count - len(thought_units)
+            if filtered > 0:
+                print(f"      ⚠️  Filtered out {filtered} units (duration constraints)")
+                sys.stdout.flush()
+
+        # Store Week 2 output
+        if self.export_layers:
+            self.layer_outputs['week2_units'] = [
+                {
+                    'duration': u.duration,
+                    'premise_start': u.premise_start,
+                    'claim_peak': u.claim_peak,
+                    'resolution_end': u.resolution_end,
+                    'premise_text': u.premise_text,
+                    'claim_text': u.claim_text,
+                    'resolution_text': u.resolution_text,
+                    'rhetorical_type': u.rhetorical_type.value
+                }
+                for u in thought_units
+            ]
+
+        # =========================================================================
+        # WEEK 3: Completeness Validation & Scoring
+        # =========================================================================
+        print("\n[3/4] 🎯 Week 3: Completeness Validation & Scoring")
+        print("-" * 70)
+        sys.stdout.flush()
+
+        # Standalone validation (parallel processing for speed)
+        print("      Running standalone validation...")
+        sys.stdout.flush()
+        self.standalone_validator = StandaloneValidator(self.api_key, model=self.model)
+        validations = self.standalone_validator.validate_batch_parallel(thought_units, max_workers=self.max_workers, verbose=False)
+        thought_units = self.standalone_validator.update_thought_units(thought_units, validations)
+
+        standalone_rate = sum(1 for v in validations if v['is_standalone']) / len(validations) * 100 if validations else 0
+        print(f"      ✓ Standalone validation: {standalone_rate:.0f}% passed")
+        sys.stdout.flush()
+
+        # Completeness scoring (parallel processing for speed)
+        print("      Running completeness scoring...")
+        sys.stdout.flush()
+        self.completeness_scorer = CompletenessScorer(self.api_key, model=self.model)
+        scores = self.completeness_scorer.score_batch_parallel(thought_units, max_workers=self.max_workers, verbose=False)
+        thought_units = self.completeness_scorer.update_thought_units(thought_units, scores)
+
+        avg_completeness = sum(u.completeness_score for u in thought_units) / len(thought_units) if thought_units else 0
+        production_count = sum(1 for u in thought_units if u.meets_production_standard())
+        print(f"      ✓ Average completeness: {avg_completeness:.2f}")
+        print(f"      ✓ Production quality: {production_count}/{len(thought_units)} units")
+        sys.stdout.flush()
+
+        # Store Week 3 output
+        if self.export_layers:
+            self.layer_outputs['week3_scored'] = [
+                {
+                    'duration': u.duration,
+                    'completeness_score': u.completeness_score,
+                    'premise_clarity': u.premise_clarity,
+                    'claim_strength': u.claim_strength,
+                    'resolution_closure': u.resolution_closure,
+                    'standalone_score': validations[i]['standalone_score'],
+                    'is_standalone': validations[i]['is_standalone'],
+                    'meets_production': u.meets_production_standard()
+                }
+                for i, u in enumerate(thought_units)
+            ]
+
+        # =========================================================================
+        # WEEK 4: Deduplication & Variant Selection
+        # =========================================================================
+        print("\n[4/4] 🔄 Week 4: Deduplication & Variant Selection")
+        print("-" * 70)
+        sys.stdout.flush()
+
+        # Semantic + Temporal deduplication
+        self.deduplicator = SemanticDeduplicator(self.api_key)
+        unique_units, clusters = self.deduplicator.deduplicate(
+            thought_units,
+            similarity_threshold=0.85,
+            temporal_overlap_threshold=0.5,  # 50% overlap = duplicate
+            verbose=False
+        )
+
+        dedup_rate = (len(thought_units) - len(clusters)) / len(thought_units) * 100 if thought_units else 0
+        print(f"      ✓ Clustering: {len(clusters)} unique moments ({dedup_rate:.0f}% reduction)")
+        sys.stdout.flush()
+
+        # Variant selection
+        self.variant_selector = VariantSelector(
+            ideal_min_duration=min_duration or 30,
+            ideal_max_duration=max_duration or 90
+        )
+        best_variants = self.variant_selector.select_best_variants(clusters, verbose=False)
+
+        print(f"      ✓ Selected {len(best_variants)} best variants")
+        sys.stdout.flush()
+
+        # Store Week 4 output
+        if self.export_layers:
+            self.layer_outputs['week4_deduplicated'] = [
+                {
+                    'duration': u.duration,
+                    'completeness_score': u.completeness_score,
+                    'claim_text': u.claim_text
+                }
+                for u in best_variants
+            ]
+
+        # =========================================================================
+        # Select Top N Clips
+        # =========================================================================
+
+        # Sort by combined score
+        def combined_score(unit):
+            # Get standalone score from validation
+            standalone_score = 0.0
+            for i, u in enumerate(thought_units):
+                if u == unit:
+                    standalone_score = validations[i]['standalone_score']
+                    break
+
+            return (
+                unit.completeness_score * self.score_weights['completeness'] +
+                standalone_score * self.score_weights['standalone']
+            )
+
+        sorted_units = sorted(best_variants, key=combined_score, reverse=True)
+        top_units = sorted_units[:target_clips]
+
+        print(f"\n      ✓ Selected top {len(top_units)} clips for export")
+        sys.stdout.flush()
+
+        # =========================================================================
+        # Convert to Legacy Format
+        # =========================================================================
+
+        legacy_clips = []
+        for i, unit in enumerate(top_units, 1):
+            # Find standalone score from validations
+            standalone_score = 0.0
+            for j, u in enumerate(thought_units):
+                if u == unit:
+                    standalone_score = validations[j]['standalone_score']
+                    break
+
+            # Generate title from claim text
+            title = self._generate_title(unit.claim_text)
+
+            # Generate reason/description
+            reason = f"{unit.rhetorical_type.value.title()}: {unit.claim_text[:100]}"
+
+            legacy_clips.append({
+                # Required fields (HybridAnalyzer expects these)
+                'id': f"clip_{i:03d}",
+                'start_time': unit.premise_start,
+                'end_time': unit.resolution_end,
+                'duration': unit.duration,
+                'title': title,
+                'reason': reason,
+                'interest_score': unit.completeness_score,  # Use completeness as interest
+                'content_type': unit.rhetorical_type.value,
+                # Extra metadata (preserved through pipeline)
+                '_4layer_metadata': {
+                    'completeness_score': unit.completeness_score,
+                    'standalone_score': standalone_score,
+                    'premise_clarity': unit.premise_clarity,
+                    'claim_strength': unit.claim_strength,
+                    'resolution_closure': unit.resolution_closure,
+                    'rhetorical_type': unit.rhetorical_type.value,
+                    'premise_text': unit.premise_text,
+                    'claim_text': unit.claim_text,
+                    'resolution_text': unit.resolution_text
+                }
+            })
 
         # Print summary
         self._print_summary(legacy_clips)
+
+        # Clean up checkpoints on successful completion
+        if self.enable_checkpoints:
+            checkpoint_mgr.clear_checkpoints(job_id)
 
         return legacy_clips
 
@@ -216,13 +465,38 @@ class FourLayerAdapter:
         Returns:
             str: Generated title (max 60 chars)
         """
-        # Initialize packager if not already done
-        if not hasattr(self, 'packager'):
-            from .layer4_packaging import PackagingLayer
-            self.packager = PackagingLayer(self.api_key, model="gpt-4o-mini")
+        return self._generate_title(transcript_segment)
 
-        # Use Layer 4 to generate title
-        return self.packager.generate_title_only(transcript_segment)
+    def _generate_title(self, text: str) -> str:
+        """
+        Generate a title from text (max 60 chars).
+
+        Uses simple extraction: first sentence or claim text.
+
+        Args:
+            text: Text to generate title from
+
+        Returns:
+            Title string (max 60 chars)
+        """
+        # Clean text
+        text = text.strip()
+
+        # Take first sentence or first 60 chars
+        sentences = text.split('.')
+        if sentences:
+            title = sentences[0].strip()
+        else:
+            title = text
+
+        # Truncate to 60 chars
+        if len(title) > 60:
+            title = title[:57] + "..."
+
+        # Convert to title case
+        title = title.title()
+
+        return title
 
     def extract_transcript_text(
         self,
@@ -256,94 +530,15 @@ class FourLayerAdapter:
 
         return ' '.join(text_parts)
 
-    def _deduplicate_ideas(self, clips: List[Dict]) -> List[Dict]:
-        """
-        Remove clips that express the same core idea using semantic similarity.
-
-        Uses OpenAI embeddings to cluster clips by similarity, keeping only the
-        best clip from each cluster (highest combined score).
-
-        Args:
-            clips: List of packaged clips from Layer 4
-
-        Returns:
-            List of unique clips (duplicates removed)
-        """
-        if len(clips) <= 1:
-            return clips
-
-        try:
-            from openai import OpenAI
-            import numpy as np
-        except ImportError:
-            print("      ⚠️  openai or numpy not available, skipping deduplication")
-            return clips
-
-        client = OpenAI(api_key=self.api_key)
-
-        # Get embeddings for each clip's title + description
-        texts = [f"{clip['title']}. {clip['description']}" for clip in clips]
-
-        try:
-            response = client.embeddings.create(
-                input=texts,
-                model="text-embedding-3-small"
-            )
-            embeddings = np.array([e.embedding for e in response.data])
-        except Exception as e:
-            print(f"      ⚠️  Failed to generate embeddings: {e}")
-            return clips
-
-        # Calculate cosine similarity matrix
-        from numpy.linalg import norm
-        similarities = np.dot(embeddings, embeddings.T) / (
-            norm(embeddings, axis=1)[:, np.newaxis] *
-            norm(embeddings, axis=1)[np.newaxis, :]
-        )
-
-        # Cluster clips by similarity (threshold: 80% similar = duplicate)
-        SIMILARITY_THRESHOLD = 0.80
-        unique_clips = []
-        used_indices = set()
-
-        # Sort by combined score (best first)
-        def combined_score(c):
-            return (
-                c['interest_score'] * self.score_weights['interest'] +
-                c['standalone_score'] * self.score_weights['standalone']
-            )
-
-        sorted_indices = sorted(
-            range(len(clips)),
-            key=lambda i: combined_score(clips[i]),
-            reverse=True
-        )
-
-        for i in sorted_indices:
-            if i in used_indices:
-                continue
-
-            # This clip is unique (so far)
-            unique_clips.append(clips[i])
-            used_indices.add(i)
-
-            # Mark all similar clips as duplicates
-            for j in range(len(clips)):
-                if j != i and j not in used_indices:
-                    if similarities[i][j] >= SIMILARITY_THRESHOLD:
-                        used_indices.add(j)
-
-        return unique_clips
-
     def export_layer_outputs(self, output_dir: Path):
         """
         Export intermediate layer results for debugging
 
         Creates files:
-            - output_dir/editorial/layer1_moments.json
-            - output_dir/editorial/layer2_boundaries.json
-            - output_dir/editorial/layer3_validated.json
-            - output_dir/editorial/layer4_packaged.json
+            - output_dir/editorial/week1_seeds.json
+            - output_dir/editorial/week2_units.json
+            - output_dir/editorial/week3_scored.json
+            - output_dir/editorial/week4_deduplicated.json
 
         Args:
             output_dir: Directory to export results to
@@ -354,98 +549,79 @@ class FourLayerAdapter:
         layer_dir = output_dir / "editorial"
         layer_dir.mkdir(exist_ok=True, parents=True)
 
-        for layer_name, data in self.layer_outputs.items():
-            output_file = layer_dir / f"{layer_name}.json"
+        for week_name, data in self.layer_outputs.items():
+            output_file = layer_dir / f"{week_name}.json"
             with open(output_file, 'w') as f:
                 json.dump(data, f, indent=2)
-            print(f"   ✓ Exported {layer_name}.json")
-
-    def _convert_to_legacy_format(self, clips: List[Dict]) -> List[Dict]:
-        """
-        Convert 4-layer output to format expected by HybridAnalyzer
-
-        Args:
-            clips: Packaged clips from Layer 4
-
-        Returns:
-            List[Dict] in TranscriptAnalyzer format
-        """
-        legacy_clips = []
-        for i, clip in enumerate(clips, 1):
-            legacy_clips.append({
-                # Required fields (HybridAnalyzer expects these)
-                'id': f"clip_{i:03d}",
-                'start_time': clip['start_time'],
-                'end_time': clip['end_time'],
-                'duration': clip['duration'],
-                'title': clip['title'],
-                'reason': clip['description'],  # Use description as reason
-                'interest_score': clip['interest_score'],
-                'content_type': clip['content_type'],
-                # Extra metadata (preserved through pipeline)
-                '_4layer_metadata': {
-                    'standalone_score': clip['standalone_score'],
-                    'hashtags': clip['hashtags'],
-                    'thumbnail_time': clip['thumbnail_time'],
-                    'layer1': clip.get('_layer1'),
-                    'layer2': clip.get('_layer2'),
-                    'layer3': clip.get('_layer3')
-                }
-            })
-        return legacy_clips
+            print(f"   ✓ Exported {week_name}.json")
 
     def _print_summary(self, clips: List[Dict]):
         """
-        Print summary of 4-layer analysis
+        Print summary of ThoughtUnit editorial analysis
 
         Args:
             clips: Final clips in legacy format
         """
         print("\n" + "="*70)
-        print("📊 EDITORIAL SUMMARY")
+        print("📊 THOUGHTUNIT EDITORIAL SUMMARY")
         print("="*70)
         print(f"Final clips: {len(clips)}")
 
-        # Calculate total cost from all layers
+        # Calculate total cost from all modules
         total_cost = 0.0
         total_tokens = 0
         total_api_calls = 0
 
-        if hasattr(self, 'moment_detector'):
-            total_cost += self.moment_detector.metrics.get('cost_usd', 0)
-            total_tokens += self.moment_detector.metrics.get('tokens_used', 0)
-            total_api_calls += self.moment_detector.metrics.get('api_calls', 0)
+        if hasattr(self, 'seed_detector'):
+            total_cost += self.seed_detector.metrics.get('cost_usd', 0)
+            total_tokens += self.seed_detector.metrics.get('tokens_used', 0)
+            total_api_calls += self.seed_detector.metrics.get('api_calls', 0)
 
-        if hasattr(self, 'boundary_analyzer'):
-            total_cost += self.boundary_analyzer.metrics.get('cost_usd', 0)
-            total_tokens += self.boundary_analyzer.metrics.get('tokens_used', 0)
-            total_api_calls += self.boundary_analyzer.metrics.get('api_calls', 0)
+        if hasattr(self, 'constructor'):
+            total_cost += self.constructor.metrics.get('total_cost_usd', 0)
+            total_tokens += self.constructor.metrics.get('total_tokens_used', 0)
+            total_api_calls += self.constructor.metrics.get('total_api_calls', 0)
 
-        if hasattr(self, 'context_refiner'):
-            total_cost += self.context_refiner.metrics.get('cost_usd', 0)
-            total_tokens += self.context_refiner.metrics.get('tokens_used', 0)
-            total_api_calls += self.context_refiner.metrics.get('api_calls', 0)
+        if hasattr(self, 'standalone_validator'):
+            total_cost += self.standalone_validator.metrics.get('cost_usd', 0)
+            total_tokens += self.standalone_validator.metrics.get('tokens_used', 0)
+            total_api_calls += self.standalone_validator.metrics.get('api_calls', 0)
 
-        if hasattr(self, 'packager'):
-            total_cost += self.packager.metrics.get('cost_usd', 0)
-            total_tokens += self.packager.metrics.get('tokens_used', 0)
-            total_api_calls += self.packager.metrics.get('api_calls', 0)
+        if hasattr(self, 'completeness_scorer'):
+            total_cost += self.completeness_scorer.metrics.get('cost_usd', 0)
+            total_tokens += self.completeness_scorer.metrics.get('tokens_used', 0)
+            total_api_calls += self.completeness_scorer.metrics.get('api_calls', 0)
 
-        print(f"Total cost: ${total_cost:.2f}")
+        if hasattr(self, 'deduplicator'):
+            total_cost += self.deduplicator.metrics.get('cost_usd', 0)
+            total_tokens += self.deduplicator.metrics.get('tokens_used', 0)
+            total_api_calls += self.deduplicator.metrics.get('api_calls', 0)
+
+        print(f"Total cost: ${total_cost:.3f}")
         print(f"Total tokens: {total_tokens:,}")
         print(f"Total API calls: {total_api_calls}")
 
-        # Show layer breakdown
-        if hasattr(self, 'context_refiner'):
-            pass_rate = self.context_refiner.metrics.get('pass_rate', 0)
-            print(f"Layer 3 pass rate: {pass_rate:.1%}")
+        # Show average scores
+        if clips:
+            avg_completeness = sum(c['_4layer_metadata']['completeness_score'] for c in clips) / len(clips)
+            avg_standalone = sum(c['_4layer_metadata']['standalone_score'] for c in clips) / len(clips)
+            production_count = sum(1 for c in clips if c['_4layer_metadata']['completeness_score'] >= 0.75)
+
+            print(f"\nQuality Metrics:")
+            print(f"  Average completeness: {avg_completeness:.2f}")
+            print(f"  Average standalone: {avg_standalone:.2f}")
+            print(f"  Production quality: {production_count}/{len(clips)} clips")
 
         # Show top 3 clips
         print("\nTop 3 Clips:")
         for i, clip in enumerate(clips[:3], 1):
+            metadata = clip['_4layer_metadata']
+            combined = (
+                metadata['completeness_score'] * self.score_weights['completeness'] +
+                metadata['standalone_score'] * self.score_weights['standalone']
+            )
             print(f"  {i}. [{clip['duration']:.1f}s] {clip['title']}")
-            if '_4layer_metadata' in clip:
-                score = (clip['interest_score'] * 0.6) + (clip['_4layer_metadata']['standalone_score'] * 0.4)
-                print(f"     Combined Score: {score:.2f} (Interest: {clip['interest_score']:.2f}, Standalone: {clip['_4layer_metadata']['standalone_score']:.2f})")
+            print(f"     Score: {combined:.2f} (C:{metadata['completeness_score']:.2f}, S:{metadata['standalone_score']:.2f})")
+            print(f"     {metadata['rhetorical_type'].title()}: {metadata['claim_text'][:60]}...")
 
         print("="*70 + "\n")
