@@ -507,6 +507,28 @@ def run_arena_pipeline(
         return 1
 
     # =========================================================================
+    # COPY ARTIFACTS TO OUTPUT
+    # =========================================================================
+    # Copy enhanced audio, transcript, and analysis to main output directory
+    import shutil
+
+    artifacts_copied = []
+
+    # Copy enhanced audio if it exists
+    if enhanced_audio_path.exists():
+        dest_audio = output_path / enhanced_audio_path.name
+        shutil.copy2(enhanced_audio_path, dest_audio)
+        artifacts_copied.append(f"audio: {enhanced_audio_path.name}")
+
+    # Copy transcript
+    if transcript_cache.exists():
+        dest_transcript = output_path / "transcript.json"
+        shutil.copy2(transcript_cache, dest_transcript)
+        artifacts_copied.append(f"transcript: transcript.json")
+
+    # analysis_results.json is already in output_path, no need to copy
+
+    # =========================================================================
     # FINAL SUMMARY
     # =========================================================================
     print(f"{'='*70}")
@@ -519,7 +541,10 @@ def run_arena_pipeline(
     print(f"   │   ├── *_*.mp4            ({successful} video clips)")
     print(f"   │   ├── *_*_thumb.jpg      (thumbnails)")
     print(f"   │   └── *_*_metadata.json  (metadata)")
+    print(f"   ├── transcript.json        (word-level transcript)")
     print(f"   ├── analysis_results.json  (full analysis)")
+    if enhanced_audio_path.exists():
+        print(f"   ├── {enhanced_audio_path.name}")
     print(f"   └── .cache/")
     print(f"       └── *_transcript.json  (cached transcript)\n")
 
@@ -534,9 +559,10 @@ def run_arena_pipeline(
 
     print("🚀 Next Steps:")
     print("   1. Review clips in the clips/ directory")
-    print("   2. Check analysis_results.json for all segments")
-    print("   3. Edit clips or run again with different parameters")
-    print("   4. Share your clips on social media!\n")
+    print("   2. Check transcript.json for word-level timestamps")
+    print("   3. Check analysis_results.json for all segments")
+    print("   4. Edit clips or run again with different parameters")
+    print("   5. Share your clips on social media!\n")
 
     print(f"{'='*70}\n")
 
