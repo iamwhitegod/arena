@@ -1,0 +1,20 @@
+{
+  "week7_status": "passed",
+  "completeness_scores": {
+    "financial": 0.8266666666666668,
+    "tech": 0.7166666666666666
+  },
+  "completeness_variance": 0.05500000000000016,
+  "standalone_scores": {
+    "tech": 0.8500000000000001
+  },
+  "issues": [],
+  "warnings": [
+    "Financial term detection may be weak (4 terms)",
+    "Tech term detection may be weak (1 terms)"
+  ],
+  "content_types_tested": [
+    "financial",
+    "tech"
+  ]
+}

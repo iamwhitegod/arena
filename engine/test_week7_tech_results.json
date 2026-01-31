@@ -1,0 +1,59 @@
+{
+  "clips": [
+    {
+      "id": "clip_001",
+      "start_time": 459.29998779296875,
+      "end_time": 519.1400146484375,
+      "duration": 59.84002685546875,
+      "title": "I'M Hoping To Crush This Thing As Soon As Possible And Cr...",
+      "reason": "Example: I'm hoping to crush this thing as soon as possible and create content without any of this awkwardnes",
+      "interest_score": 0.7,
+      "content_type": "example",
+      "_4layer_metadata": {
+        "completeness_score": 0.7,
+        "standalone_score": 0.9,
+        "premise_clarity": 7.0,
+        "claim_strength": 6.5,
+        "resolution_closure": 7.5,
+        "rhetorical_type": "example",
+        "premise_text": " Thank you for listening to my ramble. So I'm trying to get comfortable with the camera and talk about things that I could talk about with a regular person.",
+        "claim_text": "I'm hoping to crush this thing as soon as possible and create content without any of this awkwardness on camera.",
+        "resolution_text": " And I know I don't have stage fright. I don't know why I'm having camera fright. Whatever, if that is a natural word. But I'm hoping to crush this thing as soon as possible and create content without any of this awkwardness on camera.  So, bye for now."
+      }
+    },
+    {
+      "id": "clip_002",
+      "start_time": 258.1400146484375,
+      "end_time": 343.8399963378906,
+      "duration": 85.69998168945312,
+      "title": "I Want To Be Able To Scale Any Software Or, You Know, Pro...",
+      "reason": "Argument: I want to be able to scale any software or, you know, products, digital products to a million users.",
+      "interest_score": 0.7333333333333333,
+      "content_type": "argument",
+      "_4layer_metadata": {
+        "completeness_score": 0.7333333333333333,
+        "standalone_score": 0.8,
+        "premise_clarity": 7.0,
+        "claim_strength": 8.0,
+        "resolution_closure": 7.0,
+        "rhetorical_type": "argument",
+        "premise_text": " Okay. So, and I remember also telling myself I want to be able to, you know, function in any team anywhere in the world. If you insert me into any team anywhere in the world, I would be able to perform.",
+        "claim_text": "I want to be able to scale any software or, you know, products, digital products to a million users.",
+        "resolution_text": " I want to be able to scale any software or, you know, products, digital products to a million users. That's what I have, I said for myself, professionalized professional code in the moment. I want to be able to scale software to a million users.  And what that means is I need to start thinking about architecture more deeply. And that's my focus for the next six to 18 months."
+      }
+    }
+  ],
+  "validation": {
+    "content_type": "tech/career_advice",
+    "avg_completeness": 0.7166666666666666,
+    "avg_standalone": 0.8500000000000001,
+    "tech_terms_detected": [
+      "software"
+    ],
+    "comparison_to_religious": {
+      "religious_avg": 0.74,
+      "tech_avg": 0.7166666666666666,
+      "difference": 0.023333333333333428
+    }
+  }
+}

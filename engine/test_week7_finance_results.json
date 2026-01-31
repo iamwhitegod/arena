@@ -1,0 +1,124 @@
+{
+  "clips": [
+    {
+      "id": "clip_001",
+      "start_time": 2826.9200134277344,
+      "end_time": 2904.5,
+      "duration": 77.57998657226562,
+      "title": "If You'Re Going To Panic And Sell When That Happens, You ...",
+      "reason": "Example: If you're going to panic and sell when that happens, you do not want to invest in stocks, because th",
+      "interest_score": 0.85,
+      "content_type": "example",
+      "_4layer_metadata": {
+        "completeness_score": 0.85,
+        "standalone_score": 0.9,
+        "premise_clarity": 8.5,
+        "claim_strength": 9.0,
+        "resolution_closure": 8.0,
+        "rhetorical_type": "example",
+        "premise_text": " and stocks are never safe to invest in for the short-term,  because they're volatile.  At any given moment, they can take a deep plunge,  and that's a perfectly natural part of the process.  People get all crazy, especially if you watch the news,",
+        "claim_text": "If you're going to panic and sell when that happens, you do not want to invest in stocks, because they will leave you bleeding.",
+        "resolution_text": " people go insane and panic,  but crashes and pullbacks in the stock market  are a perfectly natural part of the process.  They are very, very difficult, if not impossible,  to predict when they're going to happen.  But that's the reason you never want to invest in stocks  for money that you're going to need in the near term.  If you zoom out for longer periods of time,  which is what I recommend, stocks are stunningly reliable.  I mean, there are very few times  over the course of 10 years  where stocks have not given you a good return,  and you've got 20 years, and I mean, it's very rare.  So if you look long-term, stocks are extremely safe  and extremely powerful in building wealth,  but they are very volatile along the way.  So you have to be willing and able to endure that volatility  if you're going to panic and sell when the market drops,  not if, because the market will drop.  It's a perfectly natural part of the process."
+      }
+    },
+    {
+      "id": "clip_002",
+      "start_time": 2442.759998321533,
+      "end_time": 2517.379997253418,
+      "duration": 74.61999893188477,
+      "title": "So When You Return These Gold Pieces To Me In A Year, You...",
+      "reason": "Teaching: So when you return these gold pieces to me in a year, you're going to return 11 gold pieces to me.",
+      "interest_score": 0.8333333333333334,
+      "content_type": "teaching",
+      "_4layer_metadata": {
+        "completeness_score": 0.8333333333333334,
+        "standalone_score": 0.9,
+        "premise_clarity": 9.0,
+        "claim_strength": 8.0,
+        "resolution_closure": 8.0,
+        "rhetorical_type": "teaching",
+        "premise_text": " Let's say I'm sitting on this pile of gold  and you want to borrow some of my gold.  I'm happy to loan you, Stephen,  these 10 very valuable pieces,  but I don't like you well enough  to just let you borrow them for free.  I want to be paid.  I want to get a reward back for that.  So when you return these gold pieces to me in a year,  you're going to return 11 gold pieces to me.",
+        "claim_text": "So when you return these gold pieces to me in a year, you're going to return 11 gold pieces to me.",
+        "resolution_text": " because an extra gold piece is 10% of these 10, right?  Make sense?  Yeah.  That's what interest is.  So if I say, okay, well, I'm going to buy a house.  Right, you're going to take those 10 gold pieces.  Go ahead and take them.  So I'm buying a house that costs 10 gold pieces, right?  So I'm going to accept your 10% interest rate.  Am I paying 10% a year on the total?  On the balance.  So the way a mortgage works is in the,  let's say it's a 30 year mortgage.  You're going to be giving me a certain amount  of money every month, right?  That's your mortgage payment.  And in the beginning,  most of that payment is going to be interest to me.  And a very tiny sliver of it will be paying down  the principal part of the 10 gold pieces that you bought"
+      }
+    },
+    {
+      "id": "clip_003",
+      "start_time": 218.97999572753906,
+      "end_time": 301.32000732421875,
+      "duration": 82.34001159667969,
+      "title": "You Can Buy Your Freedom, Your Financial Freedom",
+      "reason": "Example: You can buy your freedom, your financial freedom.",
+      "interest_score": 0.8166666666666667,
+      "content_type": "example",
+      "_4layer_metadata": {
+        "completeness_score": 0.8166666666666667,
+        "standalone_score": 0.9,
+        "premise_clarity": 8.0,
+        "claim_strength": 8.5,
+        "resolution_closure": 8.0,
+        "rhetorical_type": "example",
+        "premise_text": " The fundamental way I think the vast majority of people think about money, because this  is what our culture has taught us, the way our culture has taught us to think about money,  is solely in terms of what can you buy with it.  If you go to the average person, that lottery, for instance, is like a billion dollars at  the moment, so people are buying lottery tickets.",
+        "claim_text": "You can buy your freedom, your financial freedom.",
+        "resolution_text": " you win this billion dollar, what are you going to do with it?  What you're typically going to hear is, well, I'm going to pay off my debts, and I'm going  to pay off my mortgage, and I'm going to buy my parents a house, and I'm going to buy myself  a Lamborghini.  I'm going to buy, I'm going to buy, I'm going to buy.  That's the way most people think about money, and that's certainly one of the things that  money is very good at.  It is a means of exchange, but the other thing your money can do for you is work for you.  Your money can make you more money.  So you can exchange your time and effort and labor to earn money, and that's what most  of us do, but you can also divert some of the money you earn into investments, into  what I call buying your freedom, and now your money is working for you.  So instead of just thinking about what your money can buy, you can start thinking about  what can your money earn.  You can buy your freedom.  You can buy your freedom, your financial freedom."
+      }
+    },
+    {
+      "id": "clip_004",
+      "start_time": 1535.3399963378906,
+      "end_time": 1595.3200073242188,
+      "duration": 59.980010986328125,
+      "title": "You Can Never Be Financially Independent If You'Re Carryi...",
+      "reason": "Argument: You can never be financially independent if you're carrying around debt.",
+      "interest_score": 0.8,
+      "content_type": "argument",
+      "_4layer_metadata": {
+        "completeness_score": 0.8,
+        "standalone_score": 0.9,
+        "premise_clarity": 8.5,
+        "claim_strength": 8.0,
+        "resolution_closure": 7.5,
+        "rhetorical_type": "argument",
+        "premise_text": " Why did you say avoid debt?  You can never be financially independent  if you're carrying around debt.",
+        "claim_text": "You can never be financially independent if you're carrying around debt.",
+        "resolution_text": " especially consumer debt.  Now, to be clear, if you're in business  and your business is carrying debt  as a function of running the operation,  for one reason or another,  that's kind of a different thing.  But in terms of personal debt,  if you're running up credit card debt,  if you're leasing expensive cars  or borrowing money to buy expensive cars  or what have you,  possibly a mortgage is in a slightly different category,  but it has all the disadvantages we just talked about.  Yeah, debt's a ball and chain.  It's like asking a swimmer to compete  and strap in a weight around their waist.  Is it possible?  Sure, I guess it is,  but it's a whole lot more difficult.  So job one, if you have debt, is to blow it out."
+      }
+    },
+    {
+      "id": "clip_005",
+      "start_time": 1618.5400085449219,
+      "end_time": 1668.2200012207031,
+      "duration": 49.67999267578125,
+      "title": "The More Must-Haves You Have In Your Life, The Less Likel...",
+      "reason": "Argument: The more must-haves you have in your life, the less likely you are to become financially independent",
+      "interest_score": 0.8333333333333334,
+      "content_type": "argument",
+      "_4layer_metadata": {
+        "completeness_score": 0.8333333333333334,
+        "standalone_score": 0.8,
+        "premise_clarity": 8.0,
+        "claim_strength": 9.0,
+        "resolution_closure": 8.0,
+        "rhetorical_type": "argument",
+        "premise_text": " And people say, well, I can't do that.  You know, I need to have this,  I need to have the two least luxury cars  and we need to live in this neighborhood  and we need to send the kids to these schools.",
+        "claim_text": "The more must-haves you have in your life, the less likely you are to become financially independent.",
+        "resolution_text": " The more must-haves you have in your life,  the less likely you are to become financially independent.  Now, that's your choice.  That's an individual's choice.  It may very well be that those things  are more important to you than buying your freedom.  And it's your money.  It's not for me to tell anybody,  well, they should spend their money  or what's important to me or what's important to them.  For me, there was nothing I could spend my money on  that was more important than my freedom,  which is why, from the beginning,  I diverted half of my income to buying that thing."
+      }
+    }
+  ],
+  "validation": {
+    "content_type": "financial/passive_income",
+    "avg_completeness": 0.8266666666666668,
+    "financial_terms_detected": [
+      "debt",
+      "invest",
+      "buy",
+      "financial"
+    ],
+    "comparison_to_religious": {
+      "religious_avg": 0.74,
+      "financial_avg": 0.8266666666666668,
+      "difference": 0.08666666666666678
+    }
+  }
+}
