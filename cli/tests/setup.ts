@@ -8,7 +8,7 @@ import path from 'path';
 import fs from 'fs-extra';
 
 // Test directories
-export const TEST_DIR = path.join(__dirname, 'tmp');
+export const TEST_DIR = path.join(__dirname, `tmp-${Math.random().toString(36).substring(2, 9)}`);
 export const FIXTURES_DIR = path.join(__dirname, 'fixtures');
 export const MOCKS_DIR = path.join(__dirname, 'mocks');
 

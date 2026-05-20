@@ -6,15 +6,10 @@
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { ConfigManager } from '../core/config.js';
-import { formatList } from '../ui/formatters.js';
 
 type ConfigAction = 'view' | 'set' | 'get' | 'reset';
 
-export async function configCommand(
-  action?: string,
-  key?: string,
-  value?: string
-): Promise<void> {
+export async function configCommand(action?: string, key?: string, value?: string): Promise<void> {
   const configManager = new ConfigManager();
 
   // Determine action
@@ -87,14 +82,18 @@ async function viewConfig(configManager: ConfigManager): Promise<void> {
   });
 
   console.log('\n' + separator);
-  console.log(chalk.gray('\n💡 Tip: Use ') + chalk.cyan('arena config set <key> <value>') + chalk.gray(' to update\n'));
+  console.log(
+    chalk.gray('\n💡 Tip: Use ') +
+      chalk.cyan('arena config set <key> <value>') +
+      chalk.gray(' to update\n')
+  );
 }
 
 /**
  * Set a configuration value
  */
 async function setConfig(configManager: ConfigManager, key: string, value: string): Promise<void> {
-  const config = await configManager.getGlobalConfig() || {};
+  const config = (await configManager.getGlobalConfig()) || {};
 
   // Parse value (handle booleans, numbers, strings)
   const parsedValue = parseConfigValue(value);
@@ -110,7 +109,7 @@ async function setConfig(configManager: ConfigManager, key: string, value: strin
  * Get a specific configuration value
  */
 async function getConfig(configManager: ConfigManager, key: string): Promise<void> {
-  const config = await configManager.getGlobalConfig() || {};
+  const config = (await configManager.getGlobalConfig()) || {};
 
   if (key in config) {
     console.log(chalk.white(`\n${key} = ${formatConfigValue(config[key])}\n`));
