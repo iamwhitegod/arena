@@ -61,7 +61,8 @@ def run_arena_pipeline(
     pad_strategy: str = "blur",
     pad_color: str = "#000000",
     captions: bool = False,
-    caption_style: Optional[dict] = None
+    caption_style: Optional[dict] = None,
+    cookies_from_browser: Optional[str] = None
 ):
     """
     Run the complete Arena pipeline
@@ -88,7 +89,7 @@ def run_arena_pipeline(
     from arena.video.downloader import resolve_input, is_url
 
     try:
-        video_file = resolve_input(video_path, mode='video')
+        video_file = resolve_input(video_path, mode='video', cookies_from_browser=cookies_from_browser)
     except RuntimeError as e:
         print(f"❌ Error: {e}")
         return 1
@@ -816,6 +817,12 @@ Environment:
         choices=['bottom', 'top', 'middle'],
         help='Caption position (default: bottom)'
     )
+    parser.add_argument(
+        '--cookies-from-browser',
+        type=str,
+        default=None,
+        help='Browser to extract cookies from for URL downloads (chrome, firefox, safari, edge)'
+    )
 
     args = parser.parse_args()
 
@@ -847,7 +854,8 @@ Environment:
         pad_strategy=args.pad,
         pad_color=args.pad_color,
         captions=args.captions,
-        caption_style=caption_style
+        caption_style=caption_style,
+        cookies_from_browser=args.cookies_from_browser
     ))
 
 

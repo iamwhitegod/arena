@@ -38,6 +38,7 @@ def download_video(
     url: str,
     cache_dir: Optional[Path] = None,
     max_height: int = 1080,
+    cookies_from_browser: Optional[str] = None,
 ) -> Path:
     """
     Download video from URL using yt-dlp. Uses cache to avoid re-downloading.
@@ -46,6 +47,7 @@ def download_video(
         url: Video URL (YouTube, Vimeo, Twitter, etc.)
         cache_dir: Where to store downloads (default: ~/.arena/cache/downloads/)
         max_height: Maximum video height (default: 1080p)
+        cookies_from_browser: Browser to extract cookies from (e.g. 'chrome', 'firefox', 'safari')
 
     Returns:
         Path to downloaded video file
@@ -78,11 +80,24 @@ def download_video(
         url,
     ]
 
+    if cookies_from_browser:
+        cmd.insert(-1, '--cookies-from-browser')
+        cmd.insert(-1, cookies_from_browser)
+
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
+        error_msg = result.stderr.strip()
+        # Detect bot/auth issues and suggest --cookies-from-browser
+        if 'Sign in to confirm' in error_msg or 'HTTP Error 429' in error_msg:
+            raise RuntimeError(
+                f"yt-dlp failed to download video (authentication required):\n{error_msg}\n\n"
+                f"URL: {url}\n\n"
+                f"Fix: Use --cookies-from-browser to authenticate:\n"
+                f"  arena process \"{url}\" --cookies-from-browser chrome"
+            )
         raise RuntimeError(
-            f"yt-dlp failed to download video:\n{result.stderr.strip()}\n\n"
+            f"yt-dlp failed to download video:\n{error_msg}\n\n"
             f"URL: {url}"
         )
 
@@ -100,6 +115,7 @@ def download_audio(
     url: str,
     cache_dir: Optional[Path] = None,
     audio_format: str = 'mp3',
+    cookies_from_browser: Optional[str] = None,
 ) -> Path:
     """
     Download audio-only from URL using yt-dlp. Faster and smaller than full video.
@@ -108,6 +124,7 @@ def download_audio(
         url: Video URL
         cache_dir: Where to store downloads
         audio_format: Output audio format (default: mp3)
+        cookies_from_browser: Browser to extract cookies from (e.g. 'chrome', 'firefox', 'safari')
 
     Returns:
         Path to downloaded audio file
@@ -140,11 +157,23 @@ def download_audio(
         url,
     ]
 
+    if cookies_from_browser:
+        cmd.insert(-1, '--cookies-from-browser')
+        cmd.insert(-1, cookies_from_browser)
+
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
+        error_msg = result.stderr.strip()
+        if 'Sign in to confirm' in error_msg or 'HTTP Error 429' in error_msg:
+            raise RuntimeError(
+                f"yt-dlp failed to download audio (authentication required):\n{error_msg}\n\n"
+                f"URL: {url}\n\n"
+                f"Fix: Use --cookies-from-browser to authenticate:\n"
+                f"  arena transcribe \"{url}\" --cookies-from-browser chrome"
+            )
         raise RuntimeError(
-            f"yt-dlp failed to download audio:\n{result.stderr.strip()}\n\n"
+            f"yt-dlp failed to download audio:\n{error_msg}\n\n"
             f"URL: {url}"
         )
 
@@ -158,13 +187,14 @@ def download_audio(
     return downloaded_path
 
 
-def resolve_input(input_path: str, mode: str = 'video') -> Path:
+def resolve_input(input_path: str, mode: str = 'video', cookies_from_browser: Optional[str] = None) -> Path:
     """
     If input is a URL, download it. If it's a local path, return as-is.
 
     Args:
         input_path: URL or file path
         mode: 'video' for full video download, 'audio' for audio-only
+        cookies_from_browser: Browser to extract cookies from (e.g. 'chrome', 'firefox', 'safari')
 
     Returns:
         Path to local file (downloaded or original)
@@ -173,6 +203,6 @@ def resolve_input(input_path: str, mode: str = 'video') -> Path:
         return Path(input_path)
 
     if mode == 'audio':
-        return download_audio(input_path)
+        return download_audio(input_path, cookies_from_browser=cookies_from_browser)
     else:
-        return download_video(input_path)
+        return download_video(input_path, cookies_from_browser=cookies_from_browser)

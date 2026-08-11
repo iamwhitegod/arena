@@ -80,6 +80,10 @@ program
     'blur'
   )
   .option('--pad-color <color>', 'padding color (hex) for platform formatting', '#000000')
+  .option(
+    '--cookies-from-browser <browser>',
+    'use browser cookies for URL downloads (chrome, firefox, safari, edge)'
+  )
   .option('--captions', 'burn subtitle captions into clips')
   .option('--caption-font-size <size>', 'caption font size')
   .option('--caption-color <color>', 'caption text color: white, yellow, red, black')
@@ -94,6 +98,10 @@ program
   .argument('<video>', 'path to video/audio file or URL')
   .option('-o, --output <file>', 'output transcript file path')
   .option('--no-cache', 'force re-transcription, ignore cached transcript')
+  .option(
+    '--cookies-from-browser <browser>',
+    'use browser cookies for URL downloads (chrome, firefox, safari, edge)'
+  )
   .option('--debug', 'show debug information')
   .action(transcribeCommand);
 

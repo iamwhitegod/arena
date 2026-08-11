@@ -28,6 +28,7 @@ interface ProcessOptions {
   captionFontSize?: string;
   captionColor?: string;
   captionPosition?: string;
+  cookiesFromBrowser?: string;
   debug?: boolean;
 }
 
@@ -110,6 +111,7 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
           : globalConfig?.subtitle_style?.size,
         captionColor: options.captionColor || globalConfig?.subtitle_style?.color,
         captionPosition: options.captionPosition || globalConfig?.subtitle_style?.position,
+        cookiesFromBrowser: options.cookiesFromBrowser,
       },
       (update) => {
         progress.updateStage(update.stage, update.progress, update.message);

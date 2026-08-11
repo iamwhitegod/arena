@@ -16,6 +16,7 @@ import { isUrl } from '../utils/url.js';
 interface TranscribeOptions {
   output?: string;
   cache?: boolean; // Note: commander negates --no-cache to cache: false
+  cookiesFromBrowser?: string;
   debug?: boolean;
 }
 
@@ -70,6 +71,7 @@ export async function transcribeCommand(
         videoPath: absoluteVideoPath,
         outputFile,
         noCache: options.cache === false,
+        cookiesFromBrowser: options.cookiesFromBrowser,
       },
       (update) => {
         if (update.progress !== undefined) {

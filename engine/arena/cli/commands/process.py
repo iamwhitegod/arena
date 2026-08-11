@@ -13,7 +13,7 @@ def run_process(args):
     from arena.video.downloader import resolve_input
 
     try:
-        video_path = resolve_input(args.video, mode='video')
+        video_path = resolve_input(args.video, mode='video', cookies_from_browser=getattr(args, 'cookies_from_browser', None))
     except RuntimeError as e:
         print(f"❌ Error: {e}")
         return 1

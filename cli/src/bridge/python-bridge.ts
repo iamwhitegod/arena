@@ -26,6 +26,7 @@ export interface ProcessOptions {
   captionFontSize?: number;
   captionColor?: string;
   captionPosition?: string;
+  cookiesFromBrowser?: string;
 }
 
 export interface AnalyzeOptions {
@@ -43,6 +44,7 @@ export interface TranscribeOptions {
   videoPath: string;
   outputFile: string;
   noCache?: boolean;
+  cookiesFromBrowser?: string;
 }
 
 export interface GenerateOptions {
@@ -292,6 +294,9 @@ export class PythonBridge {
       if (options.captionPosition) {
         cmdArgs.push('--caption-position', options.captionPosition);
       }
+      if (options.cookiesFromBrowser) {
+        cmdArgs.push('--cookies-from-browser', options.cookiesFromBrowser);
+      }
 
       const { command, args } = this.getArenaCommand('process', cmdArgs);
       this.runCommand(command, args, resolve, reject, onProgress, onError);
@@ -350,6 +355,9 @@ export class PythonBridge {
 
       if (options.noCache) {
         cmdArgs.push('--no-cache');
+      }
+      if (options.cookiesFromBrowser) {
+        cmdArgs.push('--cookies-from-browser', options.cookiesFromBrowser);
       }
 
       const { command, args } = this.getArenaCommand('transcribe', cmdArgs);
