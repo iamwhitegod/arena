@@ -11,6 +11,7 @@ import { runPreflightChecksWithProgress } from '../core/preflight.js';
 import { formatErrorWithHelp } from '../errors/formatter.js';
 import { isArenaError } from '../errors/index.js';
 import { displayTranscriptionSummary } from '../ui/summary.js';
+import { isUrl } from '../utils/url.js';
 
 interface TranscribeOptions {
   output?: string;
@@ -27,11 +28,19 @@ export async function transcribeCommand(
   const bridge = new PythonBridge();
 
   try {
-    const absoluteVideoPath = path.resolve(videoPath);
-    const outputFile = options.output || path.join(
-      path.dirname(absoluteVideoPath),
-      `${path.basename(absoluteVideoPath, path.extname(absoluteVideoPath))}_transcript.json`
-    );
+    const absoluteVideoPath = isUrl(videoPath) ? videoPath : path.resolve(videoPath);
+    let outputFile: string;
+    if (options.output) {
+      outputFile = options.output;
+    } else if (isUrl(videoPath)) {
+      const slug = videoPath.split('/').pop()?.split('?')[0] || 'download';
+      outputFile = path.join(process.cwd(), `${slug}_transcript.json`);
+    } else {
+      outputFile = path.join(
+        path.dirname(absoluteVideoPath),
+        `${path.basename(absoluteVideoPath, path.extname(absoluteVideoPath))}_transcript.json`
+      );
+    }
 
     // Run pre-flight checks
     console.log(chalk.cyan('\n🔍 Running pre-flight checks...\n'));

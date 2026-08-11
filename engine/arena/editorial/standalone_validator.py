@@ -14,6 +14,7 @@ This ensures clips work on social media where viewers have no prior context.
 
 from typing import Dict, List, Optional
 from .thought_unit import ThoughtUnit, DependencyLevel
+from .retry import call_api_with_smart_retry
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import threading
@@ -137,21 +138,27 @@ class StandaloneValidator:
         # Create prompt
         prompt = self._create_standalone_prompt(text, rhetorical_type)
 
-        # Call GPT
-        response = client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert at analyzing text for standalone comprehension. You identify unresolved references that break understanding for readers without prior context."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            temperature=0.2,  # Lower temperature for consistent analysis
-            response_format={"type": "json_object"}
+        # Call GPT with retry for rate limits
+        response = call_api_with_smart_retry(
+            lambda: client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert at analyzing text for standalone comprehension. You identify unresolved references that break understanding for readers without prior context."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.2,  # Lower temperature for consistent analysis
+                response_format={"type": "json_object"}
+            ),
+            max_retries=4,
+            initial_delay=2.0,
+            backoff_factor=2.0,
+            verbose=True
         )
 
         # Track metrics (thread-safe)
@@ -315,20 +322,20 @@ STANDALONE SCORING (Audience-Relative):
 - 1.0 = Perfect (zero issues for target audience)
 - 0.8-0.9 = Excellent (complete for domain-aware viewers)
 - 0.7 = Good (target audience easily understands the main point)
-- 0.5-0.6 = Acceptable with minor gaps (message still clear to audience)
-- 0.3-0.4 = Poor (even domain-aware listeners confused)
-- 0.0-0.2 = Unsalvageable (completely depends on prior context)
+- 0.55-0.69 = Acceptable with minor gaps (message still clear to audience)
+- 0.3-0.54 = Poor (even domain-aware listeners confused)
+- 0.0-0.29 = Unsalvageable (completely depends on prior context)
 
 ⚠️ CRITICAL SCORING RULES (ARSC):
 - Personal testimony/authority ("I've seen", "In my experience") → Score 0.7+
 - Domain references without citations ("the Bible says", "in scripture") → Score 0.7+
 - Pronouns with clear antecedents in the clip → Score 0.8+
 - Generic "you" → Score 0.9+
-- ONLY score below 0.7 if the INTENDED AUDIENCE can't understand the core claim
+- ONLY score below 0.55 if the INTENDED AUDIENCE can't understand the core claim
 
 DEPENDENCY LEVELS:
-- "standalone" = Score 0.7+ (complete for intended audience, publishable)
-- "needs_context" = Score 0.3-0.69 (even target audience confused)
+- "standalone" = Score 0.55+ (complete for intended audience, publishable)
+- "needs_context" = Score 0.3-0.54 (even target audience confused)
 - "unsalvageable" = Score <0.3 (completely incomprehensible)
 
 RETURN JSON:

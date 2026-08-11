@@ -15,11 +15,23 @@ import { extractAudioCommand } from './commands/extract-audio.js';
 import { formatCommand } from './commands/format.js';
 import { detectScenesCommand } from './commands/detect-scenes.js';
 import { diagnoseCommand } from './commands/diagnose.js';
+import { ConfigManager } from './core/config.js';
 
 // Get package.json version (ES module compatible)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const packageJson = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8'));
+
+// Load API key from config if not in env
+try {
+  const configManager = new ConfigManager();
+  const globalConfig = await configManager.getGlobalConfig();
+  if (globalConfig?.openai_api_key && !process.env.OPENAI_API_KEY) {
+    process.env.OPENAI_API_KEY = globalConfig.openai_api_key;
+  }
+} catch (error) {
+  // Ignore config loading errors at startup
+}
 
 const program = new Command();
 
@@ -38,7 +50,7 @@ program.command('setup').description('Check and install system dependencies').ac
 program
   .command('process')
   .description('Process a video and generate clips automatically')
-  .argument('<video>', 'path to video file')
+  .argument('<video>', 'path to video/audio file or URL')
   .option('-o, --output <dir>', 'output directory', 'output')
   .option('-n, --num-clips <number>', 'target number of clips to generate', '5')
   .option('--min <seconds>', 'minimum clip duration', '30')
@@ -65,14 +77,18 @@ program
     'blur'
   )
   .option('--pad-color <color>', 'padding color (hex) for platform formatting', '#000000')
+  .option('--captions', 'burn subtitle captions into clips')
+  .option('--caption-font-size <size>', 'caption font size')
+  .option('--caption-color <color>', 'caption text color: white, yellow, red, black')
+  .option('--caption-position <position>', 'caption position: bottom, top, middle')
   .option('--debug', 'show debug information')
   .action(processCommand);
 
 // Transcribe command - Transcription only
 program
   .command('transcribe')
-  .description('Transcribe video audio only')
-  .argument('<video>', 'path to video file')
+  .description('Transcribe video or audio (supports URLs)')
+  .argument('<video>', 'path to video/audio file or URL')
   .option('-o, --output <file>', 'output transcript file path')
   .option('--no-cache', 'force re-transcription, ignore cached transcript')
   .option('--debug', 'show debug information')
@@ -141,6 +157,10 @@ program
   .option('--pad <strategy>', 'pad strategy: blur, black, white, color', 'blur')
   .option('--pad-color <color>', 'padding color (hex), e.g., #000000', '#000000')
   .option('--no-quality', 'disable high quality encoding (faster, smaller files)')
+  .option('--captions <srt>', 'path to SRT subtitle file to burn into clips')
+  .option('--caption-font-size <size>', 'caption font size')
+  .option('--caption-color <color>', 'caption text color: white, yellow, red, black')
+  .option('--caption-position <position>', 'caption position: bottom, top, middle')
   .action(formatCommand);
 
 // Detect-scenes command - Scene detection

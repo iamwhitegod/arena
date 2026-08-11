@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  arena:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: whitegodkingsley/arena:latest
+    container_name: arena-cli-container
+    volumes:
+      - .:/workspace
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
+    stdin_open: true
+    tty: true

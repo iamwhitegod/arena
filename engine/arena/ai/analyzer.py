@@ -307,12 +307,8 @@ Important:
 
             # Sanity filter: Remove physically impossible clips
             # This is NOT a user constraint - it's quality control
-            # A clip under 8 seconds cannot contain:
-            # - Setup/context for the idea
-            # - The core statement/insight
-            # - Resolution/conclusion
-            # This filters AI mistakes, not enforces user preferences
-            if duration < 8.0:
+            # Clips under 5 seconds are almost certainly AI mistakes
+            if duration < 5.0:
                 continue
 
             # Validate user-specified duration constraints (if provided)

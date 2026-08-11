@@ -174,6 +174,53 @@ Documentation:
         action='store_true',
         help='Export intermediate results from each editorial layer (requires --use-4layer)'
     )
+    process_parser.add_argument(
+        '-p', '--platform',
+        choices=['tiktok', 'instagram-reels', 'youtube-shorts', 'youtube', 'instagram-feed', 'twitter', 'linkedin'],
+        default=None,
+        help='Auto-format clips for platform after generation'
+    )
+    process_parser.add_argument(
+        '--crop',
+        default='center',
+        choices=['center', 'smart', 'top', 'bottom'],
+        help='Crop strategy for platform formatting (default: center)'
+    )
+    process_parser.add_argument(
+        '--pad',
+        default='blur',
+        choices=['blur', 'black', 'white', 'color'],
+        help='Pad strategy for platform formatting (default: blur)'
+    )
+    process_parser.add_argument(
+        '--pad-color',
+        default='#000000',
+        help='Padding color for platform formatting (default: #000000)'
+    )
+    process_parser.add_argument(
+        '--captions',
+        action='store_true',
+        help='Burn subtitle captions into generated clips'
+    )
+    process_parser.add_argument(
+        '--caption-font-size',
+        type=int,
+        default=None,
+        help='Caption font size (default: 24)'
+    )
+    process_parser.add_argument(
+        '--caption-color',
+        type=str,
+        default=None,
+        help='Caption text color: white, yellow, red, black (default: white)'
+    )
+    process_parser.add_argument(
+        '--caption-position',
+        type=str,
+        default=None,
+        choices=['bottom', 'top', 'middle'],
+        help='Caption position (default: bottom)'
+    )
 
     # =========================================================================
     # arena transcribe

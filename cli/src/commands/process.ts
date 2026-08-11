@@ -7,6 +7,7 @@ import { ConfigManager } from '../core/config.js';
 import { runPreflightChecksWithProgress } from '../core/preflight.js';
 import { formatErrorWithHelp } from '../errors/formatter.js';
 import { isArenaError } from '../errors/index.js';
+import { isUrl } from '../utils/url.js';
 
 interface ProcessOptions {
   output?: string;
@@ -24,6 +25,10 @@ interface ProcessOptions {
   crop?: 'center' | 'smart' | 'top' | 'bottom';
   pad?: 'blur' | 'black' | 'white' | 'color';
   padColor?: string;
+  captions?: boolean;
+  captionFontSize?: string;
+  captionColor?: string;
+  captionPosition?: string;
   debug?: boolean;
 }
 
@@ -33,7 +38,7 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
   const bridge = new PythonBridge();
 
   try {
-    const absoluteVideoPath = path.resolve(videoPath);
+    const absoluteVideoPath = isUrl(videoPath) ? videoPath : path.resolve(videoPath);
     const outputDir = options.output || '.arena/output';
 
     // Run pre-flight checks
@@ -62,9 +67,10 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
     const workspace = new Workspace();
     await workspace.initialize();
 
-    // Create config
+    // Create config and load defaults
     const configManager = new ConfigManager();
     await configManager.ensureGlobalConfig();
+    const globalConfig = await configManager.getGlobalConfig();
     await configManager.createProjectConfig(absoluteVideoPath);
 
     // Initialize processing stages for progress tracking
@@ -96,6 +102,16 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
         noCache: options.cache === false, // --no-cache sets cache to false
         padding: options.padding ? parseFloat(options.padding) : undefined,
         sceneDetection: options.sceneDetection || false,
+        platform: options.platform,
+        cropStrategy: options.crop || 'center',
+        padStrategy: options.pad || 'blur',
+        padColor: options.padColor || '#000000',
+        captions: options.captions || false,
+        captionFontSize: options.captionFontSize
+          ? parseInt(options.captionFontSize)
+          : globalConfig?.subtitle_style?.size,
+        captionColor: options.captionColor || globalConfig?.subtitle_style?.color,
+        captionPosition: options.captionPosition || globalConfig?.subtitle_style?.position,
       },
       (update) => {
         progress.updateStage(update.stage, update.progress, update.message);
@@ -128,43 +144,6 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
       outputDir: outputDir,
       processingTime,
     });
-
-    // Auto-format for platform if specified
-    if (options.platform && clipsGenerated > 0) {
-      console.log(chalk.cyan(`\n📐 Auto-formatting clips for ${options.platform}...\n`));
-
-      const formattedDir = path.join(path.resolve(outputDir), 'formatted');
-
-      const formatResult = await bridge.runFormat(
-        {
-          inputPath: clipsDir,
-          outputDir: formattedDir,
-          platform: options.platform,
-          cropStrategy: options.crop || 'center',
-          padStrategy: options.pad || 'blur',
-          padColor: options.padColor || '#000000',
-          maintainQuality: true,
-        },
-        (update) => {
-          if (update.message) {
-            console.log(chalk.gray(`  ${update.message}`));
-          }
-        },
-        (error) => {
-          console.error(chalk.red(`  ⚠️  ${error}`));
-        }
-      );
-
-      if (formatResult.success) {
-        console.log(chalk.green('\n✓ Platform formatting complete!\n'));
-        console.log(chalk.white('Formatted clips location:'));
-        console.log(chalk.cyan(`  ${formattedDir}\n`));
-      } else {
-        console.log(
-          chalk.yellow('\n⚠️  Platform formatting failed, but original clips are still available\n')
-        );
-      }
-    }
   } catch (error) {
     // Use our error formatter for beautiful, actionable error messages
     if (isArenaError(error)) {

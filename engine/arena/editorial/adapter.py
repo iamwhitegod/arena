@@ -47,7 +47,7 @@ class FourLayerAdapter:
         score_weights: Optional[Dict[str, float]] = None,
         enable_checkpoints: bool = True,
         checkpoint_dir: str = ".checkpoint",
-        max_workers: int = 5
+        max_workers: int = 2
     ):
         """
         Initialize editorial adapter
@@ -56,12 +56,11 @@ class FourLayerAdapter:
             api_key: OpenAI API key
             model: Base model to use (default: gpt-4o-mini for cost efficiency)
             export_layers: Whether to export intermediate results for debugging
-            score_weights: Custom scoring weights (default: {'completeness': 0.6, 'standalone': 0.4})
+            score_weights: Custom scoring weights (default: {'completeness': 0.75, 'standalone': 0.25})
             enable_checkpoints: Enable progress checkpointing (default: True)
             checkpoint_dir: Directory for checkpoints (default: .checkpoint)
-            max_workers: Max parallel API calls for scoring/validation (default: 5)
-                        Higher = faster but more API pressure. Recommended: 5-10.
-                        Performance: 5 workers = ~3-5x speedup on batch operations.
+            max_workers: Max parallel API calls for scoring/validation (default: 2)
+                        Higher = faster but more API pressure. Keep low for strict rate limits.
         """
         self.api_key = api_key
         self.model = model
@@ -71,10 +70,10 @@ class FourLayerAdapter:
         self.checkpoint_dir = checkpoint_dir
         self.max_workers = max_workers
 
-        # Default scoring weights (60% completeness, 40% standalone)
+        # Default scoring weights (75% completeness, 25% standalone)
         self.score_weights = score_weights or {
-            'completeness': 0.6,
-            'standalone': 0.4
+            'completeness': 0.75,
+            'standalone': 0.25
         }
 
         # Modules will be initialized on first use
@@ -346,8 +345,8 @@ class FourLayerAdapter:
         self.deduplicator = SemanticDeduplicator(self.api_key)
         unique_units, clusters = self.deduplicator.deduplicate(
             thought_units,
-            similarity_threshold=0.85,
-            temporal_overlap_threshold=0.5,  # 50% overlap = duplicate
+            similarity_threshold=0.92,
+            temporal_overlap_threshold=0.65,  # 65% overlap = duplicate
             verbose=False
         )
 
@@ -605,7 +604,7 @@ class FourLayerAdapter:
         if clips:
             avg_completeness = sum(c['_4layer_metadata']['completeness_score'] for c in clips) / len(clips)
             avg_standalone = sum(c['_4layer_metadata']['standalone_score'] for c in clips) / len(clips)
-            production_count = sum(1 for c in clips if c['_4layer_metadata']['completeness_score'] >= 0.75)
+            production_count = sum(1 for c in clips if c['_4layer_metadata']['completeness_score'] >= 0.60)
 
             print(f"\nQuality Metrics:")
             print(f"  Average completeness: {avg_completeness:.2f}")

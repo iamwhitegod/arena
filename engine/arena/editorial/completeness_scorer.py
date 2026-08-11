@@ -9,11 +9,12 @@ Scores on 0-10 scale:
 - Resolution closure: How satisfying and complete is the ending?
 
 Combined into overall completeness score (0.0-1.0) = (premise + claim + resolution) / 30
-Target: 0.85+ for production quality (90%+ bar)
+Target: 0.60+ for production quality
 """
 
 from typing import Dict, List
 from .thought_unit import ThoughtUnit
+from .retry import call_api_with_smart_retry
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import threading
@@ -81,7 +82,7 @@ class CompletenessScorer:
                 'claim_strength': float,  # 0.0-10.0
                 'resolution_closure': float,  # 0.0-10.0
                 'completeness_score': float,  # 0.0-1.0
-                'meets_production_standard': bool,  # >= 0.85
+                'meets_production_standard': bool,  # >= 0.60
                 'reasoning': {
                     'premise': str,
                     'claim': str,
@@ -175,21 +176,27 @@ class CompletenessScorer:
             rhetorical_type
         )
 
-        # Call GPT
-        response = client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert video editor and content analyst who scores the completeness and quality of video clips on a precise 0-10 scale."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            temperature=0.3,  # Moderate temperature for consistent but nuanced scoring
-            response_format={"type": "json_object"}
+        # Call GPT with retry for rate limits
+        response = call_api_with_smart_retry(
+            lambda: client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert video editor and content analyst who scores the completeness and quality of video clips on a precise 0-10 scale."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.3,  # Moderate temperature for consistent but nuanced scoring
+                response_format={"type": "json_object"}
+            ),
+            max_retries=4,
+            initial_delay=2.0,
+            backoff_factor=2.0,
+            verbose=True
         )
 
         # Track metrics (thread-safe)
@@ -214,12 +221,12 @@ class CompletenessScorer:
             completeness_score = (premise_score + claim_score + resolution_score) / 30.0
 
             # Check if meets production standard
-            # Production bar: 0.75+ (7.5-8.4 range, most components >= 7.0)
+            # Production bar: 0.60+ (6.0-7.4 range, most components >= 5.5)
             meets_production = (
-                completeness_score >= 0.75 and
-                premise_score >= 7.0 and
-                claim_score >= 7.0 and
-                resolution_score >= 7.0
+                completeness_score >= 0.60 and
+                premise_score >= 5.5 and
+                claim_score >= 5.5 and
+                resolution_score >= 5.5
             )
 
             return {
@@ -388,27 +395,28 @@ SCORING CONTEXT:
 - 95%+ viewers satisfied
 - Premium content quality
 
-**Production Quality = 7.5-8.4 average (most >= 7.0)** ← TARGET BAR
+**Production Quality = 6.0-8.4 average (most >= 5.5)** ← TARGET BAR
 - "Publish as-is" standard
-- 80-90% viewers satisfied
+- 70-90% viewers satisfied
 - Ready for social media distribution
 - This is the realistic production bar
 
-**Acceptable Quality = 6.5-7.4 average**
+**Acceptable Quality = 5.0-5.9 average**
 - Good enough for most uses
 - Minor polish would help but not required
 - Still usable
 
-**Needs Work = 5.0-6.4 average**
-- Significant issues
-- Requires editing before publishing
+**Needs Work = 3.5-4.9 average**
+- Some issues
+- May require editing before publishing
 
-**Not Usable = <5.0 average**
+**Not Usable = <3.5 average**
 - Major problems
 - Should not be published
 
-IMPORTANT: Be realistic and generous. A 7.0 resolution that completes the thought properly
-should score 7.0, not 5.0. Reserve low scores (4-5) for truly problematic content.
+IMPORTANT: Be realistic and generous. A 6.0 resolution that completes the thought properly
+should score 6.0, not 4.0. Reserve low scores (3-4) for truly problematic content.
+Most clips from real-world content will score in the 5.5-8.0 range.
 
 ---
 

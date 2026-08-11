@@ -38,9 +38,17 @@ yarn-error.log*
 
 # Testing
 .coverage
+coverage/
 htmlcov/
 .pytest_cache/
 *.mp3
 *.mp4
 *.mov
 *.MOV
+
+# Sensitive files
+npm_recovery_codes.txt
+
+# Generated reports
+*-diagnostics.txt
+arena-diagnostics.txt

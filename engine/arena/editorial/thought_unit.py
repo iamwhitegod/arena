@@ -165,8 +165,8 @@ class ThoughtUnit:
         Does this meet production quality bar?
 
         Requirements for production quality (calibrated for real-world content):
-        - Completeness score >= 0.75 (75%+, "publish as-is" quality)
-        - All three components score >= 7.0/10 (good closure)
+        - Completeness score >= 0.60 (60%+, usable quality)
+        - All three components score >= 5.5/10 (adequate closure)
         - Standalone validation is informational but not required
           (since content-specific references like "God" in sermons are acceptable)
 
@@ -174,10 +174,10 @@ class ThoughtUnit:
             True if meets production standard, False otherwise
         """
         return (
-            self.completeness_score >= 0.75 and
-            self.premise_clarity >= 7.0 and
-            self.claim_strength >= 7.0 and
-            self.resolution_closure >= 7.0
+            self.completeness_score >= 0.60 and
+            self.premise_clarity >= 5.5 and
+            self.claim_strength >= 5.5 and
+            self.resolution_closure >= 5.5
         )
 
     def calculate_completeness_score(self) -> float:
@@ -186,15 +186,17 @@ class ThoughtUnit:
 
         Formula: (premise_clarity + claim_strength + resolution_closure) / 30
 
-        If has unresolved refs, max score is 0.4 (auto-fail).
+        If has unresolved refs, apply a soft 15% penalty instead of a hard cap.
 
         Returns:
             Completeness score between 0.0 and 1.0
         """
-        if self.has_unresolved_refs:
-            return min(0.4, (self.premise_clarity + self.claim_strength + self.resolution_closure) / 30)
+        raw_score = (self.premise_clarity + self.claim_strength + self.resolution_closure) / 30
 
-        return (self.premise_clarity + self.claim_strength + self.resolution_closure) / 30
+        if self.has_unresolved_refs:
+            return raw_score * 0.85  # Soft penalty instead of hard cap at 0.4
+
+        return raw_score
 
     def to_dict(self) -> Dict[str, Any]:
         """

@@ -186,7 +186,9 @@ class PlatformFormatter:
         crop_strategy: CropStrategy = 'center',
         pad_strategy: PadStrategy = 'blur',
         pad_color: str = '#000000',
-        maintain_quality: bool = True
+        maintain_quality: bool = True,
+        subtitle_path: Optional[Path] = None,
+        subtitle_style: Optional[Dict] = None
     ) -> Dict:
         """
         Format video for specific platform
@@ -247,6 +249,19 @@ class PlatformFormatter:
         else:
             # Same aspect ratio, just scale
             filters.append(f"scale={spec.width}:{spec.height}")
+
+        # Subtitle overlay (must be last - after spatial transforms)
+        if subtitle_path and Path(subtitle_path).exists():
+            from arena.subtitles.burner import SubtitleBurner
+            style = subtitle_style or {}
+            burner = SubtitleBurner(
+                font=style.get('font', 'Arial'),
+                font_size=style.get('font_size', style.get('size', 24)),
+                color=style.get('color', 'white'),
+                bg_color=style.get('bg_color', 'black'),
+                position=style.get('position', 'bottom')
+            )
+            filters.append(burner.get_subtitle_filter(Path(subtitle_path)))
 
         # Build FFmpeg command
         command = [
@@ -395,7 +410,8 @@ class PlatformFormatter:
         platform: str,
         crop_strategy: CropStrategy = 'center',
         pad_strategy: PadStrategy = 'blur',
-        progress_callback: Optional[callable] = None
+        progress_callback: Optional[callable] = None,
+        subtitle_style: Optional[Dict] = None
     ) -> List[Dict]:
         """
         Format multiple clips for a platform
@@ -426,12 +442,18 @@ class PlatformFormatter:
             output_path = output_dir / output_filename
 
             try:
+                # Check for SRT file alongside the clip
+                srt_path = input_path.with_suffix('.srt')
+                clip_subtitle = srt_path if srt_path.exists() else None
+
                 result = self.format_for_platform(
                     input_path,
                     output_path,
                     platform,
                     crop_strategy=crop_strategy,
-                    pad_strategy=pad_strategy
+                    pad_strategy=pad_strategy,
+                    subtitle_path=clip_subtitle,
+                    subtitle_style=subtitle_style
                 )
 
                 result['clip_index'] = i

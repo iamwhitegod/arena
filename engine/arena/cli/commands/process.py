@@ -9,9 +9,17 @@ from arena_process import run_arena_pipeline
 
 
 def run_process(args):
-    """Run the process command"""
+    """Run the process command (supports URLs)"""
+    from arena.video.downloader import resolve_input
+
+    try:
+        video_path = resolve_input(args.video, mode='video')
+    except RuntimeError as e:
+        print(f"❌ Error: {e}")
+        return 1
+
     return run_arena_pipeline(
-        video_path=args.video,
+        video_path=str(video_path),
         output_dir=args.output,
         num_clips=args.num_clips,
         min_duration=args.min_duration,
@@ -24,5 +32,17 @@ def run_process(args):
         use_scene_detection=args.scene_detection,
         use_4layer=getattr(args, 'use_4layer', False),
         export_editorial_layers=getattr(args, 'export_editorial_layers', False),
-        editorial_model=getattr(args, 'editorial_model', 'gpt-4o')
+        editorial_model=getattr(args, 'editorial_model', 'gpt-4o'),
+        platform=getattr(args, 'platform', None),
+        crop_strategy=getattr(args, 'crop', 'center'),
+        pad_strategy=getattr(args, 'pad', 'blur'),
+        pad_color=getattr(args, 'pad_color', '#000000'),
+        captions=getattr(args, 'captions', False),
+        caption_style={
+            k: v for k, v in {
+                'font_size': getattr(args, 'caption_font_size', None),
+                'color': getattr(args, 'caption_color', None),
+                'position': getattr(args, 'caption_position', None),
+            }.items() if v is not None
+        } if getattr(args, 'captions', False) else None
     )

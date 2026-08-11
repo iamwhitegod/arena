@@ -1,6 +1,6 @@
 {
   "name": "@whitegodkingsley/arena-cli",
-  "version": "0.3.16",
+  "version": "0.3.17",
   "description": "AI-powered video clip generation tool for the terminal - Turn long-form content into viral clips",
   "type": "module",
   "main": "dist/index.js",
@@ -97,10 +97,16 @@
     "eslint": "^8.56.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
+    "pkg": "^5.8.1",
     "prettier": "^3.1.1",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3",
     "vitest": "^1.0.0"
+  },
+  "pkg": {
+    "assets": [
+      "dist/bin/**/*"
+    ]
   },
   "engines": {
     "node": ">=18.0.0"

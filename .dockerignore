@@ -1,0 +1,39 @@
+# Dependencies (installed inside container)
+node_modules/
+**/node_modules/
+
+# Build caches & IDE
+.git/
+.gitignore
+.husky/
+.vscode/
+.idea/
+.DS_Store
+dist/
+cli/dist/
+build/
+coverage/
+
+# Arena workspace & output
+.arena/
+.arena_cache/
+output/
+clips/
+formatted/
+
+# Media files
+*.mp4
+*.mov
+*.wav
+*.mp3
+
+# Docs & misc
+*.md
+docs/
+test_007/
+*.log
+
+# Local scratch
+scratch/
+desktop/
+src-tauri/

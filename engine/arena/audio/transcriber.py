@@ -24,29 +24,41 @@ class Transcriber:
         if self.mode == "api" and not self.api_key:
             raise ValueError("OpenAI API key is required for 'api' mode")
 
+    AUDIO_EXTENSIONS = {'.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma', '.opus'}
+
+    def _is_audio_file(self, file_path: Path) -> bool:
+        """Check if the input file is an audio-only format."""
+        return file_path.suffix.lower() in self.AUDIO_EXTENSIONS
+
     def transcribe(self, video_path: Path, cache_dir: Optional[Path] = None) -> Dict:
         """
-        Transcribe video audio with word-level timestamps
+        Transcribe audio from a video or audio file with word-level timestamps.
 
         Args:
-            video_path: Path to video file
+            video_path: Path to video or audio file
             cache_dir: Optional directory to cache audio file
 
         Returns:
             Dict containing full transcript and word-level timestamps
         """
-        # Extract audio to temporary file
-        if cache_dir:
-            cache_dir = Path(cache_dir)
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            audio_path = cache_dir / f"{video_path.stem}_audio.mp3"
-        else:
-            # Use temporary file
-            temp_dir = tempfile.mkdtemp()
-            audio_path = Path(temp_dir) / "audio.mp3"
+        video_path = Path(video_path)
 
-        # Extract audio from video
-        self.extract_audio(video_path, audio_path)
+        # If input is already an audio file, use it directly
+        if self._is_audio_file(video_path):
+            audio_path = video_path
+            is_direct_audio = True
+        else:
+            # Extract audio from video
+            if cache_dir:
+                cache_dir = Path(cache_dir)
+                cache_dir.mkdir(parents=True, exist_ok=True)
+                audio_path = cache_dir / f"{video_path.stem}_audio.mp3"
+            else:
+                temp_dir = tempfile.mkdtemp()
+                audio_path = Path(temp_dir) / "audio.mp3"
+
+            self.extract_audio(video_path, audio_path)
+            is_direct_audio = False
 
         # Transcribe based on mode
         if self.mode == "api":
@@ -54,8 +66,8 @@ class Transcriber:
         else:
             result = self._transcribe_local(audio_path)
 
-        # Clean up temporary file if not cached
-        if not cache_dir and audio_path.exists():
+        # Clean up temporary file if not cached (don't delete user's audio file)
+        if not is_direct_audio and not cache_dir and audio_path.exists():
             audio_path.unlink()
 
         return result

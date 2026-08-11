@@ -7,12 +7,17 @@ from arena.audio.transcriber import Transcriber
 
 
 def run_transcribe(args):
-    """Transcribe video audio"""
+    """Transcribe video or audio file (supports URLs)"""
+    from arena.video.downloader import resolve_input
 
-    video_path = Path(args.video)
+    try:
+        video_path = resolve_input(args.video, mode='audio')
+    except RuntimeError as e:
+        print(f"❌ Error: {e}")
+        return 1
 
     if not video_path.exists():
-        print(f"❌ Error: Video file not found: {args.video}")
+        print(f"❌ Error: File not found: {args.video}")
         return 1
 
     # Check for API key

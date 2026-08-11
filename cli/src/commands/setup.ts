@@ -630,6 +630,19 @@ async function autoInstallDependency(
 
 export async function setupCommand(): Promise<void> {
   logCommand('setup', {});
+
+  const isPackaged = typeof (process as any).pkg !== 'undefined';
+  if (isPackaged) {
+    console.log(chalk.cyan('\n🔧 ARENA SETUP\n'));
+    console.log(chalk.green('✓ Everything is pre-packaged and ready to go!\n'));
+    console.log(
+      chalk.white(
+        'Arena is running in standalone mode. All dependencies (Python, PyTorch, Whisper, FFmpeg) are compiled directly into the application.\n'
+      )
+    );
+    return;
+  }
+
   const startTime = Date.now();
 
   console.log(chalk.cyan('\n🔧 ARENA SETUP\n'));

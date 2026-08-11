@@ -57,7 +57,13 @@ def run_arena_pipeline(
     use_scene_detection: bool = False,
     use_4layer: bool = False,
     export_editorial_layers: bool = False,
-    editorial_model: str = "gpt-4o"
+    editorial_model: str = "gpt-4o",
+    platform: Optional[str] = None,
+    crop_strategy: str = "center",
+    pad_strategy: str = "blur",
+    pad_color: str = "#000000",
+    captions: bool = False,
+    caption_style: Optional[dict] = None
 ):
     """
     Run the complete Arena pipeline
@@ -80,8 +86,15 @@ def run_arena_pipeline(
     print("🎬 ARENA - AI-Powered Video Clip Generation")
     print(f"{'='*70}\n")
 
-    # Validate inputs
-    video_file = Path(video_path)
+    # Validate inputs (supports URLs via yt-dlp)
+    from arena.video.downloader import resolve_input, is_url
+
+    try:
+        video_file = resolve_input(video_path, mode='video')
+    except RuntimeError as e:
+        print(f"❌ Error: {e}")
+        return 1
+
     if not video_file.exists():
         print(f"❌ Error: Video file not found: {video_path}")
         return 1
@@ -89,12 +102,9 @@ def run_arena_pipeline(
     # Resolve output directory
     output_path = Path(output_dir)
 
-    # If relative path, resolve from project root (not engine/)
+    # If relative path, resolve from current working directory
     if not output_path.is_absolute():
-        # Get project root (parent of engine/)
-        engine_dir = Path(__file__).parent
-        project_root = engine_dir.parent
-        output_path = project_root / output_dir
+        output_path = Path.cwd() / output_dir
 
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -500,11 +510,125 @@ def run_arena_pipeline(
         print(f"  Failed:     {failed}")
         print(f"  Total size: {total_size:.1f} MB\n")
 
+        # Generate SRT files for captions
+        srt_paths = {}
+        if captions and successful > 0:
+            from arena.subtitles.burner import SubtitleBurner
+
+            style = caption_style or {}
+            burner = SubtitleBurner(
+                font=style.get('font', 'Arial'),
+                font_size=style.get('font_size', style.get('size', 24)),
+                color=style.get('color', 'white'),
+                bg_color=style.get('bg_color', 'black'),
+                position=style.get('position', 'bottom')
+            )
+
+            segments = transcript_data.get('segments', [])
+            for clip, result in zip(top_clips, clip_results):
+                if result.get('success'):
+                    clip_id = result['clip_id']
+                    srt_path = clips_dir / f"{clip_id}.srt"
+                    burner.generate_srt(
+                        segments=segments,
+                        output_path=srt_path,
+                        clip_start=clip['start_time'],
+                        clip_end=clip['end_time']
+                    )
+                    srt_paths[clip_id] = srt_path
+
+            print(f"📝 Generated {len(srt_paths)} subtitle files\n")
+
     except Exception as e:
         print(f"❌ Clip generation failed: {e}")
         import traceback
         traceback.print_exc()
         return 1
+
+    # =========================================================================
+    # STEP 5 (Optional): Platform Formatting
+    # =========================================================================
+    formatted_count = 0
+    formatted_dir = None
+    if platform and successful > 0:
+        print(f"{'='*70}")
+        print(f"[5/5] 📐 Platform Formatting ({platform})")
+        print(f"{'='*70}\n")
+
+        try:
+            from arena.export.platform_formatter import PlatformFormatter
+
+            formatter = PlatformFormatter()
+            spec = formatter.get_platform_spec(platform)
+            formatted_dir = output_path / "formatted"
+            formatted_dir.mkdir(parents=True, exist_ok=True)
+
+            print(f"Target: {spec.name} ({spec.width}x{spec.height}, {spec.aspect_ratio})")
+            print(f"Output: {formatted_dir}\n")
+
+            video_files = list(clips_dir.glob('*.mp4'))
+            for i, vf in enumerate(video_files, 1):
+                out_name = f"{vf.stem}_{platform}.mp4"
+                out_path = formatted_dir / out_name
+
+                # Find matching SRT file for captions
+                srt_file = vf.with_suffix('.srt') if captions else None
+                if srt_file and not srt_file.exists():
+                    srt_file = None
+
+                try:
+                    result = formatter.format_for_platform(
+                        vf, out_path, platform,
+                        crop_strategy=crop_strategy,
+                        pad_strategy=pad_strategy,
+                        pad_color=pad_color,
+                        subtitle_path=srt_file,
+                        subtitle_style=caption_style
+                    )
+                    if result['success']:
+                        formatted_count += 1
+                        print(f"  [{i}/{len(video_files)}] ✅ {out_name}")
+                    else:
+                        print(f"  [{i}/{len(video_files)}] ❌ Failed")
+                except Exception as e:
+                    print(f"  [{i}/{len(video_files)}] ❌ {e}")
+
+            print(f"\n✓ Formatted {formatted_count}/{len(video_files)} clips for {spec.name}\n")
+
+        except Exception as e:
+            print(f"⚠️  Platform formatting failed: {e}")
+            print(f"   Original clips are still available in clips/\n")
+
+    # Standalone caption burning (when no platform formatting)
+    elif captions and srt_paths and successful > 0:
+        print(f"{'='*70}")
+        print(f"📝 Burning captions into clips")
+        print(f"{'='*70}\n")
+
+        from arena.subtitles.burner import SubtitleBurner
+        style = caption_style or {}
+        burner = SubtitleBurner(
+            font=style.get('font', 'Arial'),
+            font_size=style.get('font_size', style.get('size', 24)),
+            color=style.get('color', 'white'),
+            bg_color=style.get('bg_color', 'black'),
+            position=style.get('position', 'bottom')
+        )
+
+        captioned_dir = output_path / "captioned"
+        captioned_dir.mkdir(parents=True, exist_ok=True)
+
+        for clip_id, srt_path in srt_paths.items():
+            clip_file = clips_dir / f"{clip_id}.mp4"
+            if clip_file.exists():
+                out_path = captioned_dir / f"{clip_id}_captioned.mp4"
+                try:
+                    burner.burn_subtitles(clip_file, srt_path, out_path)
+                    print(f"  ✅ {out_path.name}")
+                except Exception as e:
+                    print(f"  ❌ {clip_id}: {e}")
+
+        print(f"\n✓ Captioned clips saved to {captioned_dir}\n")
 
     # =========================================================================
     # COPY ARTIFACTS TO OUTPUT
@@ -541,6 +665,9 @@ def run_arena_pipeline(
     print(f"   │   ├── *_*.mp4            ({successful} video clips)")
     print(f"   │   ├── *_*_thumb.jpg      (thumbnails)")
     print(f"   │   └── *_*_metadata.json  (metadata)")
+    if formatted_dir and formatted_count > 0:
+        print(f"   ├── formatted/")
+        print(f"   │   └── *_{platform}.mp4   ({formatted_count} formatted clips)")
     print(f"   ├── transcript.json        (word-level transcript)")
     print(f"   ├── analysis_results.json  (full analysis)")
     if enhanced_audio_path.exists():
@@ -658,10 +785,68 @@ Environment:
         default='gpt-4o',
         help='Model to use for Layers 1-2 (default: gpt-4o, mini saves ~60%% cost but may reduce quality)'
     )
+    parser.add_argument(
+        '-p', '--platform',
+        choices=['tiktok', 'instagram-reels', 'youtube-shorts', 'youtube', 'instagram-feed', 'twitter', 'linkedin'],
+        default=None,
+        help='Auto-format clips for platform after generation'
+    )
+    parser.add_argument(
+        '--crop',
+        default='center',
+        choices=['center', 'smart', 'top', 'bottom'],
+        help='Crop strategy for platform formatting (default: center)'
+    )
+    parser.add_argument(
+        '--pad',
+        default='blur',
+        choices=['blur', 'black', 'white', 'color'],
+        help='Pad strategy for platform formatting (default: blur)'
+    )
+    parser.add_argument(
+        '--pad-color',
+        default='#000000',
+        help='Padding color for platform formatting (default: #000000)'
+    )
+    parser.add_argument(
+        '--captions',
+        action='store_true',
+        help='Burn subtitle captions into generated clips'
+    )
+    parser.add_argument(
+        '--caption-font-size',
+        type=int,
+        default=None,
+        help='Caption font size (default: 24)'
+    )
+    parser.add_argument(
+        '--caption-color',
+        type=str,
+        default=None,
+        help='Caption text color: white, yellow, red, black (default: white)'
+    )
+    parser.add_argument(
+        '--caption-position',
+        type=str,
+        default=None,
+        choices=['bottom', 'top', 'middle'],
+        help='Caption position (default: bottom)'
+    )
 
     args = parser.parse_args()
 
     # Run pipeline
+    # Build caption style from args
+    caption_style = None
+    if args.captions:
+        caption_style = {}
+        if args.caption_font_size:
+            caption_style['font_size'] = args.caption_font_size
+        if args.caption_color:
+            caption_style['color'] = args.caption_color
+        if args.caption_position:
+            caption_style['position'] = args.caption_position
+
     sys.exit(run_arena_pipeline(
         video_path=args.video,
         output_dir=args.output,
@@ -673,7 +858,13 @@ Environment:
         padding=args.padding,
         use_4layer=args.use_4layer,
         export_editorial_layers=args.export_editorial_layers,
-        editorial_model=args.editorial_model
+        editorial_model=args.editorial_model,
+        platform=args.platform,
+        crop_strategy=args.crop,
+        pad_strategy=args.pad,
+        pad_color=args.pad_color,
+        captions=args.captions,
+        caption_style=caption_style
     ))
 
 

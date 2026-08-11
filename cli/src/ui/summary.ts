@@ -4,12 +4,14 @@
  */
 
 import chalk from 'chalk';
+import path from 'path';
 import {
   formatDuration,
   formatCost,
   formatPercentage,
-  formatList,
   formatDurationCompact,
+  formatTerminalLink,
+  formatBox,
 } from './formatters.js';
 
 export interface ClipSummary {
@@ -44,100 +46,135 @@ export interface ProcessingSummary {
  * Display processing summary
  */
 export function displayProcessingSummary(summary: ProcessingSummary): void {
-  const separator = chalk.gray('━'.repeat(60));
+  const absoluteOutputDir = path.resolve(summary.outputDir);
+  const linkedOutputDir = formatTerminalLink(`${summary.outputDir}/`, absoluteOutputDir);
 
-  console.log('\n' + separator);
-  console.log(chalk.green('✨ Success! ') + chalk.white(`Generated ${summary.clipsGenerated} professional clip${summary.clipsGenerated !== 1 ? 's' : ''}`));
-  console.log(separator);
+  // Success message
+  console.log(chalk.green('\n✓ Processing Complete!\n'));
 
-  // Main stats
-  console.log(chalk.cyan('\n📊 Summary:'));
-
-  const stats: string[] = [];
+  // 1. Gather stats for Summary Box
+  const summaryLines: string[] = [];
+  summaryLines.push(
+    `${chalk.bold(chalk.white('Video File:'))}  ${path.basename(summary.videoPath)}`
+  );
 
   if (summary.videoDuration) {
-    stats.push(`Video Duration: ${formatDuration(summary.videoDuration)}`);
+    summaryLines.push(
+      `${chalk.bold(chalk.white('Duration:'))}    ${formatDuration(summary.videoDuration)}`
+    );
   }
 
-  stats.push(`Clips Generated: ${summary.clipsGenerated}`);
-  stats.push(`Processing Time: ${formatDuration(summary.processingTime)}`);
+  summaryLines.push(
+    `${chalk.bold(chalk.white('Clips Net:'))}   ${summary.clipsGenerated} viral hook${summary.clipsGenerated !== 1 ? 's' : ''} generated`
+  );
+  summaryLines.push(
+    `${chalk.bold(chalk.white('Time Cost:'))}   ${formatDuration(summary.processingTime)}`
+  );
 
   if (summary.totalCost !== undefined) {
-    stats.push(`Total Cost: ${formatCost(summary.totalCost)}${summary.editorialModel ? ` (${summary.editorialModel})` : ''}`);
+    summaryLines.push(
+      `${chalk.bold(chalk.white('API Cost:'))}    ${formatCost(summary.totalCost)}${summary.editorialModel ? ` (${summary.editorialModel})` : ''}`
+    );
   }
 
   if (summary.passRate !== undefined && summary.use4Layer) {
-    stats.push(`Pass Rate: ${formatPercentage(summary.passRate)} (strict quality gate)`);
+    summaryLines.push(
+      `${chalk.bold(chalk.white('Pass Rate:'))}   ${formatPercentage(summary.passRate)} (strict quality gate)`
+    );
   }
 
-  console.log(formatList(stats));
+  summaryLines.push(
+    `${chalk.bold(chalk.white('Output Dir:'))}  ${chalk.cyan(linkedOutputDir)} ${chalk.gray('(Ctrl/Cmd + Click to Open Folder)')}`
+  );
 
-  // 4-Layer stats (if available)
+  console.log(formatBox('📊 RUN SUMMARY', summaryLines));
+  console.log('');
+
+  // 2. 4-Layer stats (if available)
   if (summary.use4Layer && summary.layerStats) {
-    console.log(chalk.cyan('\n🧠 4-Layer Editorial System:'));
-    const layerStats: string[] = [];
-
+    const layerLines: string[] = [];
     if (summary.layerStats.layer1Moments) {
-      layerStats.push(`Layer 1: Found ${summary.layerStats.layer1Moments} candidate moments`);
+      layerLines.push(`Layer 1: Found ${summary.layerStats.layer1Moments} candidate moments`);
     }
     if (summary.layerStats.layer2Boundaries) {
-      layerStats.push(`Layer 2: Analyzed ${summary.layerStats.layer2Boundaries} boundaries`);
+      layerLines.push(`Layer 2: Analyzed ${summary.layerStats.layer2Boundaries} boundaries`);
     }
     if (summary.layerStats.layer3Validated) {
-      layerStats.push(`Layer 3: Validated ${summary.layerStats.layer3Validated} standalone thoughts`);
+      layerLines.push(
+        `Layer 3: Validated ${summary.layerStats.layer3Validated} standalone thoughts`
+      );
     }
     if (summary.layerStats.layer4Packaged) {
-      layerStats.push(`Layer 4: Packaged ${summary.layerStats.layer4Packaged} professional clips`);
+      layerLines.push(`Layer 4: Packaged ${summary.layerStats.layer4Packaged} professional clips`);
     }
-
-    console.log(formatList(layerStats));
+    console.log(formatBox('🧠 4-LAYER EDITORIAL SYSTEM', layerLines));
+    console.log('');
   }
 
-  // Output location
-  console.log(chalk.cyan('\n📁 Output:'));
-  console.log(chalk.white(`  ${summary.outputDir}/`));
-
-  // Clip details
+  // 3. Clip details
   if (summary.clips && summary.clips.length > 0) {
-    console.log(chalk.cyan('\n✂️  Clips:'));
+    const clipsLines: string[] = [];
+
     summary.clips.forEach((clip, index) => {
       const number = chalk.gray(`${index + 1}.`);
-      const title = chalk.white(clip.title);
-      const duration = chalk.gray(`(${formatDurationCompact(clip.duration)})`);
-      const timeRange = chalk.gray(`[${formatDurationCompact(clip.startTime)} - ${formatDurationCompact(clip.endTime)}]`);
 
-      let line = `  ${number} ${title} ${duration} ${timeRange}`;
+      // Resolve click-to-play absolute video clip path
+      const filename = clip.title.toLowerCase().endsWith('.mp4') ? clip.title : `${clip.title}.mp4`;
+      const absoluteClipPath = path.resolve(summary.outputDir, 'clips', filename);
+      const linkedClipTitle = formatTerminalLink(filename, absoluteClipPath);
+
+      const durationStr = chalk.gray(`(${formatDurationCompact(clip.duration)})`);
+      const timeRange = chalk.gray(
+        `[${formatDurationCompact(clip.startTime)} - ${formatDurationCompact(clip.endTime)}]`
+      );
+
+      let line = `  ${number} ${chalk.cyan(linkedClipTitle)} ${durationStr} ${timeRange}`;
 
       if (clip.interestScore !== undefined) {
         const score = chalk.yellow(`★ ${(clip.interestScore * 100).toFixed(0)}%`);
-        line += ` ${score}`;
+        // Simple visual waveform representing the relative score level
+        let wave = '▃▅▆▇█▆▅▃';
+        if (clip.interestScore < 0.8) {
+          wave = '▃▅▅▃    ';
+        } else if (clip.interestScore < 0.9) {
+          wave = '▃▅▆▆▅▃  ';
+        }
+        line += ` ${score} ${chalk.gray(wave)}`;
       }
 
-      console.log(line);
+      clipsLines.push(line);
     });
+
+    clipsLines.push('');
+    clipsLines.push(
+      `  ${chalk.gray('* Ctrl/Cmd + Click on any clip filename above to play it directly!')}`
+    );
+
+    console.log(formatBox('✂️  GENERATED HIGHLIGHTS', clipsLines));
+    console.log('');
   }
 
-  // Next steps / tips
-  console.log(chalk.cyan('\n💡 Next steps:'));
+  // 4. Next steps / tips
   const tips: string[] = [
-    `Review clips: ${chalk.white(`ls ${summary.outputDir}/`)}`,
+    `${chalk.white('Review clips locally:')}       ${chalk.cyan(`ls ${summary.outputDir}/`)}`,
   ];
 
   if (summary.use4Layer && summary.editorialModel === 'gpt-4o') {
-    tips.push(`Try cost-optimized: ${chalk.white('--editorial-model gpt-4o-mini')}`);
+    tips.push(
+      `${chalk.white('Try cost-optimized:')}   ${chalk.cyan('--editorial-model gpt-4o-mini')}`
+    );
   }
 
   if (summary.use4Layer) {
-    tips.push(`Debug layers: ${chalk.white('--export-layers')}`);
+    tips.push(`${chalk.white('Debug layers:')}         ${chalk.cyan('--export-layers')}`);
   } else {
-    tips.push(`Try 4-layer system: ${chalk.white('--use-4layer')}`);
+    tips.push(`${chalk.white('Try 4-layer system:')}   ${chalk.cyan('--use-4layer')}`);
   }
 
-  tips.push(`Adjust duration: ${chalk.white('--min 20 --max 60')}`);
+  tips.push(`${chalk.white('Adjust duration:')}       ${chalk.cyan('--min 20 --max 60')}`);
 
-  console.log(formatList(tips));
-
-  console.log('\n' + separator + '\n');
+  console.log(formatBox('💡 RECOMMENDED NEXT STEPS', tips));
+  console.log('');
 }
 
 /**
@@ -152,13 +189,7 @@ export function displayAnalysisSummary(data: {
   processingTime: number;
   outputFile?: string;
 }): void {
-  const separator = chalk.gray('━'.repeat(60));
-
-  console.log('\n' + separator);
-  console.log(chalk.green('✨ Analysis complete!'));
-  console.log(separator);
-
-  console.log(chalk.cyan('\n📊 Video Analysis:'));
+  console.log(chalk.green('\n✓ Analysis complete!\n'));
 
   const stats: string[] = [
     `Video: ${data.videoPath}`,
@@ -173,17 +204,22 @@ export function displayAnalysisSummary(data: {
   stats.push(`Estimated Clips: ${data.estimatedClips}`);
   stats.push(`Processing Time: ${formatDuration(data.processingTime)}`);
 
-  console.log(formatList(stats));
+  console.log(formatBox('📊 VIDEO ANALYSIS', stats));
+  console.log('');
 
   if (data.outputFile) {
-    console.log(chalk.cyan('\n📁 Output:'));
-    console.log(chalk.white(`  ${data.outputFile}`));
+    const absoluteOutputFile = path.resolve(data.outputFile);
+    const linkedOutputFile = formatTerminalLink(data.outputFile, absoluteOutputFile);
+    console.log(formatBox('📁 OUTPUT FILE', [`File Location: ${chalk.cyan(linkedOutputFile)}`]));
+    console.log('');
   }
 
-  console.log(chalk.cyan('\n💡 Next step:'));
-  console.log(chalk.white(`  Generate clips: arena generate ${data.videoPath} ${data.outputFile || 'analysis.json'}`));
-
-  console.log('\n' + separator + '\n');
+  console.log(
+    formatBox('💡 NEXT STEP', [
+      `Generate clips: ${chalk.cyan(`arena generate ${data.videoPath} ${data.outputFile || 'analysis.json'}`)}`,
+    ])
+  );
+  console.log('');
 }
 
 /**
@@ -197,13 +233,7 @@ export function displayTranscriptionSummary(data: {
   processingTime: number;
   cost?: number;
 }): void {
-  const separator = chalk.gray('━'.repeat(60));
-
-  console.log('\n' + separator);
-  console.log(chalk.green('✨ Transcription complete!'));
-  console.log(separator);
-
-  console.log(chalk.cyan('\n📝 Transcript:'));
+  console.log(chalk.green('\n✓ Transcription complete!\n'));
 
   const stats: string[] = [
     `Video: ${data.videoPath}`,
@@ -216,35 +246,35 @@ export function displayTranscriptionSummary(data: {
     stats.push(`Cost: ${formatCost(data.cost)}`);
   }
 
-  console.log(formatList(stats));
+  console.log(formatBox('📝 TRANSCRIPT STATS', stats));
+  console.log('');
 
-  console.log(chalk.cyan('\n📁 Output:'));
-  console.log(chalk.white(`  ${data.outputFile}`));
+  const absoluteOutputFile = path.resolve(data.outputFile);
+  const linkedOutputFile = formatTerminalLink(data.outputFile, absoluteOutputFile);
+  console.log(formatBox('📁 OUTPUT FILE', [`File Location: ${chalk.cyan(linkedOutputFile)}`]));
+  console.log('');
 
-  console.log(chalk.cyan('\n💡 Next step:'));
-  console.log(chalk.white(`  Analyze: arena analyze ${data.videoPath} -t ${data.outputFile}`));
-
-  console.log('\n' + separator + '\n');
+  console.log(
+    formatBox('💡 NEXT STEP', [
+      `Analyze: ${chalk.cyan(`arena analyze ${data.videoPath} -t ${data.outputFile}`)}`,
+    ])
+  );
+  console.log('');
 }
 
 /**
  * Display error summary with suggestions
  */
 export function displayErrorSummary(message: string, suggestions: string[]): void {
-  const separator = chalk.gray('━'.repeat(60));
+  console.log(chalk.red('\n✗ Processing Failed!\n'));
 
-  console.log('\n' + separator);
-  console.log(chalk.red('✗ Processing failed'));
-  console.log(separator);
-
-  console.log(chalk.white(`\n  ${message}\n`));
+  console.log(formatBox('⚠️  ERROR DETAILS', [chalk.white(message)]));
+  console.log('');
 
   if (suggestions.length > 0) {
-    console.log(chalk.cyan('💡 Suggestions:'));
-    console.log(formatList(suggestions));
+    console.log(formatBox('💡 SUGGESTED REMEDIES', suggestions));
+    console.log('');
   }
-
-  console.log('\n' + separator + '\n');
 }
 
 /**

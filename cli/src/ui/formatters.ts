@@ -152,8 +152,58 @@ export function formatClipTitle(slug: string): string {
 /**
  * Format rate (items per second/minute)
  */
-export function formatRate(count: number, seconds: number, unit: 'second' | 'minute' = 'second'): string {
+export function formatRate(
+  count: number,
+  seconds: number,
+  unit: 'second' | 'minute' = 'second'
+): string {
   const divisor = unit === 'minute' ? 60 : 1;
   const rate = count / (seconds / divisor);
   return `${rate.toFixed(1)}/${unit === 'minute' ? 'min' : 's'}`;
+}
+
+/**
+ * Format string as a native clickable terminal hyperlink
+ */
+export function formatTerminalLink(text: string, absolutePath: string): string {
+  return `\u001b]8;;file://${absolutePath}\u0007${text}\u001b]8;;\u0007`;
+}
+
+/**
+ * Format list of strings into a beautiful unicode boxed border grid
+ */
+export function formatBox(title: string, lines: string[]): string {
+  const borderChar = '─';
+  const boxGray = '\u001b[90m';
+  const boxWhite = '\u001b[37m';
+  const boxBold = '\u001b[1m';
+  const boxReset = '\u001b[0m';
+
+  // Calculate clean text lengths omitting ANSI escape sequences and links
+  const cleanLen = (str: string) => {
+    // eslint-disable-next-line no-control-regex
+    const ansiEscape = /\x1b\[[0-9;]*m/g;
+    // eslint-disable-next-line no-control-regex
+    const oscLink = /\x1b\]8;;.*?\x07|\x1b\]8;;\x07/g;
+    return str.replace(ansiEscape, '').replace(oscLink, '').length;
+  };
+
+  const width = Math.max(...lines.map((l) => cleanLen(l))) + 4;
+  const result: string[] = [];
+
+  // Top border
+  const titleHeader = ` ${boxBold}${boxWhite}${title}${boxReset} `;
+  const topBarLength = width - cleanLen(titleHeader) - 2;
+  result.push(`${boxGray}┌─${titleHeader}${borderChar.repeat(topBarLength)}┐${boxReset}`);
+
+  // Inner lines
+  lines.forEach((line) => {
+    const padding = ' '.repeat(width - cleanLen(line) - 2);
+    result.push(`${boxGray}│${boxReset} ${line}${padding}${boxGray}│${boxReset}`);
+  });
+
+  // Bottom border
+  result.push(`${boxGray}└${borderChar.repeat(width - 2)}┘${boxReset}`);
+
+  return result.join('\n');
 }

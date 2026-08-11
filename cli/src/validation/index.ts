@@ -7,11 +7,17 @@ import fs from 'fs-extra';
 import path from 'path';
 import { spawn } from 'child_process';
 import { PreflightError } from '../errors/index.js';
+import { isUrl } from '../utils/url.js';
 
 /**
- * Validate video file exists and is readable
+ * Validate video/audio file exists and is readable, or is a URL
  */
 export async function validateVideoFile(videoPath: string): Promise<void> {
+  // URLs are validated by yt-dlp on the Python side
+  if (isUrl(videoPath)) {
+    return;
+  }
+
   const absolutePath = path.resolve(videoPath);
 
   // Check if file exists
@@ -44,14 +50,16 @@ export async function validateVideoFile(videoPath: string): Promise<void> {
     );
   }
 
-  // Basic video format validation (by extension)
-  const validExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.m4v'];
+  // Format validation (by extension)
+  const validVideoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.m4v'];
+  const validAudioExtensions = ['.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma', '.opus'];
+  const validExtensions = [...validVideoExtensions, ...validAudioExtensions];
   const ext = path.extname(absolutePath).toLowerCase();
 
   if (!validExtensions.includes(ext)) {
     throw new PreflightError(
-      'INVALID_VIDEO_FORMAT',
-      `Unsupported video format: ${ext}`,
+      'INVALID_MEDIA_FORMAT',
+      `Unsupported media format: ${ext}`,
       `Supported formats: ${validExtensions.join(', ')}`
     );
   }

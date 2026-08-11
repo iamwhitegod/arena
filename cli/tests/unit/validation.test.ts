@@ -66,7 +66,7 @@ describe('Validation Module', () => {
         expect.fail('Should have thrown PreflightError');
       } catch (error) {
         expect(error).toBeInstanceOf(PreflightError);
-        expect((error as PreflightError).code).toBe('INVALID_VIDEO_FORMAT');
+        expect((error as PreflightError).code).toBe('INVALID_MEDIA_FORMAT');
       }
     });
 

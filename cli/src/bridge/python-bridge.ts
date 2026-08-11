@@ -2,6 +2,8 @@ import { spawn, ChildProcess } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import chalk from 'chalk';
+import fs from 'fs-extra';
+import os from 'os';
 import { ProcessingError, SystemError } from '../errors/index.js';
 
 export interface ProcessOptions {
@@ -17,6 +19,14 @@ export interface ProcessOptions {
   noCache?: boolean;
   padding?: number;
   sceneDetection?: boolean;
+  platform?: string;
+  cropStrategy?: string;
+  padStrategy?: string;
+  padColor?: string;
+  captions?: boolean;
+  captionFontSize?: number;
+  captionColor?: string;
+  captionPosition?: string;
 }
 
 export interface AnalyzeOptions {
@@ -64,6 +74,10 @@ export interface FormatOptions {
   padStrategy?: 'blur' | 'black' | 'white' | 'color';
   padColor?: string;
   maintainQuality?: boolean;
+  captions?: string;
+  captionFontSize?: number;
+  captionColor?: string;
+  captionPosition?: string;
 }
 
 export interface DetectScenesOptions {
@@ -97,10 +111,63 @@ export class PythonBridge {
   }
 
   /**
+   * Helper to ensure all packaged dependencies (arena-engine sidecar, ffmpeg, ffprobe)
+   * are extracted to user's home directory.
+   */
+  private ensureBinariesExtracted(): string {
+    const targetBinDir = path.join(os.homedir(), '.arena', 'bin');
+    fs.ensureDirSync(targetBinDir);
+
+    const binaries = [
+      process.platform === 'win32' ? 'arena-engine.exe' : 'arena-engine',
+      process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg',
+      process.platform === 'win32' ? 'ffprobe.exe' : 'ffprobe',
+    ];
+
+    // __dirname is dist/bridge/ inside package or workspace
+    // So relative from bridge to bin folder inside dist is ../bin
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+
+    for (const binName of binaries) {
+      const targetPath = path.join(targetBinDir, binName);
+      const sourcePath = path.join(__dirname, '../bin', binName);
+
+      if (!fs.existsSync(targetPath)) {
+        if (fs.existsSync(sourcePath)) {
+          console.log(chalk.cyan(`📦 Extracting bundled dependency: ${binName}...`));
+          try {
+            fs.copySync(sourcePath, targetPath);
+            fs.chmodSync(targetPath, 0o755);
+          } catch (err: any) {
+            console.error(chalk.red(`❌ Failed to extract ${binName}: ${err.message}`));
+          }
+        }
+      }
+    }
+
+    return targetBinDir;
+  }
+
+  /**
    * Get the command and args to run arena-cli
    * On Windows, explicitly use python. On Unix, use the script directly.
    */
   private getArenaCommand(subcommand: string, args: string[]): { command: string; args: string[] } {
+    const isPackaged = typeof (process as any).pkg !== 'undefined';
+
+    if (isPackaged) {
+      const targetBinDir = this.ensureBinariesExtracted();
+      const targetEnginePath = path.join(
+        targetBinDir,
+        process.platform === 'win32' ? 'arena-engine.exe' : 'arena-engine'
+      );
+      return {
+        command: targetEnginePath,
+        args: [subcommand, ...args],
+      };
+    }
+
     const arenaCliPath = path.join(this.enginePath, 'arena-cli');
 
     if (process.platform === 'win32') {
@@ -122,6 +189,10 @@ export class PythonBridge {
    * Get the engine path for external use
    */
   getEnginePath(): string {
+    const isPackaged = typeof (process as any).pkg !== 'undefined';
+    if (isPackaged) {
+      return path.join(os.homedir(), '.arena', 'bin');
+    }
     return this.enginePath;
   }
 
@@ -201,6 +272,30 @@ export class PythonBridge {
       }
       if (options.sceneDetection) {
         cmdArgs.push('--scene-detection');
+      }
+      if (options.platform) {
+        cmdArgs.push('--platform', options.platform);
+      }
+      if (options.cropStrategy) {
+        cmdArgs.push('--crop', options.cropStrategy);
+      }
+      if (options.padStrategy) {
+        cmdArgs.push('--pad', options.padStrategy);
+      }
+      if (options.padColor) {
+        cmdArgs.push('--pad-color', options.padColor);
+      }
+      if (options.captions) {
+        cmdArgs.push('--captions');
+      }
+      if (options.captionFontSize) {
+        cmdArgs.push('--caption-font-size', options.captionFontSize.toString());
+      }
+      if (options.captionColor) {
+        cmdArgs.push('--caption-color', options.captionColor);
+      }
+      if (options.captionPosition) {
+        cmdArgs.push('--caption-position', options.captionPosition);
       }
 
       const { command, args } = this.getArenaCommand('process', cmdArgs);
@@ -312,13 +407,7 @@ export class PythonBridge {
         return;
       }
 
-      const cmdArgs = [
-        options.videoPath,
-        '-o',
-        options.outputFile,
-        '--format',
-        options.format,
-      ];
+      const cmdArgs = [options.videoPath, '-o', options.outputFile, '--format', options.format];
 
       if (options.bitrate) {
         cmdArgs.push('--bitrate', options.bitrate);
@@ -346,10 +435,22 @@ export class PythonBridge {
     onProgress?: (update: ProgressUpdate) => void,
     onError?: (error: string) => void
   ): void {
+    const isPackaged = typeof (process as any).pkg !== 'undefined';
+    const binDir = path.join(os.homedir(), '.arena', 'bin');
+    const separator = process.platform === 'win32' ? ';' : ':';
+
+    // Prepend ~/.arena/bin to system path so compiled engine can find bundled FFmpeg/FFprobe
+    const updatedPath = isPackaged
+      ? `${binDir}${separator}${process.env.PATH || ''}`
+      : process.env.PATH || '';
+
     // Windows-specific spawn options to avoid job object errors
     const spawnOptions: any = {
-      cwd: this.enginePath,
-      env: { ...process.env },
+      cwd: isPackaged ? binDir : this.enginePath,
+      env: {
+        ...process.env,
+        ...(isPackaged ? { PATH: updatedPath } : {}),
+      },
     };
 
     // Fix for Windows "AssignProcessToJobObject" error
@@ -491,8 +592,10 @@ export class PythonBridge {
     return new Promise((resolve, reject) => {
       const cmdArgs = [
         options.inputPath,
-        '--output', options.outputDir,
-        '--platform', options.platform,
+        '--output',
+        options.outputDir,
+        '--platform',
+        options.platform,
       ];
 
       if (options.cropStrategy) {
@@ -509,6 +612,19 @@ export class PythonBridge {
 
       if (options.maintainQuality === false) {
         cmdArgs.push('--no-quality');
+      }
+
+      if (options.captions) {
+        cmdArgs.push('--captions', options.captions);
+      }
+      if (options.captionFontSize) {
+        cmdArgs.push('--caption-font-size', options.captionFontSize.toString());
+      }
+      if (options.captionColor) {
+        cmdArgs.push('--caption-color', options.captionColor);
+      }
+      if (options.captionPosition) {
+        cmdArgs.push('--caption-position', options.captionPosition);
       }
 
       const { command, args } = this.getArenaCommand('format', cmdArgs);
@@ -544,7 +660,16 @@ export class PythonBridge {
     });
   }
 
-  async checkPythonEnvironment(): Promise<{ available: boolean; version?: string; error?: string }> {
+  async checkPythonEnvironment(): Promise<{
+    available: boolean;
+    version?: string;
+    error?: string;
+  }> {
+    const isPackaged = typeof (process as any).pkg !== 'undefined';
+    if (isPackaged) {
+      return { available: true, version: 'Bundled Python Engine (PyInstaller)' };
+    }
+
     return new Promise((resolve) => {
       // Use python on Windows, python3 on Unix
       const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
@@ -591,6 +716,11 @@ export class PythonBridge {
   }
 
   async checkDependencies(): Promise<{ installed: boolean; missing?: string[] }> {
+    const isPackaged = typeof (process as any).pkg !== 'undefined';
+    if (isPackaged) {
+      return { installed: true };
+    }
+
     return new Promise((resolve) => {
       // Use python on Windows, python3 on Unix
       const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';

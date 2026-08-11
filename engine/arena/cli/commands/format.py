@@ -1,7 +1,13 @@
 """Platform formatting command for Arena CLI"""
 import argparse
+import json
 from pathlib import Path
 from arena.export.platform_formatter import PlatformFormatter
+
+
+def _emit_result(data):
+    """Emit a JSON result line for the TypeScript bridge to parse."""
+    print(json.dumps({"type": "result", "data": data}), flush=True)
 
 
 def setup_format_command(subparsers):
@@ -69,6 +75,31 @@ def setup_format_command(subparsers):
         action='store_true',
         help='Disable high quality encoding (faster, smaller files)'
     )
+    parser.add_argument(
+        '--captions',
+        type=str,
+        default=None,
+        help='Path to SRT subtitle file to burn into clips'
+    )
+    parser.add_argument(
+        '--caption-font-size',
+        type=int,
+        default=None,
+        help='Caption font size (default: 24)'
+    )
+    parser.add_argument(
+        '--caption-color',
+        type=str,
+        default=None,
+        help='Caption text color: white, yellow, red, black (default: white)'
+    )
+    parser.add_argument(
+        '--caption-position',
+        type=str,
+        default=None,
+        choices=['bottom', 'top', 'middle'],
+        help='Caption position (default: bottom)'
+    )
 
     parser.set_defaults(func=run_format)
 
@@ -84,6 +115,7 @@ def run_format(args):
     # Validate input
     if not input_path.exists():
         print(f"❌ Error: Input not found: {input_path}")
+        _emit_result({"success": False, "error": f"Input not found: {input_path}"})
         return 1
 
     # Initialize formatter
@@ -121,6 +153,21 @@ def run_format(args):
         output_filename = f"{stem}_{args.platform}.mp4"
         output_path = output_dir / output_filename
 
+        # Build caption style if provided
+        caption_style = None
+        subtitle_path = None
+        if args.captions:
+            subtitle_path = Path(args.captions)
+            if not subtitle_path.exists():
+                subtitle_path = None
+            caption_style = {}
+            if args.caption_font_size:
+                caption_style['font_size'] = args.caption_font_size
+            if args.caption_color:
+                caption_style['color'] = args.caption_color
+            if args.caption_position:
+                caption_style['position'] = args.caption_position
+
         result = formatter.format_for_platform(
             input_path,
             output_path,
@@ -128,7 +175,9 @@ def run_format(args):
             crop_strategy=args.crop,
             pad_strategy=args.pad,
             pad_color=args.pad_color,
-            maintain_quality=not args.no_quality
+            maintain_quality=not args.no_quality,
+            subtitle_path=subtitle_path,
+            subtitle_style=caption_style
         )
 
         if result['success']:
@@ -140,8 +189,16 @@ def run_format(args):
                 print(f"\n⚠️  Warnings:")
                 for warning in result['warnings']:
                     print(f"   • {warning}")
+
+            _emit_result({
+                "success": True,
+                "clipCount": 1,
+                "outputDir": str(output_dir),
+                "warnings": result.get('warnings', [])
+            })
         else:
             print(f"\n❌ Failed: {result.get('error', 'Unknown error')}")
+            _emit_result({"success": False, "error": result.get('error', 'Unknown error')})
             return 1
 
     elif input_path.is_dir():
@@ -152,6 +209,7 @@ def run_format(args):
         video_files = list(input_path.glob('*.mp4'))
         if not video_files:
             print(f"❌ Error: No MP4 files found in {input_path}")
+            _emit_result({"success": False, "error": f"No MP4 files found in {input_path}"})
             return 1
 
         print(f"Found {len(video_files)} clip(s)")
@@ -172,7 +230,8 @@ def run_format(args):
             args.platform,
             crop_strategy=args.crop,
             pad_strategy=args.pad,
-            progress_callback=progress_callback
+            progress_callback=progress_callback,
+            subtitle_style=caption_style
         )
 
         # Summary
@@ -192,8 +251,16 @@ def run_format(args):
             for warning in set(all_warnings):  # Deduplicate
                 print(f"   • {warning}")
 
+        _emit_result({
+            "success": successful > 0,
+            "clipCount": successful,
+            "outputDir": str(output_dir),
+            "warnings": list(set(all_warnings))
+        })
+
     else:
         print(f"❌ Error: Invalid input path: {input_path}")
+        _emit_result({"success": False, "error": f"Invalid input path: {input_path}"})
         return 1
 
     print("\n" + "=" * 70)

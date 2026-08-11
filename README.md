@@ -2,9 +2,10 @@
 
 > AI-powered video clip generation for the terminal - Turn long-form content into viral clips
 
+[![npm](https://img.shields.io/npm/v/@whitegodkingsley/arena-cli)](https://www.npmjs.com/package/@whitegodkingsley/arena-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Arena is a professional video clip generation tool that uses AI to automatically identify and extract the best moments from your long-form content. Perfect for content creators, podcasters, course producers, and anyone who wants to repurpose their content for social media.
+Arena is a professional video clip generation tool that uses AI to automatically identify and extract the best moments from your long-form content. Works with local files, audio files, and URLs (YouTube, Vimeo, Twitter, and 1000+ sites). Perfect for content creators, podcasters, course producers, and anyone who wants to repurpose their content for social media.
 
 ## ✨ Features
 
@@ -15,12 +16,24 @@ Professional-grade clip generation with quality validation:
 - **Layer 3:** Validate standalone context (strict quality gate)
 - **Layer 4:** Package with titles, descriptions, and hashtags
 
+### 🌐 **URL & Audio Support**
+Process content from anywhere:
+- YouTube, Vimeo, Twitter/X, TikTok, and 1000+ sites via `yt-dlp`
+- All audio formats: MP3, WAV, FLAC, AAC, OGG, M4A, WMA, Opus
+- Cached downloads — same URL won't re-download
+
 ### 📐 **Multi-Platform Formatting**
 Convert clips for any social media platform with optimal specs:
 - TikTok, Instagram Reels, YouTube Shorts (9:16 vertical)
 - YouTube, LinkedIn (16:9 horizontal)
 - Instagram Feed (1:1 square)
 - Smart cropping and blur background padding
+
+### 📝 **Captions**
+Burn subtitles into clips from the Whisper transcript:
+- Traditional subtitle style with configurable font, color, and position
+- Platform-aware safe zones (avoids TikTok/Reels UI overlap)
+- Integrated into the formatting pipeline (single FFmpeg pass)
 
 ### 🎬 **Hybrid AI + Energy Analysis**
 - AI content analysis finds engaging narratives
@@ -74,14 +87,20 @@ This wizard helps you configure:
 ### Process Your First Video
 
 ```bash
-# All-in-one: Generate professional clips
-arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini -n 5
+# From a local file
+arena process video.mp4 --use-4layer -n 5
+
+# From a YouTube URL
+arena process https://www.youtube.com/watch?v=VIDEO_ID -n 5
+
+# Transcribe audio (any format)
+arena transcribe podcast.mp3
+
+# With captions burned in
+arena process video.mp4 --captions -p tiktok
 
 # Format for TikTok
 arena format output/clips/ -p tiktok -o tiktok/
-
-# Format for Instagram Reels
-arena format output/clips/ -p instagram-reels -o reels/
 ```
 
 ## 📚 Commands
@@ -99,6 +118,8 @@ Arena provides 9 commands for flexible video clip generation workflows:
 | `arena detect-scenes` | Detect scene changes | `arena detect-scenes video.mp4` |
 | `arena config` | Manage configuration | `arena config set openai_api_key "sk-..."` |
 | `arena extract-audio` | Extract audio from video | `arena extract-audio video.mp4` |
+
+All commands that accept a video file also accept audio files and URLs.
 
 See [docs/guides/USAGE.md](./docs/guides/USAGE.md) for comprehensive documentation.
 
@@ -130,8 +151,8 @@ arena generate video.mp4 moments.json --select 1,3,5,7
 ### Workflow 3: Multi-Platform Distribution
 
 ```bash
-# Step 1: Generate high-quality clips
-arena process video.mp4 --use-4layer -n 5
+# Step 1: Generate high-quality clips with captions
+arena process video.mp4 --use-4layer -n 5 --captions
 
 # Step 2: Format for each platform
 arena format output/clips/ -p tiktok -o social/tiktok/
@@ -140,7 +161,22 @@ arena format output/clips/ -p youtube-shorts -o social/shorts/
 arena format output/clips/ -p youtube -o social/youtube/
 ```
 
-**Result:** 1 video → 5 clips → 4 platforms = 20 optimized videos!
+**Result:** 1 video → 5 captioned clips → 4 platforms = 20 optimized videos!
+
+### Workflow 4: Process from URL
+
+```bash
+# Transcribe a YouTube video
+arena transcribe https://www.youtube.com/watch?v=VIDEO_ID -o transcript.json
+
+# Generate clips from a YouTube video
+arena process https://www.youtube.com/watch?v=VIDEO_ID -n 5 --captions -p tiktok
+
+# Works with any yt-dlp supported site (YouTube, Vimeo, Twitter, TikTok, etc.)
+arena transcribe https://vimeo.com/123456789
+```
+
+**Note:** Requires `yt-dlp` (`pip install yt-dlp` or `brew install yt-dlp`). Downloads are cached.
 
 ## 📊 4-Layer Editorial System
 
@@ -240,12 +276,13 @@ Arena uses a hybrid TypeScript + Python architecture:
 - **Python 3.9+** (for video processing engine)
 - **FFmpeg** (for video encoding)
 - **OpenAI API Key** (for AI analysis)
+- **yt-dlp** (optional, for URL support: `pip install yt-dlp`)
 
 ### Install Node CLI
 
 ```bash
-# Option 1: Install from npm (when published)
-npm install -g @arena/cli
+# Option 1: Install from npm
+npm install -g @whitegodkingsley/arena-cli
 
 # Option 2: Install from source
 git clone https://github.com/iamwhitegod/arena.git
@@ -325,46 +362,54 @@ Typical costs per 10-minute video:
 ### Content Creator Pipeline
 
 ```bash
-# Generate short-form clips for social media
+# Generate captioned short-form clips for social media
 arena process video.mp4 \
   --use-4layer \
   --editorial-model gpt-4o-mini \
   -n 3 \
   --min 15 \
-  --max 30
-
-# Format for TikTok
-arena format output/clips/ -p tiktok --crop smart -o social/tiktok/
+  --max 30 \
+  --captions \
+  -p tiktok
 ```
 
 ### Podcast Highlights
 
 ```bash
-# Extract 8 longer clips from podcast
-arena process podcast.mp4 \
+# From a YouTube podcast URL — extract 8 clips
+arena process https://www.youtube.com/watch?v=PODCAST_ID \
   --use-4layer \
-  --editorial-model gpt-4o-mini \
   -n 8 \
   --min 60 \
-  --max 120
+  --max 120 \
+  --captions
 
 # Format for YouTube and LinkedIn
 arena format output/clips/ -p youtube -o social/youtube/
 arena format output/clips/ -p linkedin -o social/linkedin/
 ```
 
+### Transcribe a Podcast Audio
+
+```bash
+# Transcribe an MP3, WAV, FLAC, or any audio format
+arena transcribe podcast.mp3 -o transcript.json
+
+# Transcribe from URL
+arena transcribe https://www.youtube.com/watch?v=VIDEO_ID
+```
+
 ### Course Creator
 
 ```bash
-# Extract educational snippets
+# Extract educational snippets with captions
 arena process lecture.mp4 \
   --use-4layer \
   -n 8 \
   --min 45 \
-  --max 90
-
-# Format for YouTube (keep horizontal)
-arena format output/clips/ -p youtube -o youtube/
+  --max 90 \
+  --captions \
+  --caption-color yellow
 ```
 
 ## 📖 Documentation
@@ -373,6 +418,20 @@ arena format output/clips/ -p youtube -o youtube/
 - [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) - Common issues and solutions
 - [CONTRIBUTING.md](./docs/CONTRIBUTING.md) - Contribution guidelines
 - [EDITORIAL_ARCHITECTURE.md](./docs/architecture/EDITORIAL_ARCHITECTURE.md) - 4-layer system details
+
+## 🐳 Docker
+
+```bash
+# Build the image
+docker compose build
+
+# Run with Docker
+docker compose run arena process video.mp4 -n 5
+
+# Or pull from Docker Hub
+docker pull whitegodkingsley/arena:latest
+docker run -v $(pwd):/workspace -e OPENAI_API_KEY whitegodkingsley/arena process video.mp4
+```
 
 ## 🛠️ Development
 
@@ -444,7 +503,7 @@ See [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) for more solutions.
 
 ## 🚀 Roadmap
 
-**Current (v0.1.0):**
+**Current (v0.3):**
 - ✅ 9-command CLI
 - ✅ 4-layer editorial system
 - ✅ Multi-platform formatting
@@ -452,10 +511,14 @@ See [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) for more solutions.
 - ✅ Scene change detection
 - ✅ Automatic rate limit handling
 - ✅ Cost optimization with gpt-4o-mini
+- ✅ Caption/subtitle burning
+- ✅ URL support (YouTube, Vimeo, Twitter, 1000+ sites)
+- ✅ Audio file transcription (MP3, WAV, FLAC, etc.)
+- ✅ Docker support
 
 **Coming Soon:**
 - [ ] Interactive clip review TUI
-- [ ] Subtitle burning with custom styles
+- [ ] Word-by-word animated captions (TikTok style)
 - [ ] Cloud processing option
 - [ ] Web dashboard
 - [ ] Plugin system

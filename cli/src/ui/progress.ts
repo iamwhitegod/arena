@@ -189,25 +189,30 @@ export class ProgressTracker {
 
     stageList.forEach((stage, index) => {
       const stageNumber = `[${index + 1}/${stageList.length}]`;
-      const icon = this.getStageIcon(stage);
-      const stageName = `${icon} ${stage.name}`;
 
       if (stage.status === 'pending') {
-        lines.push(chalk.gray(`${stageNumber} ${stageName} - Pending`));
+        lines.push(chalk.gray(`${stageNumber} ⏳ ${stage.name} - Pending`));
       } else if (stage.status === 'in_progress') {
         const progress = stage.progress || 0;
-        const bar = formatProgressBar(progress / 100, 10);
+        const bar = formatProgressBar(progress / 100, 16);
         const message = stage.message ? chalk.gray(` - ${stage.message}`) : '';
-        lines.push(`${chalk.cyan(stageNumber)} ${chalk.white(stageName)}\n  ${bar}${message}`);
+        lines.push(
+          `${chalk.cyan(stageNumber)} ${chalk.bold(chalk.white(stage.name))}\n     ${chalk.cyan(bar)}${message}`
+        );
       } else if (stage.status === 'completed') {
-        const elapsed = stage.endTime && stage.startTime
-          ? formatDuration((stage.endTime - stage.startTime) / 1000)
-          : '';
+        const elapsed =
+          stage.endTime && stage.startTime
+            ? formatDuration((stage.endTime - stage.startTime) / 1000)
+            : '';
         const message = stage.message || 'Complete';
-        lines.push(chalk.green(`${stageNumber} ✓ ${stageName}`) + chalk.gray(` - ${message}`) + (elapsed ? chalk.gray(` (${elapsed})`) : ''));
+        lines.push(
+          chalk.green(`${stageNumber} ✓ ${stage.icon} ${stage.name}`) +
+            chalk.gray(` - ${message}`) +
+            (elapsed ? chalk.gray(` (${elapsed})`) : '')
+        );
       } else if (stage.status === 'failed') {
         const message = stage.message || 'Failed';
-        lines.push(chalk.red(`${stageNumber} ✗ ${stageName} - ${message}`));
+        lines.push(chalk.red(`${stageNumber} ✗ ${stage.icon} ${stage.name} - ${message}`));
       }
     });
 
