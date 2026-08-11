@@ -29,6 +29,19 @@ def _check_ytdlp() -> str:
     return ytdlp_path
 
 
+def _get_js_runtimes() -> str:
+    """Detect available JS runtimes for yt-dlp to solve YouTube challenges.
+    Arena requires Node.js, so nodejs is always available."""
+    runtimes = []
+    if shutil.which('deno'):
+        runtimes.append('deno')
+    if shutil.which('node'):
+        runtimes.append('nodejs')
+    if shutil.which('bun'):
+        runtimes.append('bun')
+    return ','.join(runtimes) if runtimes else 'nodejs'
+
+
 def _url_cache_key(url: str) -> str:
     """Generate a stable cache key from URL."""
     return hashlib.sha256(url.encode()).hexdigest()[:16]
@@ -77,6 +90,7 @@ def download_video(
         '--merge-output-format', 'mp4',
         '-o', output_template,
         '--newline',
+        '--js-runtimes', _get_js_runtimes(),
         url,
     ]
 
@@ -154,6 +168,7 @@ def download_audio(
         '--audio-format', audio_format,
         '-o', output_template,
         '--newline',
+        '--js-runtimes', _get_js_runtimes(),
         url,
     ]
 
