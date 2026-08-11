@@ -30,8 +30,7 @@ def _check_ytdlp() -> str:
 
 
 def _get_js_runtimes() -> str:
-    """Detect available JS runtimes for yt-dlp to solve YouTube challenges.
-    Arena requires Node.js, so nodejs is always available."""
+    """Detect available JS runtimes for yt-dlp to solve YouTube challenges."""
     runtimes = []
     if shutil.which('deno'):
         runtimes.append('deno')
@@ -39,7 +38,32 @@ def _get_js_runtimes() -> str:
         runtimes.append('node')
     if shutil.which('bun'):
         runtimes.append('bun')
-    return ','.join(runtimes) if runtimes else 'node'
+    if not runtimes:
+        print("  ⚠️  No JavaScript runtime found (deno, node, or bun).")
+        print("  YouTube downloads require one. Install with: brew install deno")
+        return 'deno'
+    return ','.join(runtimes)
+
+
+def _format_download_error(error_msg: str, url: str, command: str) -> str:
+    """Format yt-dlp errors with actionable suggestions."""
+    if 'n challenge' in error_msg or 'page needs to be reloaded' in error_msg:
+        return (
+            f"yt-dlp failed (YouTube challenge solving failed):\n{error_msg}\n\n"
+            f"URL: {url}\n\n"
+            f"Fixes to try:\n"
+            f"  1. Update yt-dlp:  pip install -U yt-dlp\n"
+            f"  2. Install deno:   brew install deno\n"
+            f"  3. Use cookies:    arena {command} \"{url}\" --cookies-from-browser chrome"
+        )
+    if 'Sign in to confirm' in error_msg or 'HTTP Error 429' in error_msg:
+        return (
+            f"yt-dlp failed (authentication required):\n{error_msg}\n\n"
+            f"URL: {url}\n\n"
+            f"Fix: Use --cookies-from-browser to authenticate:\n"
+            f"  arena {command} \"{url}\" --cookies-from-browser chrome"
+        )
+    return f"yt-dlp failed to download:\n{error_msg}\n\nURL: {url}"
 
 
 def _url_cache_key(url: str) -> str:
@@ -91,6 +115,7 @@ def download_video(
         '-o', output_template,
         '--newline',
         '--js-runtimes', _get_js_runtimes(),
+        '--remote-components', 'ejs:github',
         url,
     ]
 
@@ -102,18 +127,7 @@ def download_video(
 
     if result.returncode != 0:
         error_msg = result.stderr.strip()
-        # Detect bot/auth issues and suggest --cookies-from-browser
-        if 'Sign in to confirm' in error_msg or 'HTTP Error 429' in error_msg:
-            raise RuntimeError(
-                f"yt-dlp failed to download video (authentication required):\n{error_msg}\n\n"
-                f"URL: {url}\n\n"
-                f"Fix: Use --cookies-from-browser to authenticate:\n"
-                f"  arena process \"{url}\" --cookies-from-browser chrome"
-            )
-        raise RuntimeError(
-            f"yt-dlp failed to download video:\n{error_msg}\n\n"
-            f"URL: {url}"
-        )
+        raise RuntimeError(_format_download_error(error_msg, url, 'process'))
 
     downloaded = list(cache_dir.glob(f"{cache_key}.*"))
     if not downloaded:
@@ -169,6 +183,7 @@ def download_audio(
         '-o', output_template,
         '--newline',
         '--js-runtimes', _get_js_runtimes(),
+        '--remote-components', 'ejs:github',
         url,
     ]
 
@@ -180,17 +195,7 @@ def download_audio(
 
     if result.returncode != 0:
         error_msg = result.stderr.strip()
-        if 'Sign in to confirm' in error_msg or 'HTTP Error 429' in error_msg:
-            raise RuntimeError(
-                f"yt-dlp failed to download audio (authentication required):\n{error_msg}\n\n"
-                f"URL: {url}\n\n"
-                f"Fix: Use --cookies-from-browser to authenticate:\n"
-                f"  arena transcribe \"{url}\" --cookies-from-browser chrome"
-            )
-        raise RuntimeError(
-            f"yt-dlp failed to download audio:\n{error_msg}\n\n"
-            f"URL: {url}"
-        )
+        raise RuntimeError(_format_download_error(error_msg, url, 'transcribe'))
 
     downloaded = list(cache_dir.glob(f"{cache_key}.*"))
     if not downloaded:

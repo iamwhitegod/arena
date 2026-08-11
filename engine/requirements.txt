@@ -20,7 +20,7 @@ scipy~=1.11
 pillow~=10.0
 
 # URL download support (broader range — tracks rapidly-changing site APIs)
-yt-dlp>=2024.1.0,<2026.0.0
+yt-dlp>=2025.1.0,<2027.0.0
 
 # Utilities
 numpy~=1.24
