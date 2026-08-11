@@ -7,9 +7,9 @@ Complete reference for all Arena CLI commands and options.
 | Command | Purpose | Example |
 |---------|---------|---------|
 | `arena init` | Interactive setup wizard | `arena init` |
-| `arena process` | All-in-one processing | `arena process video.mp4 --use-4layer` |
+| `arena process` | All-in-one processing | `arena process video.mp4` |
 | `arena transcribe` | Transcription only | `arena transcribe video.mp4` |
-| `arena analyze` | Find moments (no video) | `arena analyze video.mp4 --use-4layer` |
+| `arena analyze` | Find moments (no video) | `arena analyze video.mp4` |
 | `arena generate` | Generate from analysis | `arena generate video.mp4 analysis.json` |
 | `arena format` | Format for social platforms | `arena format clips/ -p tiktok` |
 | `arena config` | Manage configuration | `arena config set openai_api_key "sk-..."` |
@@ -64,7 +64,7 @@ arena process <video> [options]
 - `--debug` - Show debug information
 
 **4-Layer Editorial System:**
-- `--use-4layer` - Use 4-layer editorial system for professional quality
+- `` - Use 4-layer editorial system for professional quality
 - `--editorial-model <model>` - Model for Layers 1-2: `gpt-4o` or `gpt-4o-mini` (default: `gpt-4o`)
 - `--export-editorial-layers` - Export intermediate layer results for debugging
 
@@ -75,26 +75,26 @@ arena process <video> [options]
 arena process video.mp4
 
 # 4-Layer mode - professional quality
-arena process video.mp4 --use-4layer
+arena process video.mp4
 
 # 4-Layer with cost optimization (recommended)
-arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini
+arena process video.mp4 --editorial-model gpt-4o-mini
 
 # Generate 10 short clips for social media
-arena process video.mp4 --use-4layer -n 10 --min 15 --max 30
+arena process video.mp4 -n 10 --min 15 --max 30
 
 # Fast mode for quick iteration
 arena process video.mp4 --fast
 
 # Custom output directory
-arena process video.mp4 --use-4layer -o my_clips
+arena process video.mp4 -o my_clips
 
 # Debug mode - export all layer results
-arena process video.mp4 --use-4layer --export-editorial-layers
+arena process video.mp4 --export-editorial-layers
 
 # Production workflow
 arena process podcast.mp4 \\
-  --use-4layer \\
+  \\
   --editorial-model gpt-4o-mini \\
   -n 8 \\
   --min 20 \\
@@ -175,7 +175,7 @@ arena analyze <video> [options]
 - `-n, --num-clips <number>` - Target number of clips to analyze (default: `5`)
 - `--min <seconds>` - Minimum clip duration (default: `30`)
 - `--max <seconds>` - Maximum clip duration (default: `90`)
-- `--use-4layer` - Use 4-layer editorial system
+- `` - Use 4-layer editorial system
 - `--editorial-model <model>` - Model for Layers 1-2: `gpt-4o` or `gpt-4o-mini` (default: `gpt-4o`)
 - `--transcript <file>` - Use existing transcript file
 - `--debug` - Show debug information
@@ -183,16 +183,16 @@ arena analyze <video> [options]
 **Examples:**
 ```bash
 # Analyze with 4-layer system
-arena analyze video.mp4 --use-4layer -o moments.json
+arena analyze video.mp4 -o moments.json
 
 # Use existing transcript
 arena analyze video.mp4 --transcript transcript.json -n 10
 
 # Cost-optimized analysis
-arena analyze video.mp4 --use-4layer --editorial-model gpt-4o-mini
+arena analyze video.mp4 --editorial-model gpt-4o-mini
 
 # Find many candidates for review
-arena analyze video.mp4 --use-4layer -n 20
+arena analyze video.mp4 -n 20
 ```
 
 **Why use this:**
@@ -204,7 +204,7 @@ arena analyze video.mp4 --use-4layer -n 20
 **Workflow:**
 ```bash
 # Step 1: Analyze
-arena analyze video.mp4 --use-4layer -o moments.json
+arena analyze video.mp4 -o moments.json
 
 # Step 2: Review moments.json
 cat moments.json | jq '.clips[] | {id, title, duration, standalone_score}'
@@ -326,7 +326,7 @@ arena format clip.mp4 -p instagram-reels --no-quality -o reels/
 **Multi-Platform Workflow:**
 ```bash
 # Generate clips once
-arena process video.mp4 --use-4layer -n 5
+arena process video.mp4 -n 5
 
 # Format for every platform
 arena format output/clips/ -p tiktok --crop smart -o social/tiktok/
@@ -367,7 +367,6 @@ arena config [action] [key] [value]
 - `whisper_mode` - Transcription mode: `api` or `local`
 - `minDuration` - Default minimum clip duration
 - `maxDuration` - Default maximum clip duration
-- `use4Layer` - Enable 4-layer by default: `true` or `false`
 - `editorialModel` - Default model: `gpt-4o` or `gpt-4o-mini`
 
 **Examples:**
@@ -382,7 +381,6 @@ arena config set openai_api_key "sk-..."
 arena config get whisper_mode
 
 # Enable 4-layer by default
-arena config set use4Layer true
 
 # Set default model
 arena config set editorialModel gpt-4o-mini
@@ -401,7 +399,6 @@ arena config reset
   "whisper_mode": "api",
   "minDuration": 30,
   "maxDuration": 90,
-  "use4Layer": true,
   "editorialModel": "gpt-4o-mini"
 }
 ```
@@ -485,13 +482,13 @@ arena process video.mp4 --debug
 
 ### Workflow 1: Quick Start
 ```bash
-arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini -n 5
+arena process video.mp4 --editorial-model gpt-4o-mini -n 5
 ```
 
 ### Workflow 2: Review Before Generate
 ```bash
 # Analyze
-arena analyze video.mp4 --use-4layer -o moments.json
+arena analyze video.mp4 -o moments.json
 
 # Review moments.json
 
@@ -502,7 +499,7 @@ arena generate video.mp4 moments.json --select 1,3,5
 ### Workflow 3: Multi-Platform Distribution
 ```bash
 # Generate clips
-arena process video.mp4 --use-4layer -n 5
+arena process video.mp4 -n 5
 
 # Format for platforms
 arena format output/clips/ -p tiktok -o social/tiktok/
@@ -529,12 +526,12 @@ arena generate video.mp4 best-moments.json
 
 1. **Use gpt-4o-mini** - 60% cheaper than gpt-4o, same quality
    ```bash
-   arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini
+   arena process video.mp4 --editorial-model gpt-4o-mini
    ```
 
 2. **Analyze first** - Review before generating
    ```bash
-   arena analyze video.mp4 --use-4layer -o moments.json
+   arena analyze video.mp4 -o moments.json
    arena generate video.mp4 moments.json --select 1,3,5
    ```
 

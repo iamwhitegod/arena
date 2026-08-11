@@ -235,7 +235,7 @@ npm install -g @whitegodkingsley/arena-cli
 export OPENAI_API_KEY="sk-..."
 
 # Process video
-arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini
+arena process video.mp4 --editorial-model gpt-4o-mini
 ```
 
 ### Advanced Workflow (Separate Steps)
@@ -244,7 +244,7 @@ arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini
 arena transcribe video.mp4 -o transcript.json
 
 # 2. Analyze (fast, cheap)
-arena analyze video.mp4 -o analysis.json --use-4layer
+arena analyze video.mp4 -o analysis.json
 
 # 3. Review analysis.json, pick favorites
 

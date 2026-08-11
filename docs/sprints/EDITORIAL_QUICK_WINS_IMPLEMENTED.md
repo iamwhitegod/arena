@@ -206,7 +206,7 @@ def combined_score(c):
 
 1. **Process a 60-minute video with the enhanced system**:
    ```bash
-   arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini --export-layers
+   arena process video.mp4 --editorial-model gpt-4o-mini --export-layers
    ```
 
 2. **Review exported layer outputs**:
@@ -318,7 +318,7 @@ With the full 6-phase plan implemented:
 - Monitor rejection rates and reasons
 
 ### Phase 3: Default Behavior (Week 3)
-- Make enhanced validation default for all `--use-4layer` processing
+- Make enhanced validation default for all `` processing
 - Update documentation with new quality expectations
 - Announce improvements in changelog
 
@@ -365,7 +365,7 @@ With the full 6-phase plan implemented:
 **Next Command**:
 ```bash
 # Test the enhanced system
-arena process <your-video>.mp4 --use-4layer --editorial-model gpt-4o-mini --export-layers -o test_quick_wins
+arena process <your-video>.mp4 --editorial-model gpt-4o-mini --export-layers -o test_quick_wins
 
 # Review results
 cat test_quick_wins/editorial/layer3_rejected.json  # See why clips were rejected

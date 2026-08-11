@@ -5,7 +5,7 @@ from arena.ai.sentence_detector import SentenceBoundaryDetector
 from arena.video.scene_detector import SceneDetector
 
 if TYPE_CHECKING:
-    from arena.ai.analyzer import TranscriptAnalyzer
+    from arena.editorial.adapter import FourLayerAdapter
 
 
 class ProfessionalClipAligner:
@@ -46,7 +46,7 @@ class ProfessionalClipAligner:
         transcript_segments: List[Dict],
         min_duration: Optional[float] = None,
         max_duration: Optional[float] = None,
-        analyzer: Optional['TranscriptAnalyzer'] = None,
+        analyzer: Optional['FourLayerAdapter'] = None,
         video_path: Optional[Path] = None
     ) -> List[Dict]:
         """
@@ -57,7 +57,7 @@ class ProfessionalClipAligner:
             transcript_segments: List of transcript segments with timestamps
             min_duration: Optional minimum duration constraint
             max_duration: Optional maximum duration constraint
-            analyzer: Optional TranscriptAnalyzer to regenerate titles after alignment
+            analyzer: Optional FourLayerAdapter to regenerate titles after alignment
             video_path: Optional video path for scene detection
 
         Returns:

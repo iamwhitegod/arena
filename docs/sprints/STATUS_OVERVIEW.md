@@ -102,7 +102,7 @@
 - **Task**: Re-run test_007 with `--export-layers` to see where failure occurs
 - **Command**:
   ```bash
-  arena process test_007/video.mp4 --use-4layer --export-layers -n 10 -o test_007_diagnostic
+  arena process test_007/video.mp4 --export-layers -n 10 -o test_007_diagnostic
   ```
 - **Output**:
   - `editorial/layer1_moments.json` - How many moments detected?
@@ -267,7 +267,7 @@
 ```bash
 # Option A: Run diagnostic first
 arena process ~/Desktop/arena/test_007/video.mp4 \
-  --use-4layer \
+  \
   --export-layers \
   -n 10 \
   -o ~/Desktop/arena/test_007_diagnostic
@@ -431,7 +431,7 @@ Update npm package with fixes
 ```bash
 # Run diagnostic
 arena process ~/Desktop/arena/test_007/[video_file] \
-  --use-4layer \
+  \
   --export-layers \
   -n 10 \
   -o ~/Desktop/arena/test_007_diagnostic
@@ -443,7 +443,7 @@ arena process ~/Desktop/arena/test_007/[video_file] \
 ```bash
 # Test on a different video (sermon or talk, 10-20 minutes)
 arena process [your_video.mp4] \
-  --use-4layer \
+  \
   --export-layers \
   -n 10 \
   -o ~/Desktop/arena/diagnostic_test

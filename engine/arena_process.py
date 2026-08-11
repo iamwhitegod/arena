@@ -35,7 +35,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 from arena.audio.transcriber import Transcriber
 from arena.audio.energy import AudioEnergyAnalyzer
 from arena.audio.enhance import AudioEnhancer
-from arena.ai.analyzer import TranscriptAnalyzer
 from arena.ai.hybrid import HybridAnalyzer
 from arena.editorial import FourLayerAdapter
 from arena.clipping.generator import ClipGenerator
@@ -55,7 +54,6 @@ def run_arena_pipeline(
     max_adjustment: float = 10.0,
     enhance_audio: bool = True,
     use_scene_detection: bool = False,
-    use_4layer: bool = False,
     export_editorial_layers: bool = False,
     editorial_model: str = "gpt-4o",
     platform: Optional[str] = None,
@@ -261,15 +259,11 @@ def run_arena_pipeline(
         # Initialize analyzers
         if HAS_TQDM:
             with tqdm(total=100, desc="🔧 Initializing", bar_format='{l_bar}{bar}') as pbar:
-                # Choose analyzer based on use_4layer flag
-                if use_4layer:
-                    ai_analyzer = FourLayerAdapter(
-                        api_key=api_key,
-                        model=editorial_model,
-                        export_layers=export_editorial_layers
-                    )
-                else:
-                    ai_analyzer = TranscriptAnalyzer(api_key=api_key)
+                ai_analyzer = FourLayerAdapter(
+                    api_key=api_key,
+                    model=editorial_model,
+                    export_layers=export_editorial_layers
+                )
                 pbar.update(33)
                 energy_analyzer = AudioEnergyAnalyzer(video_path=video_file)
                 pbar.update(33)
@@ -282,24 +276,19 @@ def run_arena_pipeline(
             print()
         else:
             print("🔧 Initializing analyzers...")
-            # Choose analyzer based on use_4layer flag
-            if use_4layer:
-                print(f"   Using 4-layer editorial system (model: {editorial_model})")
-                ai_analyzer = FourLayerAdapter(
-                    api_key=api_key,
-                    model=editorial_model,
-                    export_layers=export_editorial_layers
-                )
-            else:
-                ai_analyzer = TranscriptAnalyzer(api_key=api_key)
+            print(f"   Using 4-layer editorial system (model: {editorial_model})")
+            ai_analyzer = FourLayerAdapter(
+                api_key=api_key,
+                model=editorial_model,
+                export_layers=export_editorial_layers
+            )
             energy_analyzer = AudioEnergyAnalyzer(video_path=video_file)
             hybrid_analyzer = HybridAnalyzer(
                 ai_analyzer=ai_analyzer,
                 energy_analyzer=energy_analyzer,
                 energy_weight=0.3  # 30% boost from energy
             )
-            analyzer_type = "4-layer editorial" if use_4layer else "single-layer"
-            print(f"   ✓ AI analyzer ready ({analyzer_type})")
+            print("   ✓ AI analyzer ready (4-layer editorial)")
             print("   ✓ Energy analyzer ready")
             print("   ✓ Hybrid analyzer ready\n")
 
@@ -770,14 +759,9 @@ Environment:
         help='Seconds of padding before/after clips (default: 0.5)'
     )
     parser.add_argument(
-        '--use-4layer',
-        action='store_true',
-        help='Use 4-layer editorial system (higher quality, slower, more expensive)'
-    )
-    parser.add_argument(
         '--export-editorial-layers',
         action='store_true',
-        help='Export intermediate results from each editorial layer for debugging (requires --use-4layer)'
+        help='Export intermediate results from each editorial layer for debugging'
     )
     parser.add_argument(
         '--editorial-model',
@@ -856,7 +840,6 @@ Environment:
         use_cached_transcript=not args.no_cache,
         fast_mode=args.fast,
         padding=args.padding,
-        use_4layer=args.use_4layer,
         export_editorial_layers=args.export_editorial_layers,
         editorial_model=args.editorial_model,
         platform=args.platform,

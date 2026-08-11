@@ -235,7 +235,7 @@ Once API key is available:
 
 - [ ] Run full pipeline on test_007
   ```bash
-  python3 -u -m arena.cli.main process [VIDEO] -o output/ -n 3 --use-4layer
+  python3 -u -m arena.cli.main process [VIDEO] -o output/ -n 3
   ```
 
 - [ ] Verify no overlapping clips in final output

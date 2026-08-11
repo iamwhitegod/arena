@@ -346,13 +346,13 @@ arena format clips/ -p linkedin          # LinkedIn (16:9)
 ### One-Command Processing
 ```bash
 # High quality (4-layer + gpt-4o-mini)
-arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini
+arena process video.mp4 --editorial-model gpt-4o-mini
 
 # Cost optimized (standard mode)
 arena process video.mp4 -n 10 --min 30 --max 90
 
 # With platform formatting
-arena process video.mp4 --use-4layer -p tiktok --crop smart
+arena process video.mp4 -p tiktok --crop smart
 ```
 
 ### Advanced Workflow
@@ -361,7 +361,7 @@ arena process video.mp4 --use-4layer -p tiktok --crop smart
 arena transcribe video.mp4 -o transcript.json
 
 # 2. Analyze (fast iteration)
-arena analyze video.mp4 -o analysis.json --use-4layer
+arena analyze video.mp4 -o analysis.json
 
 # 3. Review and select clips in analysis.json
 

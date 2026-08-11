@@ -14,7 +14,6 @@ interface ProcessOptions {
   numClips?: string;
   min?: string;
   max?: string;
-  use4layer?: boolean;
   editorialModel?: 'gpt-4o' | 'gpt-4o-mini';
   exportLayers?: boolean;
   fast?: boolean;
@@ -78,7 +77,7 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
       { id: 'transcription', name: 'Transcription', icon: '📝' },
       {
         id: 'analysis',
-        name: options.use4layer ? 'AI Analysis - 4-Layer System' : 'AI Analysis',
+        name: 'AI Analysis',
         icon: '🧠',
       },
       { id: 'hybrid', name: 'Hybrid Analysis', icon: '⚡' },
@@ -95,7 +94,6 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
         minDuration: options.min ? parseInt(options.min) : undefined,
         maxDuration: options.max ? parseInt(options.max) : undefined,
         clipCount: options.numClips ? parseInt(options.numClips) : undefined,
-        use4Layer: options.use4layer || false,
         editorialModel: options.editorialModel || 'gpt-4o',
         exportLayers: options.exportLayers || false,
         fast: options.fast || false,

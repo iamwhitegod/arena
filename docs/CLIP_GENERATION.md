@@ -256,7 +256,7 @@ Complete workflow from analysis to clips:
 from pathlib import Path
 from arena.audio.transcriber import Transcriber
 from arena.audio.energy import AudioEnergyAnalyzer
-from arena.ai.hybrid import HybridAnalyzer, TranscriptAnalyzer
+from arena.ai.hybrid import HybridAnalyzer
 from arena.clipping.generator import ClipGenerator
 
 video = Path("video.mp4")
@@ -269,7 +269,7 @@ transcript = transcriber.transcribe(video)
 
 # Step 2: Hybrid Analysis
 print("Analyzing...")
-ai_analyzer = TranscriptAnalyzer()
+ai_analyzer = FourLayerAdapter()
 energy_analyzer = AudioEnergyAnalyzer(video)
 hybrid = HybridAnalyzer(ai_analyzer, energy_analyzer)
 

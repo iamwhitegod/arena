@@ -135,7 +135,7 @@ cd engine
 python3 -u -m arena.cli.main process \
   [PATH_TO_TEST_004_VIDEO] \
   -o /Users/whitegodkingsley/Desktop/arena/test_week7_tech \
-  -n 5 --use-4layer --editorial-model gpt-4o-mini --min 30 --max 90
+  -n 5 --editorial-model gpt-4o-mini --min 30 --max 90
 ```
 
 ---

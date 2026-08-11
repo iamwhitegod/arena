@@ -62,7 +62,7 @@ cd engine
 python3 -u -m arena.cli.main process \
   /Users/whitegodkingsley/Desktop/arena/test_001/clips/breaking-the-mold-my-unconventional-tech-journey_001_00m00s-00m28s.mp4 \
   -o /Users/whitegodkingsley/Desktop/arena/test_week7_tech \
-  -n 3 --use-4layer --editorial-model gpt-4o-mini --min 30 --max 90
+  -n 3 --editorial-model gpt-4o-mini --min 30 --max 90
 ```
 
 ---
@@ -210,7 +210,7 @@ cat test_week7_finance_results.json | python3 -m json.tool
 
 # Run full pipeline test on new video
 python3 -u -m arena.cli.main process VIDEO.mp4 \
-  -o OUTPUT_DIR -n 5 --use-4layer --editorial-model gpt-4o-mini
+  -o OUTPUT_DIR -n 5 --editorial-model gpt-4o-mini
 
 # Check Week 7 status
 grep "VALIDATED\|PENDING" WEEK7_README.md

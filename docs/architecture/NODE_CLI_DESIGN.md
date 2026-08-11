@@ -66,7 +66,7 @@ arena process video.mp4 [options]
 - `-n, --num-clips <number>` - Number of clips (default: 5)
 - `--min <seconds>` - Minimum duration (default: 30)
 - `--max <seconds>` - Maximum duration (default: 90)
-- `--use-4layer` - Use 4-layer editorial system (higher quality)
+- `` - Use 4-layer editorial system (higher quality)
 - `--editorial-model <model>` - gpt-4o or gpt-4o-mini (default: gpt-4o)
 - `--export-layers` - Export intermediate layer results
 - `--fast` - Fast mode (stream copy)
@@ -74,7 +74,7 @@ arena process video.mp4 [options]
 
 **UX Flow:**
 ```
-$ arena process video.mp4 --use-4layer
+$ arena process video.mp4
 
 ✓ Video file found: video.mp4 (1.6 GB)
 ✓ Python environment ready (3.12.0)
@@ -174,7 +174,7 @@ Let's set up your video clip generation workspace.
 
 **Usage:**
 ```bash
-arena analyze video.mp4 [--use-4layer]
+arena analyze video.mp4 []
 ```
 
 **Output:**

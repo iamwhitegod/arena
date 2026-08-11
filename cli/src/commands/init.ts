@@ -90,16 +90,12 @@ export async function initCommand(): Promise<void> {
       message: 'Quality vs Cost preference:',
       choices: [
         {
-          name: 'Balanced (4-layer + gpt-4o-mini, ~$0.20/video)',
+          name: 'Balanced (gpt-4o-mini, ~$0.20/video)',
           value: 'balanced',
         },
         {
-          name: 'High Quality (4-layer + gpt-4o, ~$0.50/video)',
+          name: 'High Quality (gpt-4o, ~$0.50/video)',
           value: 'high',
-        },
-        {
-          name: 'Cost Optimized (standard mode, ~$0.05/video)',
-          value: 'cost-optimized',
         },
       ],
       default: 'balanced',
@@ -164,7 +160,6 @@ interface ConfigurationObject {
   workflow: string;
   minDuration?: number;
   maxDuration?: number;
-  use4Layer?: boolean;
   editorialModel?: string;
   numClips?: number;
   padding?: number;
@@ -189,15 +184,11 @@ function buildConfiguration(answers: InitAnswers): ConfigurationObject {
   config.minDuration = durationSettings[answers.clipDuration].min;
   config.maxDuration = durationSettings[answers.clipDuration].max;
 
-  // Quality settings
+  // Quality settings (4-layer editorial is always on)
   if (answers.quality === 'balanced') {
-    config.use4Layer = true;
     config.editorialModel = 'gpt-4o-mini';
   } else if (answers.quality === 'high') {
-    config.use4Layer = true;
     config.editorialModel = 'gpt-4o';
-  } else {
-    config.use4Layer = false;
   }
 
   // Workflow-specific defaults
@@ -238,7 +229,7 @@ function displayNextSteps(answers: InitAnswers, hasApiKey: boolean): void {
   console.log(chalk.cyan('    arena process video.mp4 -n 3 --min 20 --max 45\n'));
 
   if (answers.quality !== 'high') {
-    console.log(chalk.gray('  Try high quality mode:'));
-    console.log(chalk.cyan('    arena process video.mp4 --use-4layer --editorial-model gpt-4o\n'));
+    console.log(chalk.gray('  Try premium model:'));
+    console.log(chalk.cyan('    arena process video.mp4 --editorial-model gpt-4o\n'));
   }
 }

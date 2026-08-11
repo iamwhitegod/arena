@@ -78,12 +78,11 @@ describe('Process Command Integration', () => {
         // This should not throw
         await expect(processCommand(videoPath, options)).resolves.not.toThrow();
     });
-    it('should process video with 4-layer system', async () => {
+    it('should process video with editorial model option', async () => {
         const videoPath = path.join(testDir, 'test.mp4');
         await fs.writeFile(videoPath, 'fake video content');
         const options = {
             output: path.join(testDir, 'output'),
-            use4layer: true,
             editorialModel: 'gpt-4o-mini',
             numClips: '5',
         };

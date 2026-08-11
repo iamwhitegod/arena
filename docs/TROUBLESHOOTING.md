@@ -238,7 +238,7 @@ arena process video.mp4
 
 **Solution 2**: Use gpt-4o-mini (higher rate limits)
 ```bash
-arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini
+arena process video.mp4 --editorial-model gpt-4o-mini
 ```
 
 **Solution 3**: Increase delays (edit Python engine if needed)
@@ -281,10 +281,10 @@ arena process video.mp4 --min 15 --max 45
 **Cause 3**: All clips failed quality validation (4-layer mode)
 ```bash
 # Solution 1: Disable 4-layer temporarily
-arena process video.mp4  # Without --use-4layer
+arena process video.mp4  # Without
 
 # Solution 2: Export layers to debug
-arena process video.mp4 --use-4layer --export-layers
+arena process video.mp4 --export-layers
 
 # Check exported JSON files to see why clips were rejected
 ```
@@ -324,7 +324,7 @@ done
 
 **Solution 1**: Use gpt-4o-mini instead of gpt-4o
 ```bash
-arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini
+arena process video.mp4 --editorial-model gpt-4o-mini
 ```
 
 **Solution 2**: Reduce number of clips
@@ -366,7 +366,7 @@ arena process video_720p.mp4
 
 **Solution**: Enable 4-layer mode
 ```bash
-arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini
+arena process video.mp4 --editorial-model gpt-4o-mini
 ```
 
 **Alternative**: Add more padding

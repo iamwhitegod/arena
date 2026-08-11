@@ -12,7 +12,6 @@ export interface ProcessOptions {
   minDuration?: number;
   maxDuration?: number;
   clipCount?: number;
-  use4Layer?: boolean;
   editorialModel?: 'gpt-4o' | 'gpt-4o-mini';
   exportLayers?: boolean;
   fast?: boolean;
@@ -35,7 +34,6 @@ export interface AnalyzeOptions {
   minDuration?: number;
   maxDuration?: number;
   clipCount?: number;
-  use4Layer?: boolean;
   editorialModel?: 'gpt-4o' | 'gpt-4o-mini';
   transcriptPath?: string;
   sceneDetection?: boolean;
@@ -252,9 +250,6 @@ export class PythonBridge {
       if (options.maxDuration) {
         cmdArgs.push('--max', options.maxDuration.toString());
       }
-      if (options.use4Layer) {
-        cmdArgs.push('--use-4layer');
-      }
       if (options.editorialModel) {
         cmdArgs.push('--editorial-model', options.editorialModel);
       }
@@ -324,9 +319,6 @@ export class PythonBridge {
       }
       if (options.maxDuration) {
         cmdArgs.push('--max', options.maxDuration.toString());
-      }
-      if (options.use4Layer) {
-        cmdArgs.push('--use-4layer');
       }
       if (options.editorialModel) {
         cmdArgs.push('--editorial-model', options.editorialModel);

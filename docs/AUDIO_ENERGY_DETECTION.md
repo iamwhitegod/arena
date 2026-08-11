@@ -161,11 +161,11 @@ Audio energy detection complements transcript-based AI analysis:
 
 ```python
 # Coming soon: Hybrid scoring
-from arena.ai.analyzer import TranscriptAnalyzer
+from arena.editorial import FourLayerAdapter
 from arena.audio.energy import AudioEnergyAnalyzer
 
 # Analyze with both methods
-ai_clips = TranscriptAnalyzer().analyze_transcript(transcript)
+ai_clips = FourLayerAdapter().analyze_transcript(transcript)
 energy_segments = AudioEnergyAnalyzer(video).analyze()
 
 # Boost scores for clips with high energy
@@ -252,7 +252,7 @@ The analyzer automatically extracts audio from video using FFmpeg:
 from pathlib import Path
 from arena.audio.transcriber import Transcriber
 from arena.audio.energy import AudioEnergyAnalyzer
-from arena.ai.analyzer import TranscriptAnalyzer
+from arena.editorial import FourLayerAdapter
 
 # Full pipeline
 video = Path("video.mp4")
@@ -262,7 +262,7 @@ transcriber = Transcriber()
 transcript = transcriber.transcribe(video)
 
 # Step 2: AI analysis for content
-ai_analyzer = TranscriptAnalyzer()
+ai_analyzer = FourLayerAdapter()
 ai_clips = ai_analyzer.analyze_transcript(transcript)
 
 # Step 3: Energy analysis for enthusiasm

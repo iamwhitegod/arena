@@ -113,12 +113,12 @@ hybrid_score = min(hybrid_score, 1.0)
 
 ```python
 from pathlib import Path
-from arena.ai.analyzer import TranscriptAnalyzer
+from arena.editorial import FourLayerAdapter
 from arena.ai.hybrid import HybridAnalyzer
 from arena.audio.energy import AudioEnergyAnalyzer
 
 # Initialize components
-ai_analyzer = TranscriptAnalyzer(api_key="your-openai-key")
+ai_analyzer = FourLayerAdapter(api_key="your-openai-key")
 energy_analyzer = AudioEnergyAnalyzer(video_path=Path("video.mp4"))
 
 # Create hybrid analyzer
@@ -375,7 +375,7 @@ transcriber = Transcriber()
 transcript = transcriber.transcribe(video, cache_dir=".arena/cache")
 
 # Step 2: Hybrid Analysis
-ai_analyzer = TranscriptAnalyzer()
+ai_analyzer = FourLayerAdapter()
 energy_analyzer = AudioEnergyAnalyzer(video)
 hybrid = HybridAnalyzer(ai_analyzer, energy_analyzer)
 

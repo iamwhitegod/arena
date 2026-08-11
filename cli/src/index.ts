@@ -55,8 +55,11 @@ program
   .option('-n, --num-clips <number>', 'target number of clips to generate', '5')
   .option('--min <seconds>', 'minimum clip duration', '30')
   .option('--max <seconds>', 'maximum clip duration', '90')
-  .option('--use-4layer', 'use 4-layer editorial system (higher quality)')
-  .option('--editorial-model <model>', 'model for Layers 1-2: gpt-4o or gpt-4o-mini', 'gpt-4o')
+  .option(
+    '--editorial-model <model>',
+    'model for editorial analysis: gpt-4o or gpt-4o-mini',
+    'gpt-4o'
+  )
   .option('--export-layers', 'export intermediate layer results for debugging')
   .option('--fast', 'fast mode - stream copy (10x faster)')
   .option('--no-cache', 'force re-transcription, ignore cached transcript')
@@ -103,8 +106,11 @@ program
   .option('-n, --num-clips <number>', 'target number of clips to analyze')
   .option('--min <seconds>', 'minimum clip duration')
   .option('--max <seconds>', 'maximum clip duration')
-  .option('--use-4layer', 'use 4-layer editorial system (higher quality)')
-  .option('--editorial-model <model>', 'model for Layers 1-2: gpt-4o or gpt-4o-mini', 'gpt-4o')
+  .option(
+    '--editorial-model <model>',
+    'model for editorial analysis: gpt-4o or gpt-4o-mini',
+    'gpt-4o'
+  )
   .option('--transcript <file>', 'use existing transcript file')
   .option('--scene-detection', 'enable scene detection for better clip boundaries')
   .option('--debug', 'show debug information')

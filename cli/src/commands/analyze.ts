@@ -17,7 +17,6 @@ interface AnalyzeOptions {
   numClips?: string;
   min?: string;
   max?: string;
-  use4layer?: boolean;
   editorialModel?: 'gpt-4o' | 'gpt-4o-mini';
   transcript?: string;
   sceneDetection?: boolean;
@@ -63,7 +62,7 @@ export async function analyzeCommand(videoPath: string, options: AnalyzeOptions)
       { id: 'transcription', name: 'Transcription', icon: '📝' },
       {
         id: 'analysis',
-        name: options.use4layer ? 'AI Analysis - 4-Layer System' : 'AI Analysis',
+        name: 'AI Analysis',
         icon: '🧠',
       },
     ]);
@@ -79,7 +78,6 @@ export async function analyzeCommand(videoPath: string, options: AnalyzeOptions)
         minDuration: options.min ? parseInt(options.min) : undefined,
         maxDuration: options.max ? parseInt(options.max) : undefined,
         clipCount: options.numClips ? parseInt(options.numClips) : undefined,
-        use4Layer: options.use4layer || false,
         editorialModel: options.editorialModel || 'gpt-4o',
         transcriptPath: options.transcript,
         sceneDetection: options.sceneDetection || false,

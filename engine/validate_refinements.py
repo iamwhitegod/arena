@@ -273,7 +273,7 @@ def main():
         print(f"✅ ALL CHECKS PASSED ({passed}/{total})")
         print("\n🎉 Refinement Plan Implementation Complete!")
         print("\nNext steps:")
-        print("  1. Test on real video: python3 arena_process.py video.mp4 --use-4layer")
+        print("  1. Test on real video: python3 arena_process.py video.mp4")
         print("  2. Export layers: Add --export-editorial-layers to see intermediate results")
         print("  3. Test gpt-4o-mini: Add --editorial-model gpt-4o-mini for cost savings")
         return 0

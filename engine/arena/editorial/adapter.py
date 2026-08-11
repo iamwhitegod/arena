@@ -1,8 +1,7 @@
 """
-FourLayerAdapter - Drop-in replacement for TranscriptAnalyzer
+FourLayerAdapter - The primary editorial analysis engine for Arena.
 
-This adapter maintains the same interface as TranscriptAnalyzer but uses
-the new ThoughtUnit editorial system (Weeks 1-4) internally for higher quality clips.
+Uses the ThoughtUnit editorial system (4 layers) for high quality clips.
 
 New Architecture (Weeks 1-4):
     Week 1: Seed Detection → Find 40 interesting moment seeds
@@ -21,9 +20,9 @@ import sys
 
 class FourLayerAdapter:
     """
-    Drop-in replacement for TranscriptAnalyzer using new ThoughtUnit system.
+    The primary editorial analysis engine for Arena.
 
-    Maintains exact same interface for backward compatibility with HybridAnalyzer:
+    Implements the interface expected by HybridAnalyzer:
     - analyze_transcript(transcript_data, target_clips, min_duration, max_duration)
     - generate_clip_title(transcript_segment)  # For ProfessionalClipAligner
 
@@ -96,7 +95,7 @@ class FourLayerAdapter:
             max_duration: Optional maximum clip duration in seconds
 
         Returns:
-            List[Dict] with format compatible with TranscriptAnalyzer:
+            List[Dict] with clip format:
             {
                 'id': str,              # "clip_001"
                 'start_time': float,

@@ -191,7 +191,7 @@ Week4: SemanticDeduplicator + VariantSelector → merge & select
    - All metadata correct
 
 2. Full pipeline test ✅
-   - `arena process --use-4layer`
+   - `arena process`
    - Generated actual .mp4 files with thumbnails
    - Professional sentence alignment working
    - Hybrid energy analysis integrated
@@ -446,7 +446,7 @@ THOUGHTUNIT_SYSTEM_STATUS.md  # Overall status
 ```bash
 # Process video with ThoughtUnit system
 python3 -m arena.cli.main process video.mp4 \
-  -o output/ -n 5 --use-4layer --editorial-model gpt-4o-mini
+  -o output/ -n 5 --editorial-model gpt-4o-mini
 ```
 
 ### Advanced Usage:

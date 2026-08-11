@@ -242,7 +242,7 @@ const commandsSequence = [
     }
   },
   {
-    cmdText: 'arena process podcast.mp4 --use-4layer --fast',
+    cmdText: 'arena process podcast.mp4 --fast',
     terminalTitle: 'bash — arena process podcast.mp4',
     run: (addLine, addProgressLine, onComplete) => {
       addLine('\n🔍 Running pre-flight checks...', 300);

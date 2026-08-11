@@ -20,7 +20,7 @@ class HybridAnalyzer:
         Initialize hybrid analyzer
 
         Args:
-            ai_analyzer: TranscriptAnalyzer instance
+            ai_analyzer: AI analyzer instance (e.g. FourLayerAdapter)
             energy_analyzer: AudioEnergyAnalyzer instance
             energy_weight: Weight for energy boost (0-1, default 0.3 = 30% boost)
         """

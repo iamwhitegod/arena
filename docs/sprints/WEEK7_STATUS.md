@@ -70,7 +70,7 @@ cd /Users/whitegodkingsley/Desktop/Reserved\ Area/Projects/arena/engine
 python3 -u -m arena.cli.main process \
   /Users/whitegodkingsley/Desktop/arena/test_004/[VIDEO].mp4 \
   -o /Users/whitegodkingsley/Desktop/arena/test_week7_tech \
-  -n 5 --use-4layer --editorial-model gpt-4o-mini --min 30 --max 90
+  -n 5 --editorial-model gpt-4o-mini --min 30 --max 90
 ```
 
 **Expected Outcome**:
@@ -151,7 +151,7 @@ After running Tests 1 & 2, compare:
    python3 -u -m arena.cli.main process \
      [TEST_004_VIDEO] \
      -o /Users/whitegodkingsley/Desktop/arena/test_week7_tech \
-     -n 5 --use-4layer --editorial-model gpt-4o-mini
+     -n 5 --editorial-model gpt-4o-mini
    ```
 
 4. **Cross-Content Analysis** (10 minutes):
@@ -392,7 +392,7 @@ cat /Users/whitegodkingsley/Desktop/arena/test_week7_finance_results.json | pyth
 
 # Run full pipeline on new video (tech content)
 python3 -u -m arena.cli.main process VIDEO.mp4 \
-  -o OUTPUT_DIR -n 5 --use-4layer --editorial-model gpt-4o-mini
+  -o OUTPUT_DIR -n 5 --editorial-model gpt-4o-mini
 
 # Check transcript exists
 ls -la /Users/whitegodkingsley/Desktop/arena/test_002/.cache/*.json

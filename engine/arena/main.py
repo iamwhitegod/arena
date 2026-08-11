@@ -42,7 +42,7 @@ def process_video(args):
     try:
         from arena.video.loader import VideoLoader
         from arena.audio.transcriber import Transcriber
-        from arena.ai.analyzer import TranscriptAnalyzer
+        from arena.editorial import FourLayerAdapter
         from arena.clipping.scorer import SegmentScorer
         from arena.export.exporter import Exporter
 
@@ -167,7 +167,7 @@ def process_video(args):
         reporter.report("Analysis", 0, "Analyzing transcript with AI...")
 
         try:
-            analyzer = TranscriptAnalyzer(api_key=os.getenv("OPENAI_API_KEY"))
+            analyzer = FourLayerAdapter(api_key=os.getenv("OPENAI_API_KEY"))
             ai_segments = analyzer.analyze_transcript(
                 transcript,
                 target_clips=args.clip_count,

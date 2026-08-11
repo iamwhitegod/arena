@@ -79,7 +79,7 @@ Every CLI command follows this pattern:
 
 ### 4-Layer Editorial System
 
-The core differentiator, in `engine/arena/editorial/`. Orchestrated by `FourLayerAdapter` (`adapter.py`) which is a drop-in replacement for `TranscriptAnalyzer`:
+The core differentiator, in `engine/arena/editorial/`. Orchestrated by `FourLayerAdapter` (`adapter.py`), the primary analysis engine:
 
 - **Layer 1** (`thought_seed_detector.py`): Scans transcript in sliding 2-min windows, detects ~40 "seeds" (claims, insights, hooks), deduplicates by time + text similarity
 - **Layer 2** (`thought_unit_constructor.py`): Expands seeds into complete thought units (premise -> claim -> resolution) using `premise_detector.py` and `resolution_detector.py`

@@ -641,7 +641,7 @@ ai_analyzer = FourLayerAdapter(api_key=api_key)
 **Add CLI Flag (Line 576+):**
 ```python
 parser.add_argument(
-    '--use-4layer',
+    '',
     action='store_true',
     help='Use 4-layer editorial system (higher quality, slower, more expensive)'
 )
@@ -741,11 +741,11 @@ def test_adapter_returns_legacy_format():
 
 def test_full_pipeline_with_4layer():
     """Test complete pipeline with 4-layer system"""
-    # This would run arena_process.py with --use-4layer flag
+    # This would run arena_process.py with flag
     result = subprocess.run([
         'python', 'arena_process.py',
         'test_video.mp4',
-        '--use-4layer',
+        '',
         '-n', '3'
     ], capture_output=True)
 
@@ -757,7 +757,7 @@ def test_full_pipeline_with_4layer():
 
 **Generate Review Report:**
 ```bash
-python arena_process.py video.mp4 --use-4layer --export-editorial-layers -n 10
+python arena_process.py video.mp4 --export-editorial-layers -n 10
 
 # Generates:
 # - output/editorial/layer1_moments.json
@@ -907,7 +907,7 @@ arena/ai/__init__.py                  # 1 line (export FourLayerAdapter)
 1. **Review this plan** - Approve/modify implementation approach
 2. **Start with Phase 1** - Create module structure and adapter shell
 3. **Iterate layer by layer** - Test each layer thoroughly before moving to next
-4. **Enable feature flag** - Deploy with `--use-4layer` flag for opt-in testing
+4. **Enable feature flag** - Deploy with `` flag for opt-in testing
 5. **Collect metrics** - Monitor quality, cost, and performance
 6. **Make default** - Once proven, replace single-layer as default
 

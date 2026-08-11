@@ -56,7 +56,7 @@ arena process <video-file> [options]
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--use-4layer` | Use 4-layer editorial system for higher quality clips | `false` |
+| `` | Use 4-layer editorial system for higher quality clips | `false` |
 | `--editorial-model` | Model for Layers 1-2: `gpt-4o` or `gpt-4o-mini` | `gpt-4o` |
 | `--export-editorial-layers` | Export intermediate results for debugging | `false` |
 
@@ -149,7 +149,7 @@ arena analyze <video> [options]
 - `-n, --num-clips <number>` - Number of clips to analyze (default: `5`)
 - `--min <seconds>` - Minimum clip duration (default: `30`)
 - `--max <seconds>` - Maximum clip duration (default: `90`)
-- `--use-4layer` - Use 4-layer editorial system
+- `` - Use 4-layer editorial system
 - `--editorial-model <model>` - Use `gpt-4o` or `gpt-4o-mini` (default: `gpt-4o`)
 - `--transcript <file>` - Use existing transcript
 
@@ -159,13 +159,13 @@ arena analyze <video> [options]
 arena analyze video.mp4 -n 10
 
 # Use 4-layer system for analysis
-arena analyze video.mp4 --use-4layer -o moments.json
+arena analyze video.mp4 -o moments.json
 
 # Analyze with existing transcript
 arena analyze video.mp4 --transcript transcript.json
 
 # Cost-optimized analysis
-arena analyze video.mp4 --use-4layer --editorial-model gpt-4o-mini
+arena analyze video.mp4 --editorial-model gpt-4o-mini
 ```
 
 **Why use this:**
@@ -287,7 +287,7 @@ arena format clips/ -p instagram-reels -o formatted/reels/
 1. **Repurpose Long-Form → Short-Form**
    ```bash
    # Generate clips from podcast
-   arena process podcast.mp4 --use-4layer -n 5
+   arena process podcast.mp4 -n 5
 
    # Format for TikTok
    arena format output/clips/ -p tiktok -o tiktok/
@@ -397,13 +397,13 @@ arena process my-video.mp4 -n 10
 
 ```bash
 # Use 4-layer system for professional quality
-arena process my-video.mp4 --use-4layer -n 5
+arena process my-video.mp4 -n 5
 
 # Cost optimization: Use gpt-4o-mini (saves ~60%)
-arena process my-video.mp4 --use-4layer --editorial-model gpt-4o-mini -n 5
+arena process my-video.mp4 --editorial-model gpt-4o-mini -n 5
 
 # Debug mode: Export intermediate layer results
-arena process my-video.mp4 --use-4layer --export-editorial-layers
+arena process my-video.mp4 --export-editorial-layers
 ```
 
 ### Custom Duration Constraints
@@ -436,7 +436,7 @@ arena process my-video.mp4 -o ./my-clips
 ```bash
 # Professional quality, optimized cost, custom durations
 arena process ~/Videos/podcast-episode.mp4 \
-  --use-4layer \
+  \
   --editorial-model gpt-4o-mini \
   -n 8 \
   --min 20 \
@@ -453,7 +453,7 @@ arena transcribe video.mp4 -o transcript.json
 # Step 2: Analyze with 4-layer (uses cached transcript)
 arena analyze video.mp4 \
   --transcript transcript.json \
-  --use-4layer \
+  \
   --editorial-model gpt-4o-mini \
   -n 10 \
   -o moments.json
@@ -472,7 +472,7 @@ arena generate video.mp4 moments.json --select 1,3,5,7 -o best-clips/
 for video in videos/*.mp4; do
   echo "Processing: $video"
   arena process "$video" \
-    --use-4layer \
+    \
     --editorial-model gpt-4o-mini \
     -n 5 \
     -o "output/$(basename $video .mp4)"
@@ -642,10 +642,10 @@ Auto-generated in `.arena/config.json`:
 
 ```bash
 # Most expensive: gpt-4o (~$0.50 per video)
-python3 arena_process.py video.mp4 --use-4layer --editorial-model gpt-4o
+python3 arena_process.py video.mp4 --editorial-model gpt-4o
 
 # Recommended: gpt-4o-mini (~$0.20 per video, 60% cheaper)
-python3 arena_process.py video.mp4 --use-4layer --editorial-model gpt-4o-mini
+python3 arena_process.py video.mp4 --editorial-model gpt-4o-mini
 
 # Cheapest: Standard mode (~$0.05 per video)
 python3 arena_process.py video.mp4
@@ -657,7 +657,7 @@ python3 arena_process.py video.mp4
 
 ```bash
 # Export all layer results to output/editorial_layers/
-python3 arena_process.py video.mp4 --use-4layer --export-editorial-layers
+python3 arena_process.py video.mp4 --export-editorial-layers
 
 # Output structure:
 # output/editorial_layers/
@@ -695,7 +695,7 @@ Test with shorter videos first:
 ffmpeg -i long-video.mp4 -t 300 -c copy test-5min.mp4
 
 # Process the test
-python3 arena_process.py test-5min.mp4 --use-4layer
+python3 arena_process.py test-5min.mp4
 ```
 
 ### 3. Review Metadata First
@@ -722,7 +722,7 @@ python3 arena_process.py interview.mp4 --min 60 --max 120
 **Common Issue:** If 4-layer returns "No clips passed validation", your duration constraints may be too strict. Try:
 ```bash
 # Relax constraints
-python3 arena_process.py video.mp4 --use-4layer --min 20 --max 90
+python3 arena_process.py video.mp4 --min 20 --max 90
 ```
 
 ### 5. Balance Quality and Cost
@@ -736,7 +736,7 @@ python3 arena_process.py video.mp4 -n 20
 # Step 2: Review metadata.json and pick best candidates
 
 # Step 3: Re-run with 4-layer on promising videos
-python3 arena_process.py video.mp4 --use-4layer --editorial-model gpt-4o-mini -n 5
+python3 arena_process.py video.mp4 --editorial-model gpt-4o-mini -n 5
 ```
 
 ### 6. Optimize for Batch Processing
@@ -747,7 +747,7 @@ for video in videos/*.mp4; do
   echo "Processing: $video"
   # Use gpt-4o-mini for cost savings on bulk processing
   arena process "$video" \
-    --use-4layer \
+    \
     --editorial-model gpt-4o-mini \
     -n 5 \
     -o "output/$(basename $video .mp4)"
@@ -760,7 +760,7 @@ Generate once, distribute everywhere:
 
 ```bash
 # Generate clips in highest quality
-arena process video.mp4 --use-4layer -n 5 -o clips/
+arena process video.mp4 -n 5 -o clips/
 
 # Format for each platform
 arena format clips/clips/ -p tiktok -o dist/tiktok/
@@ -799,7 +799,7 @@ Professional clips ready for distribution.
 ```bash
 # Professional clips for distribution
 arena process video.mp4 \
-  --use-4layer \
+  \
   --editorial-model gpt-4o-mini \
   -n 5 \
   --min 20 \
@@ -814,7 +814,7 @@ Cost-optimized workflow with manual review step.
 
 ```bash
 # Step 1: Analyze without generating (fast, cheap)
-arena analyze video.mp4 --use-4layer -n 10 -o moments.json
+arena analyze video.mp4 -n 10 -o moments.json
 
 # Step 2: Review moments.json
 cat moments.json | jq '.clips[] | {id, title, duration, standalone_score}'
@@ -835,15 +835,15 @@ Experiment with different parameters using cached transcript.
 
 ```bash
 # Initial run (creates transcript cache)
-arena process video.mp4 --use-4layer
+arena process video.mp4
 
 # Try different clip counts (reuses cached transcript)
-arena process video.mp4 --use-4layer -n 3
-arena process video.mp4 --use-4layer -n 10
+arena process video.mp4 -n 3
+arena process video.mp4 -n 10
 
 # Try different durations
-arena process video.mp4 --use-4layer --min 20 --max 45
-arena process video.mp4 --use-4layer --min 45 --max 90
+arena process video.mp4 --min 20 --max 45
+arena process video.mp4 --min 45 --max 90
 ```
 
 **Tip:** Cached transcripts save time and money on subsequent runs!
@@ -855,7 +855,7 @@ Export layer data to understand why clips were rejected.
 ```bash
 # Export layer data to diagnose issues
 arena process video.mp4 \
-  --use-4layer \
+  \
   --export-editorial-layers
 
 # Review rejection reasons
@@ -878,7 +878,7 @@ for video in videos/*.mp4; do
 
   # Use cost-optimized 4-layer
   arena process "$video" \
-    --use-4layer \
+    \
     --editorial-model gpt-4o-mini \
     -n 5 \
     -o "output/$(basename $video .mp4)"
@@ -897,7 +897,7 @@ Optimized for TikTok, Instagram Reels, YouTube Shorts.
 ```bash
 # Short-form optimized
 arena process video.mp4 \
-  --use-4layer \
+  \
   --editorial-model gpt-4o-mini \
   -n 3 \
   --min 15 \
@@ -914,7 +914,7 @@ Extract best moments from long-form podcast episodes.
 ```bash
 # Longer clips for podcast highlights
 arena process podcast-episode.mp4 \
-  --use-4layer \
+  \
   --editorial-model gpt-4o-mini \
   -n 8 \
   --min 60 \
@@ -928,7 +928,7 @@ Generate clips once, format for multiple platforms.
 ```bash
 # Step 1: Generate high-quality clips
 arena process video.mp4 \
-  --use-4layer \
+  \
   --editorial-model gpt-4o-mini \
   -n 5 \
   --min 30 \
@@ -969,7 +969,7 @@ Turn long-form content into a week's worth of social media posts.
 arena transcribe webinar.mp4 -o webinar_transcript.json
 arena analyze webinar.mp4 \
   --transcript webinar_transcript.json \
-  --use-4layer \
+  \
   -n 20 \
   -o analysis.json
 
@@ -1011,13 +1011,13 @@ This is the most common issue with 4-layer mode. Layer 3 is a strict quality gat
 
 ```bash
 # Solution 1: Lower minimum duration
-arena process video.mp4 --use-4layer --min 20 --max 90
+arena process video.mp4 --min 20 --max 90
 
 # Solution 2: Allow wider range
-arena process video.mp4 --use-4layer --min 15 --max 120
+arena process video.mp4 --min 15 --max 120
 
 # Solution 3: Debug with layer export to see why clips were rejected
-arena process video.mp4 --use-4layer --export-editorial-layers
+arena process video.mp4 --export-editorial-layers
 cat output/editorial_layers/layer3_validated.json | jq '.[] | select(.verdict=="REJECT")'
 ```
 
@@ -1034,7 +1034,7 @@ If Layer 3 is rejecting most clips:
 
 ```bash
 # 1. Check pass rate in output
-arena process video.mp4 --use-4layer
+arena process video.mp4
 # Look for: "Layer 3 pass rate: X%"
 
 # 2. If <30%, your content may have:
@@ -1043,7 +1043,7 @@ arena process video.mp4 --use-4layer
 #    - Heavy use of pronouns without clear referents
 
 # 3. Try more candidates to get enough good clips
-arena process video.mp4 --use-4layer -n 10 --min 20 --max 90
+arena process video.mp4 -n 10 --min 20 --max 90
 ```
 
 ### Rate Limit Errors (429)
@@ -1062,14 +1062,14 @@ Arena CLI includes intelligent retry logic:
 **If you're consistently hitting rate limits:**
 ```bash
 # Option 1: Process fewer clips at once
-arena process video.mp4 --use-4layer -n 3
+arena process video.mp4 -n 3
 
 # Option 2: Disable parallel processing in Layer 2 (slower but more rate-limit friendly)
 # This is controlled internally - rate limits are handled automatically
 
 # Option 3: Add delays between batch processing
 for video in videos/*.mp4; do
-  arena process "$video" --use-4layer -n 5
+  arena process "$video" -n 5
   sleep 30  # Wait 30 seconds between videos
 done
 ```
@@ -1140,13 +1140,13 @@ Use cost optimization strategies:
 
 ```bash
 # Option 1: Use gpt-4o-mini (60% cheaper)
-arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini
+arena process video.mp4 --editorial-model gpt-4o-mini
 
 # Option 2: Generate fewer clips
-arena process video.mp4 --use-4layer -n 3
+arena process video.mp4 -n 3
 
 # Option 3: Analyze first, generate selectively
-arena analyze video.mp4 --use-4layer -n 10 -o moments.json
+arena analyze video.mp4 -n 10 -o moments.json
 # Review moments.json, then:
 arena generate video.mp4 moments.json --select 1,3,5
 ```
@@ -1175,14 +1175,14 @@ sudo apt install ffmpeg
 
 ### Layer export files missing
 
-The `--export-editorial-layers` flag requires `--use-4layer`:
+The `--export-editorial-layers` flag requires ``:
 
 ```bash
 # Wrong:
 arena process video.mp4 --export-editorial-layers
 
 # Correct:
-arena process video.mp4 --use-4layer --export-editorial-layers
+arena process video.mp4 --export-editorial-layers
 ```
 
 ## Getting Help

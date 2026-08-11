@@ -32,7 +32,6 @@ export interface ProcessingSummary {
   processingTime: number;
   totalCost?: number;
   passRate?: number;
-  use4Layer?: boolean;
   editorialModel?: string;
   layerStats?: {
     layer1Moments?: number;
@@ -77,7 +76,7 @@ export function displayProcessingSummary(summary: ProcessingSummary): void {
     );
   }
 
-  if (summary.passRate !== undefined && summary.use4Layer) {
+  if (summary.passRate !== undefined) {
     summaryLines.push(
       `${chalk.bold(chalk.white('Pass Rate:'))}   ${formatPercentage(summary.passRate)} (strict quality gate)`
     );
@@ -91,7 +90,7 @@ export function displayProcessingSummary(summary: ProcessingSummary): void {
   console.log('');
 
   // 2. 4-Layer stats (if available)
-  if (summary.use4Layer && summary.layerStats) {
+  if (summary.layerStats) {
     const layerLines: string[] = [];
     if (summary.layerStats.layer1Moments) {
       layerLines.push(`Layer 1: Found ${summary.layerStats.layer1Moments} candidate moments`);
@@ -159,17 +158,13 @@ export function displayProcessingSummary(summary: ProcessingSummary): void {
     `${chalk.white('Review clips locally:')}       ${chalk.cyan(`ls ${summary.outputDir}/`)}`,
   ];
 
-  if (summary.use4Layer && summary.editorialModel === 'gpt-4o') {
+  if (summary.editorialModel === 'gpt-4o') {
     tips.push(
       `${chalk.white('Try cost-optimized:')}   ${chalk.cyan('--editorial-model gpt-4o-mini')}`
     );
   }
 
-  if (summary.use4Layer) {
-    tips.push(`${chalk.white('Debug layers:')}         ${chalk.cyan('--export-layers')}`);
-  } else {
-    tips.push(`${chalk.white('Try 4-layer system:')}   ${chalk.cyan('--use-4layer')}`);
-  }
+  tips.push(`${chalk.white('Debug layers:')}         ${chalk.cyan('--export-layers')}`);
 
   tips.push(`${chalk.white('Adjust duration:')}       ${chalk.cyan('--min 20 --max 60')}`);
 

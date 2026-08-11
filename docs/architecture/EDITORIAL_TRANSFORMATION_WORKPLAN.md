@@ -643,7 +643,7 @@ metrics = {
 
 ### CLI
 - `arena process --editorial-v2` (new system, beta)
-- `arena process --use-4layer` (current system, for comparison)
+- `arena process` (current system, for comparison)
 - `--export-thought-units` (debug intermediate results)
 
 ---

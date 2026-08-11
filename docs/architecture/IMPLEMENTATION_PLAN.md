@@ -1302,7 +1302,7 @@ def generate_review_report(packaged_clips, transcript_data, output_file):
 
 ### Phase 4: Production (Week 4)
 - [ ] Integrate with main pipeline
-- [ ] Add CLI flags (`--use-4layer`)
+- [ ] Add CLI flags (``)
 - [ ] Documentation
 - [ ] Metrics dashboard
 - [ ] Production deployment
@@ -1343,7 +1343,7 @@ Target: 2-3x quality improvement for 3-4x cost increase
 
 ```bash
 # Export intermediate results
-arena process video.mp4 --use-4layer --export-layers layers_output/
+arena process video.mp4 --export-layers layers_output/
 
 # Generates:
 # - layers_output/layer1_moments.json

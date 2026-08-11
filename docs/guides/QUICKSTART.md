@@ -74,7 +74,7 @@ This generates 5 clips (30-90s each) using standard mode.
 ### 2. Professional Quality (Recommended)
 
 ```bash
-arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini
+arena process video.mp4 --editorial-model gpt-4o-mini
 ```
 
 Uses the 4-layer editorial system for professional-grade clips with cost optimization.
@@ -83,13 +83,13 @@ Uses the 4-layer editorial system for professional-grade clips with cost optimiz
 
 ```bash
 # Generate 10 short clips for TikTok/Reels
-arena process video.mp4 --use-4layer -n 10 --min 15 --max 30
+arena process video.mp4 -n 10 --min 15 --max 30
 
 # Generate 8 longer clips for YouTube/LinkedIn
-arena process video.mp4 --use-4layer -n 8 --min 60 --max 120
+arena process video.mp4 -n 8 --min 60 --max 120
 
 # Custom output directory
-arena process video.mp4 --use-4layer -o my_clips/
+arena process video.mp4 -o my_clips/
 
 # Fast mode (10x faster, less precise cuts)
 arena process video.mp4 --fast
@@ -207,7 +207,7 @@ Example output:
 
 ```bash
 # Analyze without generating (fast preview)
-arena analyze video.mp4 --use-4layer -o moments.json
+arena analyze video.mp4 -o moments.json
 
 # Review moments.json
 
@@ -236,7 +236,7 @@ Now you have clips optimized for every platform!
 # Process multiple videos
 for video in videos/*.mp4; do
   echo "Processing: $video"
-  arena process "$video" --use-4layer --editorial-model gpt-4o-mini -n 5
+  arena process "$video" --editorial-model gpt-4o-mini -n 5
 done
 ```
 
@@ -260,7 +260,7 @@ arena process video.mp4
 **Best for:** Production, distribution, professional quality
 
 ```bash
-arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini
+arena process video.mp4 --editorial-model gpt-4o-mini
 ```
 
 - Professional quality (5-8 minutes)
@@ -274,8 +274,8 @@ arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini
 
 | Task | Command |
 |------|---------|
-| **Generate clips** | `arena process video.mp4 --use-4layer` |
-| **Analyze only** | `arena analyze video.mp4 --use-4layer -o moments.json` |
+| **Generate clips** | `arena process video.mp4` |
+| **Analyze only** | `arena analyze video.mp4 -o moments.json` |
 | **Generate from analysis** | `arena generate video.mp4 moments.json --select 1,3,5` |
 | **Format for TikTok** | `arena format clips/ -p tiktok -o tiktok/` |
 | **Transcribe only** | `arena transcribe video.mp4` |
@@ -326,7 +326,7 @@ Your duration constraints may be too strict:
 
 ```bash
 # Relax constraints
-arena process video.mp4 --use-4layer --min 20 --max 90
+arena process video.mp4 --min 20 --max 90
 
 # Or try standard mode first
 arena process video.mp4 -n 10
@@ -351,7 +351,7 @@ ffmpeg -version
 
 ```bash
 arena process video.mp4 \
-  --use-4layer \
+  \
   --editorial-model gpt-4o-mini \
   -n 3 \
   --min 15 \
@@ -364,7 +364,7 @@ arena format output/clips/ -p tiktok --crop smart -o social/tiktok/
 
 ```bash
 arena process podcast.mp4 \
-  --use-4layer \
+  \
   --editorial-model gpt-4o-mini \
   -n 8 \
   --min 60 \
@@ -378,7 +378,7 @@ arena format output/clips/ -p linkedin -o linkedin/
 
 ```bash
 arena process lecture.mp4 \
-  --use-4layer \
+  \
   -n 8 \
   --min 45 \
   --max 90
@@ -396,4 +396,4 @@ arena format output/clips/ -p youtube -o youtube/
 
 ---
 
-**Ready to create amazing clips?** Run `arena process video.mp4 --use-4layer` and watch the magic happen! ✨
+**Ready to create amazing clips?** Run `arena process video.mp4` and watch the magic happen! ✨

@@ -369,7 +369,6 @@ describe('PythonBridge', () => {
         clipCount: 5,
         minDuration: 30,
         maxDuration: 120,
-        use4Layer: true,
         fast: true,
         padding: 2,
       });
@@ -388,7 +387,6 @@ describe('PythonBridge', () => {
       expect(spawnArgs).toContain('30');
       expect(spawnArgs).toContain('--max');
       expect(spawnArgs).toContain('120');
-      expect(spawnArgs).toContain('--use-4layer');
       expect(spawnArgs).toContain('--fast');
       expect(spawnArgs).toContain('--padding');
       expect(spawnArgs).toContain('2');
@@ -409,7 +407,6 @@ describe('PythonBridge', () => {
       const spawnArgs = mockSpawn.mock.calls[0][1];
       expect(spawnArgs).not.toContain('-n');
       expect(spawnArgs).not.toContain('--min');
-      expect(spawnArgs).not.toContain('--use-4layer');
     });
   });
 

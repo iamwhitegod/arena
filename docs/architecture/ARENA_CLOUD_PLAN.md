@@ -171,7 +171,7 @@ arena process video.mp4 -c 5
 ```bash
 # Everything works offline, no account needed
 arena process video.mp4 -c 5
-arena process video.mp4 --use-4layer -c 10
+arena process video.mp4 -c 10
 arena analyze video.mp4
 ```
 

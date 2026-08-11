@@ -5,8 +5,8 @@ import json
 from pathlib import Path
 from arena.audio.transcriber import Transcriber
 from arena.audio.energy import AudioEnergyAnalyzer
-from arena.ai.analyzer import TranscriptAnalyzer
 from arena.ai.hybrid import HybridAnalyzer
+from arena.editorial import FourLayerAdapter
 
 
 def run_analyze(args):
@@ -46,7 +46,7 @@ def run_analyze(args):
     try:
         # Initialize analyzers
         print("🔧 Initializing analyzers...")
-        ai_analyzer = TranscriptAnalyzer(api_key=api_key)
+        ai_analyzer = FourLayerAdapter(api_key=api_key)
         energy_analyzer = AudioEnergyAnalyzer(video_path=video_path)
         hybrid = HybridAnalyzer(
             ai_analyzer=ai_analyzer,

@@ -21,7 +21,7 @@ arena setup
 export OPENAI_API_KEY="sk-..."
 
 # Generate clips
-arena process video.mp4 -p tiktok --use-4layer
+arena process video.mp4 -p tiktok
 ```
 
 Your clips are ready in `output/formatted/`
@@ -98,7 +98,7 @@ pip3 install openai-whisper openai ffmpeg-python torch numpy scipy
 arena process video.mp4
 
 # High quality with 4-layer system
-arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini
+arena process video.mp4 --editorial-model gpt-4o-mini
 
 # Auto-format for TikTok
 arena process video.mp4 -p tiktok -n 3 --min 15 --max 30
@@ -108,7 +108,7 @@ arena process video.mp4 -p tiktok -n 3 --min 15 --max 30
 
 ```bash
 # Step 1: Analyze (fast, cheap)
-arena analyze video.mp4 --use-4layer -n 10 -o moments.json
+arena analyze video.mp4 -n 10 -o moments.json
 
 # Step 2: Review moments.json
 
@@ -120,7 +120,7 @@ arena generate video.mp4 moments.json --select 1,3,5
 
 ```bash
 # Generate clips once
-arena process video.mp4 --use-4layer -n 5
+arena process video.mp4 -n 5
 
 # Format for each platform
 arena format output/clips/ -p tiktok -o social/tiktok/
@@ -175,7 +175,7 @@ Located at `~/.arena/config.json`:
 
 ## 4-Layer Editorial System
 
-Enable professional quality filtering with `--use-4layer`:
+Enable professional quality filtering with ``:
 
 1. **Candidate Detection** - Find potential moments
 2. **Boundary Refinement** - Adjust cut points
@@ -189,7 +189,7 @@ Enable professional quality filtering with `--use-4layer`:
 
 **Recommended:**
 ```bash
-arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini
+arena process video.mp4 --editorial-model gpt-4o-mini
 ```
 
 ## Common Options
@@ -201,7 +201,7 @@ arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini
 --max <seconds>              Maximum duration (default: 90)
 
 # Quality
---use-4layer                 Enable 4-layer system
+                Enable 4-layer system
 --editorial-model <model>    Use gpt-4o or gpt-4o-mini (default: gpt-4o)
 
 # Platform formatting
@@ -226,10 +226,10 @@ arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini
 
 ```bash
 # Relax duration constraints
-arena process video.mp4 --use-4layer --min 20 --max 120
+arena process video.mp4 --min 20 --max 120
 
 # Analyze first to see what was found
-arena analyze video.mp4 --use-4layer --export-layers
+arena analyze video.mp4 --export-layers
 
 # Use standard mode for testing
 arena process video.mp4 -n 10
@@ -263,7 +263,7 @@ Arena automatically handles rate limits with intelligent retry logic. If you're 
 
 ```bash
 for video in videos/*.mp4; do
-  arena process "$video" --use-4layer
+  arena process "$video"
   sleep 30
 done
 ```

@@ -53,7 +53,7 @@ test_4layer_integration.py (end-to-end test)
 ```
 arena_process.py:
 - Added FourLayerAdapter import
-- Added --use-4layer CLI flag
+- Added CLI flag
 - Added --export-editorial-layers CLI flag
 - Updated analyzer initialization logic
 ```
@@ -73,23 +73,23 @@ python arena_process.py video.mp4 -n 5
 
 ```bash
 # Use 4-layer system for higher quality
-python arena_process.py video.mp4 -n 5 --use-4layer
+python arena_process.py video.mp4 -n 5
 
 # With debugging (exports intermediate layer results)
-python arena_process.py video.mp4 -n 5 --use-4layer --export-editorial-layers
+python arena_process.py video.mp4 -n 5 --export-editorial-layers
 ```
 
 ### Advanced Examples
 
 ```bash
 # 4-layer with custom duration constraints
-python arena_process.py video.mp4 -n 10 --min 20 --max 60 --use-4layer
+python arena_process.py video.mp4 -n 10 --min 20 --max 60
 
 # 4-layer with fast mode (no re-encoding)
-python arena_process.py video.mp4 -n 5 --use-4layer --fast
+python arena_process.py video.mp4 -n 5 --fast
 
 # Export layer debugging info
-python arena_process.py video.mp4 -n 5 --use-4layer --export-editorial-layers
+python arena_process.py video.mp4 -n 5 --export-editorial-layers
 ```
 
 ---
@@ -187,7 +187,7 @@ Each layer has ONE job:
 
 ### Debugging Support
 ```bash
-python arena_process.py video.mp4 --use-4layer --export-editorial-layers
+python arena_process.py video.mp4 --export-editorial-layers
 ```
 
 Exports to `output/editorial/`:
@@ -322,8 +322,8 @@ Top 3 Clips:
 
 ### For New Videos
 ```bash
-# Just add --use-4layer flag
-python arena_process.py video.mp4 --use-4layer
+# Just add flag
+python arena_process.py video.mp4
 ```
 
 ### For Existing Pipelines
@@ -342,7 +342,7 @@ analyzer = FourLayerAdapter(api_key=key)
 ```
 
 ### Gradual Rollout
-1. **Week 1:** Test with a few videos using `--use-4layer`
+1. **Week 1:** Test with a few videos using ``
 2. **Week 2:** Compare quality vs single-layer
 3. **Week 3:** Make 4-layer default if results are good
 4. **Week 4:** Monitor metrics and iterate
@@ -426,11 +426,11 @@ analyzer = FourLayerAdapter(api_key=key)
 
 1. **Test with real videos:**
    ```bash
-   python arena_process.py your_video.mp4 --use-4layer -n 5
+   python arena_process.py your_video.mp4 -n 5
    ```
 
 2. **Compare results:**
-   - Run same video with and without `--use-4layer`
+   - Run same video with and without ``
    - Compare clip quality manually
    - Check standalone scores
 
@@ -450,6 +450,6 @@ analyzer = FourLayerAdapter(api_key=key)
 
 The 4-layer system is **production-ready** and **fully tested**.
 
-**Ready to use:** Just add `--use-4layer` to your arena_process.py commands!
+**Ready to use:** Just add `` to your arena_process.py commands!
 
 🎉 **Happy clipping!**

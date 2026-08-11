@@ -128,7 +128,6 @@ cat > ~/.arena/config.json << EOF
   "whisper_mode": "api",
   "minDuration": 30,
   "maxDuration": 90,
-  "use4Layer": true,
   "editorialModel": "gpt-4o-mini"
 }
 EOF
@@ -150,19 +149,19 @@ arena process video.mp4
 
 **Professional Quality (Recommended):**
 ```bash
-arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini -n 5
+arena process video.mp4 --editorial-model gpt-4o-mini -n 5
 ```
 
 **Custom Parameters:**
 ```bash
 # Short clips for TikTok/Reels
-arena process video.mp4 --use-4layer -n 10 --min 15 --max 30
+arena process video.mp4 -n 10 --min 15 --max 30
 
 # Longer clips for YouTube/LinkedIn
-arena process video.mp4 --use-4layer -n 8 --min 60 --max 120
+arena process video.mp4 -n 8 --min 60 --max 120
 
 # Custom output directory
-arena process video.mp4 --use-4layer -o my_clips/
+arena process video.mp4 -o my_clips/
 
 # Fast mode (10x faster)
 arena process video.mp4 --fast
@@ -186,9 +185,9 @@ arena format output/clips/ -p youtube -o social/youtube/
 | Command | Purpose | Example |
 |---------|---------|---------|
 | `arena init` | Interactive setup | `arena init` |
-| `arena process` | All-in-one processing | `arena process video.mp4 --use-4layer` |
+| `arena process` | All-in-one processing | `arena process video.mp4` |
 | `arena transcribe` | Transcription only | `arena transcribe video.mp4` |
-| `arena analyze` | Find moments | `arena analyze video.mp4 --use-4layer` |
+| `arena analyze` | Find moments | `arena analyze video.mp4` |
 | `arena generate` | Generate from analysis | `arena generate video.mp4 analysis.json` |
 | `arena format` | Format for platforms | `arena format clips/ -p tiktok` |
 | `arena config` | Manage configuration | `arena config` |
@@ -220,7 +219,7 @@ npm test
 cd engine
 
 # Run Python CLI directly
-./@whitegodkingsley/arena-cli process video.mp4 --use-4layer
+./@whitegodkingsley/arena-cli process video.mp4
 
 # Or via Python module
 python3 -m arena.cli.main process video.mp4
@@ -396,10 +395,10 @@ This is normal! The 4-layer system has strict quality gates. Try:
 
 ```bash
 # Relax duration constraints
-arena process video.mp4 --use-4layer --min 20 --max 90
+arena process video.mp4 --min 20 --max 90
 
 # Generate more candidates
-arena process video.mp4 --use-4layer -n 10
+arena process video.mp4 -n 10
 
 # Or try standard mode first
 arena process video.mp4 -n 10
@@ -451,7 +450,7 @@ Now that Arena is set up:
 arena init
 
 # 2. Generate test clips
-arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini -n 3
+arena process video.mp4 --editorial-model gpt-4o-mini -n 3
 
 # 3. Format for social media
 arena format output/clips/ -p tiktok -o social/tiktok/

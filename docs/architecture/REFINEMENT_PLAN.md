@@ -17,7 +17,7 @@ The 4-layer system is **fully implemented and working**:
 - ✅ Layer 2: ThoughtBoundaryAnalyzer (expands to complete thoughts)
 - ✅ Layer 3: StandaloneContextRefiner (quality gate)
 - ✅ Layer 4: PackagingLayer (titles, descriptions, hashtags)
-- ✅ Integrated with arena_process.py via `--use-4layer` flag
+- ✅ Integrated with arena_process.py via `` flag
 - ✅ Comprehensive test suite
 
 ---
@@ -576,7 +576,7 @@ After implementing refinements, run on 3 real videos:
 ### Metrics to Track:
 
 ```bash
-python arena_process.py video1.mp4 --use-4layer --export-editorial-layers -n 5
+python arena_process.py video1.mp4 --export-editorial-layers -n 5
 
 # Check these metrics:
 1. Layer 2 confidence scores (should be >0.7 for most)
@@ -605,7 +605,7 @@ python arena_process.py video1.mp4 --use-4layer --export-editorial-layers -n 5
 
 ```bash
 # Test gpt-4o-mini for Layer 2
-python arena_process.py video1.mp4 --use-4layer --editorial-model gpt-4o-mini
+python arena_process.py video1.mp4 --editorial-model gpt-4o-mini
 
 # Compare:
 - Cost difference (should be ~60% cheaper)

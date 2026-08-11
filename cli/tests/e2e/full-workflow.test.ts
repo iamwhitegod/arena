@@ -41,7 +41,7 @@ describe('Full Workflow E2E', () => {
   it('should show command-specific help', async () => {
     const { stdout } = await execAsync(`node "${CLI_PATH}" process --help`);
     expect(stdout).toContain('Process a video');
-    expect(stdout).toContain('--use-4layer');
+    expect(stdout).toContain('--editorial-model');
     expect(stdout).toContain('--scene-detection');
   });
 

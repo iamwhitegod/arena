@@ -293,7 +293,7 @@ From `analysis_results.json`:
 
 1. **Run test_007 video with --export-layers**:
    ```bash
-   arena process test_007_video.mp4 --use-4layer --export-layers -n 10
+   arena process test_007_video.mp4 --export-layers -n 10
    ```
    - Examine `layer1_moments.json`: How many moments were actually detected?
    - Examine `layer2_boundaries.json`: How many passed boundary analysis?

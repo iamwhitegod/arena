@@ -54,7 +54,7 @@ Burn subtitles into clips from the Whisper transcript:
 ### 💰 **Cost-Optimized**
 - Smart caching saves time and money
 - Support for gpt-4o-mini (~60% cheaper than gpt-4o)
-- Typical cost: $0.05-0.50 per video depending on quality settings
+- Typical cost: $0.20-0.50 per video depending on model choice
 
 ## 🚀 Quick Start
 
@@ -88,7 +88,7 @@ This wizard helps you configure:
 
 ```bash
 # From a local file
-arena process video.mp4 --use-4layer -n 5
+arena process video.mp4 -n 5
 
 # From a YouTube URL
 arena process https://www.youtube.com/watch?v=VIDEO_ID -n 5
@@ -110,9 +110,9 @@ Arena provides 9 commands for flexible video clip generation workflows:
 | Command | Purpose | Example |
 |---------|---------|---------|
 | `arena init` | Interactive setup wizard | `arena init` |
-| `arena process` | All-in-one processing | `arena process video.mp4 --use-4layer` |
+| `arena process` | All-in-one clip generation | `arena process video.mp4` |
 | `arena transcribe` | Transcription only | `arena transcribe video.mp4` |
-| `arena analyze` | Find moments (no video generation) | `arena analyze video.mp4 --use-4layer` |
+| `arena analyze` | Find moments (no video generation) | `arena analyze video.mp4 -n 10` |
 | `arena generate` | Generate clips from analysis | `arena generate video.mp4 analysis.json` |
 | `arena format` | Format for social platforms | `arena format clips/ -p tiktok` |
 | `arena detect-scenes` | Detect scene changes | `arena detect-scenes video.mp4` |
@@ -129,7 +129,7 @@ See [docs/guides/USAGE.md](./docs/guides/USAGE.md) for comprehensive documentati
 
 ```bash
 # Generate 5 professional clips
-arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini -n 5
+arena process video.mp4 --editorial-model gpt-4o-mini -n 5
 ```
 
 **Cost:** ~$0.20 | **Time:** 5-8 minutes
@@ -138,7 +138,7 @@ arena process video.mp4 --use-4layer --editorial-model gpt-4o-mini -n 5
 
 ```bash
 # Step 1: Analyze (fast, cheap)
-arena analyze video.mp4 --use-4layer -n 10 -o moments.json
+arena analyze video.mp4 -n 10 -o moments.json
 
 # Step 2: Review moments.json
 
@@ -152,7 +152,7 @@ arena generate video.mp4 moments.json --select 1,3,5,7
 
 ```bash
 # Step 1: Generate high-quality clips with captions
-arena process video.mp4 --use-4layer -n 5 --captions
+arena process video.mp4 -n 5 --captions
 
 # Step 2: Format for each platform
 arena format output/clips/ -p tiktok -o social/tiktok/
@@ -180,35 +180,16 @@ arena transcribe https://vimeo.com/123456789
 
 ## 📊 4-Layer Editorial System
 
-The optional 4-layer system applies professional editorial standards:
+Arena uses a 4-layer editorial system for every analysis:
 
-**Standard Mode** (Fast & Cheap)
-- AI analyzes transcript for interesting moments
-- Generates clips with basic metadata
-- ~$0.05 per video, 2-4 minutes
-- Good for experimentation
+- **Layer 1:** Find 25+ candidate moments (hooks, insights, stories)
+- **Layer 2:** Expand to complete thought boundaries (premise → claim → resolution)
+- **Layer 3:** Validate standalone context (strict quality gate)
+- **Layer 4:** Package with professional titles, descriptions, and hashtags
 
-**4-Layer Mode** (Professional Quality)
-- Layer 1: Find 25 candidate moments
-- Layer 2: Expand to complete thought boundaries
-- Layer 3: Validate standalone context (7-10% pass rate)
-- Layer 4: Package with professional titles/descriptions
-- ~$0.20-0.50 per video, 5-8 minutes
-- Production-ready clips
+**Cost:** ~$0.20-0.50 per video | **Time:** 5-8 minutes
 
-### When to Use 4-Layer
-
-✅ **Use 4-Layer when:**
-- You need professional-quality clips for distribution
-- Standalone context matters (viewers clicking from feeds)
-- You want better titles and descriptions
-- Quality > cost is your priority
-
-❌ **Use Standard when:**
-- You're experimenting/testing
-- You need fast iteration
-- Cost is primary concern
-- You'll manually review clips anyway
+Use `--editorial-model gpt-4o-mini` for ~60% cost savings with similar quality.
 
 ## 📐 Platform Formatting
 
@@ -327,7 +308,6 @@ Global config is stored at `~/.arena/config.json`:
   "whisper_mode": "api",
   "minDuration": 30,
   "maxDuration": 90,
-  "use4Layer": true,
   "editorialModel": "gpt-4o-mini"
 }
 ```
@@ -336,7 +316,6 @@ Manage via CLI:
 
 ```bash
 arena config                          # View current config
-arena config set use4Layer true       # Enable 4-layer
 arena config get editorialModel       # Get specific value
 arena config reset                    # Reset to defaults
 ```
@@ -345,11 +324,10 @@ arena config reset                    # Reset to defaults
 
 Typical costs per 10-minute video:
 
-| Mode | Model | Cost | Time |
-|------|-------|------|------|
-| Standard | gpt-4o-mini | $0.05 | 2-4 min |
-| 4-Layer | gpt-4o-mini | $0.20 | 5-8 min |
-| 4-Layer | gpt-4o | $0.50 | 5-8 min |
+| Model | Cost | Time |
+|-------|------|------|
+| gpt-4o-mini | $0.20 | 5-8 min |
+| gpt-4o | $0.50 | 5-8 min |
 
 **Tips to reduce costs:**
 - Use `--editorial-model gpt-4o-mini` (60% cheaper, same quality)
@@ -364,7 +342,6 @@ Typical costs per 10-minute video:
 ```bash
 # Generate captioned short-form clips for social media
 arena process video.mp4 \
-  --use-4layer \
   --editorial-model gpt-4o-mini \
   -n 3 \
   --min 15 \
@@ -378,7 +355,6 @@ arena process video.mp4 \
 ```bash
 # From a YouTube podcast URL — extract 8 clips
 arena process https://www.youtube.com/watch?v=PODCAST_ID \
-  --use-4layer \
   -n 8 \
   --min 60 \
   --max 120 \
@@ -404,7 +380,6 @@ arena transcribe https://www.youtube.com/watch?v=VIDEO_ID
 ```bash
 # Extract educational snippets with captions
 arena process lecture.mp4 \
-  --use-4layer \
   -n 8 \
   --min 45 \
   --max 90 \
@@ -496,7 +471,7 @@ Your duration constraints may be too strict:
 
 ```bash
 # Relax constraints
-arena process video.mp4 --use-4layer --min 20 --max 90
+arena process video.mp4 --min 20 --max 90
 ```
 
 See [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) for more solutions.
