@@ -36,10 +36,10 @@ def _get_js_runtimes() -> str:
     if shutil.which('deno'):
         runtimes.append('deno')
     if shutil.which('node'):
-        runtimes.append('nodejs')
+        runtimes.append('node')
     if shutil.which('bun'):
         runtimes.append('bun')
-    return ','.join(runtimes) if runtimes else 'nodejs'
+    return ','.join(runtimes) if runtimes else 'node'
 
 
 def _url_cache_key(url: str) -> str:
