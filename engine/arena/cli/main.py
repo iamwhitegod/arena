@@ -216,6 +216,12 @@ Documentation:
         choices=['bottom', 'top', 'middle'],
         help='Caption position (default: bottom)'
     )
+    process_parser.add_argument(
+        '--cookies-from-browser',
+        type=str,
+        default=None,
+        help='Browser to extract cookies from for URL downloads (chrome, firefox, safari, brave, edge)'
+    )
 
     # =========================================================================
     # arena transcribe
@@ -240,6 +246,12 @@ Documentation:
         '--no-cache',
         action='store_true',
         help='Force re-transcription'
+    )
+    transcribe_parser.add_argument(
+        '--cookies-from-browser',
+        type=str,
+        default=None,
+        help='Browser to extract cookies from for URL downloads (chrome, firefox, safari, brave, edge)'
     )
 
     # =========================================================================
