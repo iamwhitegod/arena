@@ -40,13 +40,21 @@ jobs:
         working-directory: ./cli
         run: npm run lint
 
-      - name: Run tests
+      - name: Run TypeScript tests
         working-directory: ./cli
         run: npm test
 
       - name: Build
         working-directory: ./cli
         run: npm run build
+
+      - name: Install Python dependencies
+        working-directory: ./engine
+        run: pip install -r requirements-dev.txt
+
+      - name: Run Python tests
+        working-directory: ./engine
+        run: python -m pytest tests/ -v --tb=short
 
       - name: Upload coverage reports
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == '20.x'
