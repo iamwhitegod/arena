@@ -175,7 +175,7 @@ class PlatformFormatter:
         try:
             num, denom = fps_string.split('/')
             return float(num) / float(denom)
-        except:
+        except (ValueError, ZeroDivisionError):
             return 30.0
 
     def format_for_platform(

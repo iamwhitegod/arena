@@ -107,7 +107,7 @@ class ClipGenerator:
         try:
             num, denom = fps_string.split('/')
             return float(num) / float(denom)
-        except:
+        except (ValueError, ZeroDivisionError):
             return 0.0
 
     def _sanitize_filename(self, text: str, max_length: int = 50) -> str:

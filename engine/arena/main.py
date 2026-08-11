@@ -80,7 +80,9 @@ def process_video(args):
                 with open(transcript_cache_path, 'r') as f:
                     transcript = json.load(f)
                 reporter.report("Transcription", 100, "Loaded from cache")
-            except:
+            except (json.JSONDecodeError, IOError, OSError) as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to load transcript cache: {e}")
                 transcript = None
 
         # Transcribe if not cached

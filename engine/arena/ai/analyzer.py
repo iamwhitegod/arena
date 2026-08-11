@@ -524,7 +524,7 @@ Important:
             )
 
             return response.choices[0].message.content.strip().strip('"')
-        except:
+        except Exception:
             return "Untitled Clip"
 
     def suggest_hashtags(self, transcript_segment: str, max_tags: int = 5) -> List[str]:
@@ -552,7 +552,7 @@ Important:
             # Parse hashtags from response
             tags = response.choices[0].message.content.strip().split()
             return [tag.strip().lstrip('#') for tag in tags[:max_tags]]
-        except:
+        except Exception:
             return []
 
     def extract_transcript_text(
