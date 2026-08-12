@@ -56,7 +56,7 @@ export function MobileMenu({ open, onClose }: MobileMenuProps) {
       className="md:hidden overflow-hidden transition-all duration-300 ease-in-out"
       style={{ maxHeight: 0 }}
     >
-      <div className="border-t border-border bg-white px-4 sm:px-6 py-4 space-y-3">
+      <div className="border-t border-border bg-background px-4 sm:px-6 py-4 space-y-3">
         {navLinks.map((link) =>
           link.external ? (
             <a

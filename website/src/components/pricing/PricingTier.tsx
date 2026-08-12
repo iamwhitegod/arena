@@ -21,7 +21,7 @@ export function PricingTier({
 }: PricingTierProps) {
   return (
     <div
-      className={`rounded-2xl border p-5 sm:p-8 flex flex-col ${
+      className={`rounded-2xl border bg-background p-5 sm:p-8 flex flex-col ${
         highlighted
           ? "border-arena-600 shadow-lg shadow-arena-600/10 relative"
           : "border-border"

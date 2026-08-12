@@ -8,7 +8,7 @@ export function Badge({ children, variant = "default" }: BadgeProps) {
   const styles =
     variant === "outline"
       ? "border border-border text-muted"
-      : "bg-arena-50 text-arena-700";
+      : "bg-arena-600/10 text-arena-600";
 
   return <span className={`${base} ${styles}`}>{children}</span>;
 }

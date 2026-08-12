@@ -30,8 +30,8 @@ export function PricingTable() {
         </p>
 
         {submitted ? (
-          <div className="rounded-lg bg-arena-50 border border-arena-200 p-4">
-            <p className="text-sm text-arena-700 font-medium">
+          <div className="rounded-lg bg-arena-600/10 border border-arena-600/20 p-4">
+            <p className="text-sm text-arena-600 font-medium">
               You&apos;re on the list! We&apos;ll let you know when Pro is
               ready.
             </p>

@@ -48,7 +48,7 @@ export function DocsMobileNav() {
                         onClick={() => setOpen(false)}
                         className={`block text-sm py-1.5 px-3 rounded-md ${
                           isActive
-                            ? "bg-arena-50 text-arena-700 font-medium"
+                            ? "bg-arena-600/10 text-arena-600 font-medium"
                             : "text-muted hover:text-foreground"
                         }`}
                       >

@@ -77,8 +77,8 @@ export function Features() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8">
           {FEATURES.map((feature, i) => (
             <ScrollReveal key={feature.title} delay={i * 100}>
-              <div className="rounded-xl border border-border bg-white p-5 sm:p-8 h-full">
-                <div className="w-12 h-12 rounded-lg bg-arena-50 text-arena-600 flex items-center justify-center mb-5">
+              <div className="rounded-xl border border-border bg-background p-5 sm:p-8 h-full">
+                <div className="w-12 h-12 rounded-lg bg-arena-600/10 text-arena-500 flex items-center justify-center mb-5">
                   {icons[feature.icon]}
                 </div>
                 <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>

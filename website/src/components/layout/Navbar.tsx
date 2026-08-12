@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLenis } from "lenis/react";
 import { Button } from "@/components/shared/Button";
+import { ThemeToggle } from "./ThemeToggle";
 import { MobileMenu } from "./MobileMenu";
 import { LINKS } from "@/lib/constants";
 
@@ -53,8 +54,8 @@ export function Navbar() {
   return (
     <header className={`sticky top-0 z-50 backdrop-blur-md border-b transition-all duration-300 ${
       scrolled
-        ? "bg-white/95 border-border shadow-sm"
-        : "bg-white/80 border-transparent"
+        ? "bg-background/95 border-border shadow-sm"
+        : "bg-background/80 border-transparent"
     }`}>
       <nav className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
         <Link href="/" onClick={scrollToTop} className="flex items-center gap-2">
@@ -95,13 +96,16 @@ export function Navbar() {
               </Link>
             )
           )}
+          <ThemeToggle />
           <Button href="/docs" size="sm">
             Get Started
           </Button>
         </div>
 
-        <button
-          className="md:hidden p-2 text-muted hover:text-foreground cursor-pointer"
+        <div className="flex items-center gap-1 md:hidden">
+          <ThemeToggle />
+          <button
+            className="p-2 text-muted hover:text-foreground cursor-pointer"
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-label="Toggle menu"
         >
@@ -126,7 +130,8 @@ export function Navbar() {
               />
             )}
           </svg>
-        </button>
+          </button>
+        </div>
       </nav>
 
       <MobileMenu open={mobileOpen} onClose={() => setMobileOpen(false)} />

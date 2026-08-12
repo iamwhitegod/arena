@@ -17,18 +17,18 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
         <DocsSidebar />
         <div className="flex-1 min-w-0">
           <DocsMobileNav />
-          <article className="prose prose-slate max-w-none
-            prose-headings:font-semibold prose-headings:tracking-tight
+          <article className="prose max-w-none
+            prose-headings:text-foreground prose-headings:font-semibold prose-headings:tracking-tight
             prose-h1:text-3xl prose-h1:mb-4
             prose-h2:text-xl prose-h2:mt-10 prose-h2:mb-4 prose-h2:border-b prose-h2:border-border prose-h2:pb-2
             prose-h3:text-lg prose-h3:mt-8 prose-h3:mb-3
             prose-p:text-muted prose-p:leading-relaxed
-            prose-code:font-mono prose-code:text-sm prose-code:bg-surface prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none
+            prose-code:font-mono prose-code:text-sm prose-code:bg-surface prose-code:text-foreground prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none
             prose-a:text-arena-600 prose-a:no-underline hover:prose-a:underline
             prose-li:text-muted
             prose-table:text-sm prose-table:overflow-x-auto prose-table:block
-            prose-th:text-left prose-th:font-semibold prose-th:border-b prose-th:border-border prose-th:pb-2
-            prose-td:border-b prose-td:border-border prose-td:py-2
+            prose-th:text-foreground prose-th:text-left prose-th:font-semibold prose-th:border-b prose-th:border-border prose-th:pb-2
+            prose-td:text-muted prose-td:border-b prose-td:border-border prose-td:py-2
             prose-strong:text-foreground
           ">
             {children}

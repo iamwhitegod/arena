@@ -19,7 +19,7 @@ export function HowItWorks() {
                   {step.number}
                 </div>
                 <h3 className="text-lg font-semibold mb-3">{step.title}</h3>
-                <div className="rounded-lg bg-foreground px-4 py-3 font-mono text-sm text-left">
+                <div className="rounded-lg bg-surface border border-border px-4 py-3 font-mono text-sm text-left">
                   <span className="text-muted-foreground select-none">$ </span>
                   <span className="text-white">{step.command}</span>
                 </div>

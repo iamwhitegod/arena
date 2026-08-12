@@ -16,7 +16,7 @@ const variants: Record<ButtonVariant, string> = {
   primary:
     "bg-arena-600 text-white hover:bg-arena-700 shadow-sm shadow-arena-600/25",
   secondary:
-    "bg-white text-foreground border border-border hover:bg-surface-alt",
+    "bg-background text-foreground border border-border hover:bg-surface-alt",
   ghost: "text-muted hover:text-foreground hover:bg-surface",
 };
 

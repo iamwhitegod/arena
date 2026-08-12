@@ -8,7 +8,7 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 sm:gap-10">
           <div className="md:col-span-1">
             <Link href="/" className="flex items-center gap-2">
-              <span className="font-mono text-lg font-bold text-arena-600">
+              <span className="font-mono text-lg font-bold text-arena-500">
                 &gt;_
               </span>
               <span className="font-semibold text-lg tracking-tight">

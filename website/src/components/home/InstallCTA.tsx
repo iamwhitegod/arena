@@ -5,7 +5,7 @@ import { INSTALL_COMMAND, LINKS } from "@/lib/constants";
 
 export function InstallCTA() {
   return (
-    <section className="py-14 sm:py-28 bg-foreground text-white">
+    <section className="py-14 sm:py-28 bg-code-bg text-white">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
         <ScrollReveal>
           <h2 className="text-2xl sm:text-4xl font-bold tracking-tight">
@@ -28,7 +28,7 @@ export function InstallCTA() {
             >
               Read the Docs
             </Button>
-            <Button href={LINKS.github} external variant="ghost" size="lg" className="text-muted-foreground hover:text-white hover:bg-white/10">
+            <Button href={LINKS.github} external variant="ghost" size="lg" className="text-muted hover:text-white hover:bg-white/10">
               View Source on GitHub
             </Button>
           </div>

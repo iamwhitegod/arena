@@ -21,17 +21,17 @@ export default async function DocsPage() {
         your machine and uses OpenAI for AI analysis.
       </p>
 
-      <div className="not-prose rounded-xl border border-arena-200 bg-arena-50 p-6 my-8">
-        <p className="text-sm font-semibold text-arena-800 mb-2">
+      <div className="not-prose rounded-xl border border-arena-600/20 bg-arena-600/5 p-6 my-8">
+        <p className="text-sm font-semibold text-arena-600 mb-2">
           Quick start — try it without installing
         </p>
         <DocCodeBlock
           lang="bash"
           code="npx @whitegodkingsley/arena-cli process video.mp4 -n 5"
         />
-        <p className="text-xs text-arena-700 mt-2">
+        <p className="text-xs text-muted mt-2">
           Requires Node.js 18+, Python 3.9+, and FFmpeg. Set{" "}
-          <code className="text-xs bg-arena-100 px-1 rounded">OPENAI_API_KEY</code>{" "}
+          <code className="text-xs bg-arena-600/10 px-1 rounded">OPENAI_API_KEY</code>{" "}
           first.
         </p>
       </div>
