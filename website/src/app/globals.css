@@ -1,0 +1,74 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme inline {
+  --color-background: #ffffff;
+  --color-foreground: #0f172a;
+  --color-muted: #64748b;
+  --color-muted-foreground: #94a3b8;
+  --color-border: #e2e8f0;
+  --color-surface: #f8fafc;
+  --color-surface-alt: #f1f5f9;
+
+  --color-arena-50: #f5f3ff;
+  --color-arena-100: #ede9fe;
+  --color-arena-200: #ddd6fe;
+  --color-arena-300: #c4b5fd;
+  --color-arena-400: #a78bfa;
+  --color-arena-500: #8b5cf6;
+  --color-arena-600: #7c3aed;
+  --color-arena-700: #6d28d9;
+  --color-arena-800: #5b21b6;
+  --color-arena-900: #4c1d95;
+
+  --font-sans: var(--font-outfit);
+  --font-mono: var(--font-jetbrains-mono);
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+}
+
+/* Hero entrance animations */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-hero-1 { opacity: 0; animation: fadeInUp 0.6s ease-out 0ms forwards; }
+.animate-hero-2 { opacity: 0; animation: fadeInUp 0.6s ease-out 100ms forwards; }
+.animate-hero-3 { opacity: 0; animation: fadeInUp 0.6s ease-out 200ms forwards; }
+.animate-hero-4 { opacity: 0; animation: fadeInUp 0.6s ease-out 300ms forwards; }
+.animate-hero-5 { opacity: 0; animation: fadeInUp 0.6s ease-out 450ms forwards; }
+
+/* Shiki code blocks */
+.shiki-wrapper pre {
+  margin: 0 !important;
+  padding: 1rem !important;
+  overflow-x: auto;
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+
+.shiki-wrapper pre code {
+  background: transparent !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  color: inherit !important;
+  font-size: inherit !important;
+}
+
+/* prose pre fallback (if any raw pre/code remain) */
+.prose pre {
+  background: #0d1117;
+  color: #e6edf3;
+}
+
+.prose pre code {
+  background: transparent !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  color: inherit !important;
+  font-size: inherit !important;
+}

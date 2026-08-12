@@ -514,7 +514,8 @@ MIT © Arena Contributors
 
 ## 🔗 Links
 
-- **Documentation**: [docs/guides/USAGE.md](./docs/guides/USAGE.md)
+- **Website**: [getarena.vercel.app](https://getarena.vercel.app)
+- **Documentation**: [getarena.vercel.app/docs](https://getarena.vercel.app/docs)
 - **Issues**: [GitHub Issues](https://github.com/iamwhitegod/arena/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/iamwhitegod/arena/discussions)
 

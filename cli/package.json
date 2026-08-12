@@ -2,6 +2,7 @@
   "name": "@whitegodkingsley/arena-cli",
   "version": "0.4.0",
   "description": "AI-powered video clip generation tool for the terminal - Turn long-form content into viral clips",
+  "homepage": "https://getarena.vercel.app",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
