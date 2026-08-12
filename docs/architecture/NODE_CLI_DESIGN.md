@@ -25,11 +25,16 @@
 │  ┌────────────────────────────────────┐ │
 │  │   Commands (user-facing)           │ │
 │  │   - process                        │ │
+│  │   - transcribe                     │ │
 │  │   - analyze                        │ │
 │  │   - generate                       │ │
-│  │   - transcribe                     │ │
+│  │   - format                         │ │
+│  │   - detect-scenes                  │ │
+│  │   - extract-audio                  │ │
 │  │   - config                         │ │
 │  │   - init                           │ │
+│  │   - setup                          │ │
+│  │   - diagnose                       │ │
 │  └────────────────────────────────────┘ │
 │              ↓                           │
 │  ┌────────────────────────────────────┐ │
@@ -66,11 +71,14 @@ arena process video.mp4 [options]
 - `-n, --num-clips <number>` - Number of clips (default: 5)
 - `--min <seconds>` - Minimum duration (default: 30)
 - `--max <seconds>` - Maximum duration (default: 90)
-- `` - Use 4-layer editorial system (higher quality)
 - `--editorial-model <model>` - gpt-4o or gpt-4o-mini (default: gpt-4o)
 - `--export-layers` - Export intermediate layer results
 - `--fast` - Fast mode (stream copy)
 - `--no-cache` - Force re-transcription
+- `-p, --platform <platform>` - Auto-format for platform (tiktok, instagram-reels, etc.)
+- `--captions` - Burn subtitle captions into clips
+- `--cookies-from-browser <browser>` - Use browser cookies for YouTube downloads
+- `--scene-detection` - Enable scene detection for clip boundaries
 
 **UX Flow:**
 ```
@@ -156,9 +164,8 @@ Let's set up your video clip generation workspace.
     Long (60-120s) - Full segments
 
 ? Quality vs Cost preference:
-  ❯ Balanced (4-layer + gpt-4o-mini, $0.20/video)
-    High Quality (4-layer + gpt-4o, $0.50/video)
-    Cost Optimized (standard mode, $0.05/video)
+  ❯ Balanced (gpt-4o-mini, $0.20/video)
+    High Quality (gpt-4o, $0.50/video)
 
 ✓ Created ~/.arena/config.json
 ✓ Workspace ready!
@@ -228,6 +235,80 @@ arena config reset
 
 ---
 
+### `arena format`
+**Purpose:** Format clips for social media platforms with optimal specs
+
+**Usage:**
+```bash
+arena format <input> -p <platform> [options]
+```
+
+**Options:**
+- `-p, --platform <platform>` - Target platform (tiktok, instagram-reels, youtube-shorts, youtube, instagram-feed, twitter, linkedin)
+- `-o, --output <dir>` - Output directory
+- `--crop <strategy>` - Crop strategy: center, smart, top, bottom (default: center)
+- `--pad <strategy>` - Pad strategy: blur, black, white, color (default: blur)
+- `--pad-color <color>` - Padding color hex (default: #000000)
+
+---
+
+### `arena detect-scenes`
+**Purpose:** Detect visual scene changes in video
+
+**Usage:**
+```bash
+arena detect-scenes <video> [options]
+```
+
+**Options:**
+- `-o, --output <file>` - Output scene data file
+- `--threshold <value>` - Detection sensitivity (default: 0.4)
+- `--min-duration <seconds>` - Minimum scene duration (default: 2.0)
+- `--report` - Generate visual report
+
+---
+
+### `arena extract-audio`
+**Purpose:** Extract audio from video in various formats
+
+**Usage:**
+```bash
+arena extract-audio <video> [options]
+```
+
+**Options:**
+- `-o, --output <file>` - Output audio path
+- `--format <mp3|wav|aac|flac>` - Audio format (default: mp3)
+- `--bitrate <rate>` - Audio bitrate (default: 192k)
+- `--sample-rate <rate>` - Sample rate in Hz
+- `--mono` - Convert to mono
+
+---
+
+### `arena setup`
+**Purpose:** Check and install Arena dependencies automatically
+
+**Usage:**
+```bash
+arena setup
+```
+
+Detects your OS and package manager, then installs missing dependencies (Python, FFmpeg, Deno, pip packages).
+
+---
+
+### `arena diagnose`
+**Purpose:** Run comprehensive system diagnostics
+
+**Usage:**
+```bash
+arena diagnose
+```
+
+Checks system info, dependencies (Python, FFmpeg, Deno), Python packages, API key, network, and disk space.
+
+---
+
 ## Python Bridge Design
 
 ### Communication Protocol
@@ -241,7 +322,6 @@ arena config reset
   "params": {
     "video_path": "/path/to/video.mp4",
     "output_dir": "/path/to/output",
-    "use_4layer": true,
     "editorial_model": "gpt-4o-mini",
     "num_clips": 5,
     "min_duration": 20,
@@ -430,36 +510,42 @@ arena process video.mp4
 
 ---
 
-## Implementation Checklist
+## Implementation Status
 
-### Phase 1: Core Infrastructure
+### Core Infrastructure
 - [x] Python bridge with JSON protocol
 - [x] Progress tracking system
 - [x] Config management
 - [x] Workspace initialization
-- [ ] Error handling framework
+- [x] Error handling framework (structured errors with suggestions)
+- [x] Graceful shutdown (SIGINT/SIGTERM)
 
-### Phase 2: Commands
-- [x] `arena process` (basic)
-- [ ] `arena process` (4-layer support)
-- [ ] `arena init`
-- [ ] `arena analyze`
-- [ ] `arena transcribe`
-- [ ] `arena generate`
-- [ ] `arena config`
+### Commands
+- [x] `arena process` (full pipeline with 4-layer editorial)
+- [x] `arena init` (interactive setup wizard)
+- [x] `arena analyze` (analysis without clip generation)
+- [x] `arena transcribe` (transcription only, supports URLs)
+- [x] `arena generate` (clips from existing analysis)
+- [x] `arena config` (configuration management)
+- [x] `arena format` (multi-platform formatting)
+- [x] `arena detect-scenes` (scene change detection)
+- [x] `arena extract-audio` (audio extraction)
+- [x] `arena setup` (dependency installation)
+- [x] `arena diagnose` (system diagnostics)
 
-### Phase 3: Polish
-- [ ] Interactive prompts
-- [ ] Better progress bars
-- [ ] Colored output
-- [ ] Emoji support
-- [ ] Help text improvements
+### Polish
+- [x] Interactive prompts (inquirer)
+- [x] Progress bars and spinners (ora)
+- [x] Colored output (chalk)
+- [x] Terminal hyperlinks (clickable file paths)
+- [x] Box-formatted summaries
 
-### Phase 4: Distribution
-- [ ] NPM package setup
-- [ ] Build scripts
-- [ ] CI/CD for releases
-- [ ] Documentation
+### Distribution
+- [x] NPM package (@whitegodkingsley/arena-cli)
+- [x] Build scripts (TypeScript compilation)
+- [x] CI/CD (GitHub Actions: test + publish)
+- [x] Docker support
+- [x] URL support (YouTube, Vimeo, 1000+ sites via yt-dlp)
 
 ---
 
