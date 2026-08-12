@@ -176,7 +176,7 @@ arena process https://www.youtube.com/watch?v=VIDEO_ID -n 5 --captions -p tiktok
 arena transcribe https://vimeo.com/123456789
 ```
 
-**Note:** Requires `yt-dlp` (`pip install yt-dlp` or `brew install yt-dlp`). Downloads are cached.
+**Note:** Requires `yt-dlp` (`pip install yt-dlp`) and `deno` (`brew install deno`) for YouTube. Use `--cookies-from-browser chrome` if you hit authentication errors. Downloads are cached.
 
 ## 📊 4-Layer Editorial System
 
