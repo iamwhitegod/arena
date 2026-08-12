@@ -141,13 +141,17 @@ program
 // Extract-audio command - Extract audio from video
 program
   .command('extract-audio')
-  .description('Extract audio from video')
-  .argument('<video>', 'path to video file')
+  .description('Extract audio from video or URL')
+  .argument('<video>', 'path to video file or URL')
   .option('-o, --output <file>', 'output audio file path')
   .option('--format <format>', 'audio format: mp3, wav, aac, flac', 'mp3')
   .option('--bitrate <rate>', 'audio bitrate (e.g., "192k")')
   .option('--sample-rate <rate>', 'sample rate in Hz (e.g., "44100")')
   .option('--mono', 'convert to mono')
+  .option(
+    '--cookies-from-browser <browser>',
+    'use browser cookies for URL downloads (chrome, firefox, safari, edge)'
+  )
   .option('--debug', 'show debug information')
   .action(extractAudioCommand);
 

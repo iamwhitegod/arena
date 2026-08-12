@@ -5,9 +5,14 @@ from pathlib import Path
 
 
 def run_extract_audio(args):
-    """Extract audio from video file"""
+    """Extract audio from video file or URL"""
+    from arena.video.downloader import resolve_input
 
-    video_path = Path(args.video)
+    try:
+        video_path = resolve_input(args.video, mode='video', cookies_from_browser=getattr(args, 'cookies_from_browser', None))
+    except RuntimeError as e:
+        print(f"❌ Error: {e}")
+        return 1
 
     if not video_path.exists():
         print(f"❌ Error: Video file not found: {args.video}")

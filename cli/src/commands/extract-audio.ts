@@ -11,6 +11,7 @@ import { ProgressTracker } from '../ui/progress.js';
 import { formatErrorWithHelp } from '../errors/formatter.js';
 import { isArenaError, PreflightError } from '../errors/index.js';
 import { formatFileSize, formatDuration } from '../ui/formatters.js';
+import { isUrl } from '../utils/url.js';
 
 interface ExtractAudioOptions {
   output?: string;
@@ -18,6 +19,7 @@ interface ExtractAudioOptions {
   bitrate?: string;
   sampleRate?: string;
   mono?: boolean;
+  cookiesFromBrowser?: string;
   debug?: boolean;
 }
 
@@ -30,10 +32,10 @@ export async function extractAudioCommand(
   const bridge = new PythonBridge();
 
   try {
-    const absoluteVideoPath = path.resolve(videoPath);
+    const absoluteVideoPath = isUrl(videoPath) ? videoPath : path.resolve(videoPath);
 
-    // Validate video file exists
-    if (!(await fs.pathExists(absoluteVideoPath))) {
+    // Validate local file exists (URLs are validated during download)
+    if (!isUrl(videoPath) && !(await fs.pathExists(absoluteVideoPath))) {
       throw new PreflightError(
         'VIDEO_NOT_FOUND',
         `Video file not found: ${videoPath}`,
@@ -43,10 +45,16 @@ export async function extractAudioCommand(
 
     // Determine output path
     const format = options.format || 'mp3';
-    const defaultOutput = path.join(
-      path.dirname(absoluteVideoPath),
-      `${path.basename(absoluteVideoPath, path.extname(absoluteVideoPath))}.${format}`
-    );
+    let defaultOutput: string;
+    if (isUrl(videoPath)) {
+      const slug = videoPath.split('/').pop()?.split('?')[0] || 'download';
+      defaultOutput = path.join(process.cwd(), `${slug}.${format}`);
+    } else {
+      defaultOutput = path.join(
+        path.dirname(absoluteVideoPath),
+        `${path.basename(absoluteVideoPath, path.extname(absoluteVideoPath))}.${format}`
+      );
+    }
     const outputFile = options.output || defaultOutput;
 
     // Ensure output directory exists
@@ -80,6 +88,7 @@ export async function extractAudioCommand(
         bitrate: options.bitrate,
         sampleRate: options.sampleRate ? parseInt(options.sampleRate) : undefined,
         mono: options.mono || false,
+        cookiesFromBrowser: options.cookiesFromBrowser,
       },
       (update) => {
         if (update.progress !== undefined) {

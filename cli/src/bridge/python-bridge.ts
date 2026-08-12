@@ -64,6 +64,7 @@ export interface ExtractAudioOptions {
   bitrate?: string;
   sampleRate?: number;
   mono: boolean;
+  cookiesFromBrowser?: string;
 }
 
 export interface FormatOptions {
@@ -417,6 +418,9 @@ export class PythonBridge {
       }
       if (options.mono) {
         cmdArgs.push('--mono');
+      }
+      if (options.cookiesFromBrowser) {
+        cmdArgs.push('--cookies-from-browser', options.cookiesFromBrowser);
       }
 
       const { command, args } = this.getArenaCommand('extract-audio', cmdArgs);

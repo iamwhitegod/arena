@@ -58,10 +58,16 @@ Documentation:
         help='Extract audio from video',
         description='Extract audio track from video file'
     )
-    extract_parser.add_argument('video', help='Path to input video file')
+    extract_parser.add_argument('video', help='Path to input video file or URL')
     extract_parser.add_argument(
         '-o', '--output',
         help='Output audio file (default: video_audio.mp3)'
+    )
+    extract_parser.add_argument(
+        '--cookies-from-browser',
+        type=str,
+        default=None,
+        help='Browser to extract cookies from for URL downloads (chrome, firefox, safari, brave, edge)'
     )
     extract_parser.add_argument(
         '--format',
