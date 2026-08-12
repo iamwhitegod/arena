@@ -225,6 +225,30 @@ async function checkDependencies(): Promise<DiagnosticResult> {
     });
   }
 
+  // Deno (optional, for YouTube downloads)
+  const denoSpinner = ora('Checking Deno...').start();
+  try {
+    const { stdout } = await execWithRetry('deno --version', {
+      maxAttempts: 1,
+      timeoutMs: 5000,
+    });
+    const version = stdout.match(/deno (\S+)/)?.[1];
+    denoSpinner.stop();
+    checks.push({
+      name: 'Deno',
+      status: 'pass' as const,
+      message: `v${version} installed`,
+    });
+  } catch {
+    denoSpinner.stop();
+    checks.push({
+      name: 'Deno',
+      status: 'warn' as const,
+      message: 'Not found (needed for YouTube URL downloads)',
+      solution: 'brew install deno (macOS) or curl -fsSL https://deno.land/install.sh | sh',
+    });
+  }
+
   return {
     category: '🔧 System Dependencies',
     checks,

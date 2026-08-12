@@ -256,6 +256,7 @@ Arena uses a hybrid TypeScript + Python architecture:
 - **Node.js** 18 or higher
 - **Python 3.9+** (for video processing engine)
 - **FFmpeg** (for video encoding)
+- **Deno** (for YouTube URL downloads: `brew install deno`)
 - **OpenAI API Key** (for AI analysis)
 - **yt-dlp** (optional, for URL support: `pip install yt-dlp`)
 

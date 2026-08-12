@@ -77,6 +77,23 @@ const dependencies: DependencyCheck[] = [
       'win32-manual': 'https://ffmpeg.org/download.html',
     },
   },
+  {
+    name: 'Deno (for YouTube downloads)',
+    command: 'deno --version',
+    optional: true,
+    installInstructions: {
+      'darwin-brew': 'brew install deno',
+      'darwin-port': 'curl -fsSL https://deno.land/install.sh | sh',
+      'linux-apt': 'curl -fsSL https://deno.land/install.sh | sh',
+      'linux-yum': 'curl -fsSL https://deno.land/install.sh | sh',
+      'linux-dnf': 'curl -fsSL https://deno.land/install.sh | sh',
+      'linux-pacman': 'sudo pacman -S --noconfirm deno',
+      'linux-zypper': 'curl -fsSL https://deno.land/install.sh | sh',
+      'win32-winget': 'winget install --accept-source-agreements DenoLand.Deno',
+      'win32-choco': 'choco install -y deno',
+      'win32-manual': 'https://deno.land',
+    },
+  },
 ];
 
 async function detectPackageManager(): Promise<string> {

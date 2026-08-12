@@ -77,6 +77,10 @@ async function checkFFmpeg() {
   return false;
 }
 
+async function checkDeno() {
+  return await checkCommand('deno');
+}
+
 async function main() {
   console.log('\n');
   console.log(colors.cyan('🎉 Arena CLI installed successfully!\n'));
@@ -84,8 +88,9 @@ async function main() {
   // Check dependencies
   const pythonExists = await checkPython();
   const ffmpegExists = await checkFFmpeg();
+  const denoExists = await checkDeno();
 
-  const allInstalled = pythonExists && ffmpegExists;
+  const allInstalled = pythonExists && ffmpegExists && denoExists;
 
   if (allInstalled) {
     console.log(colors.green('✓ All dependencies found!\n'));
@@ -109,6 +114,12 @@ async function main() {
       console.log(colors.green('  ✓ FFmpeg'));
     }
 
+    if (!denoExists) {
+      console.log(colors.red('  ✗ Deno (needed for YouTube downloads)'));
+    } else {
+      console.log(colors.green('  ✓ Deno'));
+    }
+
     console.log('\n' + colors.cyan('📦 Easy Installation (Works on ALL platforms):\n'));
     console.log(colors.white('  Run the automated setup command:'));
     console.log(colors.cyan('    arena setup\n'));
@@ -122,10 +133,12 @@ async function main() {
       console.log(colors.gray('  macOS (Homebrew):'));
       if (!pythonExists) console.log(colors.gray('    brew install python3'));
       if (!ffmpegExists) console.log(colors.gray('    brew install ffmpeg'));
+      if (!denoExists) console.log(colors.gray('    brew install deno'));
     } else if (platform === 'linux') {
       console.log(colors.gray('  Linux (apt):'));
       if (!pythonExists) console.log(colors.gray('    sudo apt-get install python3 python3-pip'));
       if (!ffmpegExists) console.log(colors.gray('    sudo apt-get install ffmpeg'));
+      if (!denoExists) console.log(colors.gray('    curl -fsSL https://deno.land/install.sh | sh'));
       console.log(colors.gray('\n  Linux (yum/dnf):'));
       if (!pythonExists) console.log(colors.gray('    sudo yum install python3 python3-pip'));
       if (!ffmpegExists) console.log(colors.gray('    sudo yum install ffmpeg'));
@@ -136,17 +149,20 @@ async function main() {
       console.log(colors.gray('  Windows (winget):'));
       if (!pythonExists) console.log(colors.gray('    winget install Python.Python.3.11'));
       if (!ffmpegExists) console.log(colors.gray('    winget install Gyan.FFmpeg'));
+      if (!denoExists) console.log(colors.gray('    winget install DenoLand.Deno'));
       console.log(colors.gray('\n  Windows (chocolatey):'));
       if (!pythonExists) console.log(colors.gray('    choco install python'));
       if (!ffmpegExists) console.log(colors.gray('    choco install ffmpeg'));
+      if (!denoExists) console.log(colors.gray('    choco install deno'));
       console.log(colors.gray('\n  Windows (manual):'));
       if (!pythonExists) console.log(colors.gray('    https://www.python.org/downloads/'));
       if (!ffmpegExists) console.log(colors.gray('    https://ffmpeg.org/download.html'));
+      if (!denoExists) console.log(colors.gray('    https://deno.land'));
     } else {
-      // Other platforms
       console.log(colors.gray('  Visit:'));
       if (!pythonExists) console.log(colors.gray('    https://www.python.org/downloads/'));
       if (!ffmpegExists) console.log(colors.gray('    https://ffmpeg.org/download.html'));
+      if (!denoExists) console.log(colors.gray('    https://deno.land'));
     }
 
     console.log('');
