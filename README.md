@@ -46,7 +46,7 @@ Burn subtitles into clips from the Whisper transcript:
 - Standalone scene analysis for video structure insights
 
 ### 🚀 **Production-Ready CLI**
-- 9 powerful commands for flexible workflows
+- 11 commands for flexible workflows
 - Beautiful progress tracking with multi-stage visualization
 - Automatic rate limit handling with intelligent retry
 - TypeScript + Python architecture for speed and power
@@ -105,19 +105,21 @@ arena format output/clips/ -p tiktok -o tiktok/
 
 ## 📚 Commands
 
-Arena provides 9 commands for flexible video clip generation workflows:
+Arena provides 11 commands for flexible video clip generation workflows:
 
 | Command | Purpose | Example |
 |---------|---------|---------|
 | `arena init` | Interactive setup wizard | `arena init` |
 | `arena process` | All-in-one clip generation | `arena process video.mp4` |
-| `arena transcribe` | Transcription only | `arena transcribe video.mp4` |
+| `arena transcribe` | Transcription only (files + URLs) | `arena transcribe podcast.mp3` |
 | `arena analyze` | Find moments (no video generation) | `arena analyze video.mp4 -n 10` |
 | `arena generate` | Generate clips from analysis | `arena generate video.mp4 analysis.json` |
 | `arena format` | Format for social platforms | `arena format clips/ -p tiktok` |
 | `arena detect-scenes` | Detect scene changes | `arena detect-scenes video.mp4` |
 | `arena config` | Manage configuration | `arena config set openai_api_key "sk-..."` |
 | `arena extract-audio` | Extract audio from video | `arena extract-audio video.mp4` |
+| `arena setup` | Install dependencies automatically | `arena setup` |
+| `arena diagnose` | System diagnostics | `arena diagnose` |
 
 All commands that accept a video file also accept audio files and URLs.
 
@@ -167,16 +169,19 @@ arena format output/clips/ -p youtube -o social/youtube/
 
 ```bash
 # Transcribe a YouTube video
-arena transcribe https://www.youtube.com/watch?v=VIDEO_ID -o transcript.json
+arena transcribe "https://www.youtube.com/watch?v=VIDEO_ID" -o transcript.json
 
 # Generate clips from a YouTube video
-arena process https://www.youtube.com/watch?v=VIDEO_ID -n 5 --captions -p tiktok
+arena process "https://www.youtube.com/watch?v=VIDEO_ID" -n 5 --captions -p tiktok
+
+# Use browser cookies if YouTube requires authentication
+arena process "https://www.youtube.com/watch?v=VIDEO_ID" --cookies-from-browser chrome -n 5
 
 # Works with any yt-dlp supported site (YouTube, Vimeo, Twitter, TikTok, etc.)
 arena transcribe https://vimeo.com/123456789
 ```
 
-**Note:** Requires `yt-dlp` (`pip install yt-dlp`) and `deno` (`brew install deno`) for YouTube. Use `--cookies-from-browser chrome` if you hit authentication errors. Downloads are cached.
+**Requirements:** `yt-dlp` (`pip install yt-dlp`) and `deno` (`brew install deno`). Downloads are cached.
 
 ## 📊 4-Layer Editorial System
 
@@ -479,8 +484,8 @@ See [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) for more solutions.
 
 ## 🚀 Roadmap
 
-**Current (v0.3):**
-- ✅ 9-command CLI
+**Current (v0.4):**
+- ✅ 11-command CLI
 - ✅ 4-layer editorial system
 - ✅ Multi-platform formatting
 - ✅ Hybrid AI + energy analysis
