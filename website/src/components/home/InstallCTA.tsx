@@ -16,8 +16,8 @@ export function InstallCTA() {
             minutes. No credit card required.
           </p>
 
-          <div className="mt-10 max-w-xl mx-auto [&>div]:dark:bg-surface-alt rounded-lg">
-            <CodeBlock code={INSTALL_COMMAND} />
+          <div className="mt-10 max-w-xl mx-auto">
+            <CodeBlock code={INSTALL_COMMAND} className="dark:bg-surface-alt" />
           </div>
 
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">

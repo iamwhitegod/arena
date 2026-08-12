@@ -5,13 +5,14 @@ import { useClipboard } from "@/hooks/useClipboard";
 interface CodeBlockProps {
   code: string;
   prefix?: string;
+  className?: string;
 }
 
-export function CodeBlock({ code, prefix = "$" }: CodeBlockProps) {
+export function CodeBlock({ code, prefix = "$", className }: CodeBlockProps) {
   const { copied, copy } = useClipboard();
 
   return (
-    <div className="flex items-center gap-2 sm:gap-3 rounded-lg bg-code-bg px-3 sm:px-4 py-3 font-mono text-xs sm:text-sm overflow-x-auto">
+    <div className={`flex items-center gap-2 sm:gap-3 rounded-lg bg-code-bg px-3 sm:px-4 py-3 font-mono text-xs sm:text-sm overflow-x-auto ${className ?? ""}`}>
       <span className="text-muted-foreground select-none">{prefix}</span>
       <code className="flex-1 text-white whitespace-nowrap">{code}</code>
       <button
