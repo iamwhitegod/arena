@@ -257,12 +257,17 @@ class Transcriber:
         """Extract a specific time range from audio file"""
         duration = end_time - start_time
 
+        # Use codec copy when input/output formats match, re-encode otherwise
+        input_ext = Path(audio_path).suffix.lower()
+        output_ext = Path(output_path).suffix.lower()
+        codec_args = ["-acodec", "copy"] if input_ext == output_ext else ["-q:a", "2"]
+
         command = [
             "ffmpeg",
             "-i", str(audio_path),
             "-ss", str(start_time),
             "-t", str(duration),
-            "-acodec", "copy",  # Copy codec (faster)
+            *codec_args,
             "-y",
             str(output_path)
         ]
