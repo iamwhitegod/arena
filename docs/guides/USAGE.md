@@ -22,8 +22,8 @@ Arena CLI provides 9 commands for flexible video clip generation workflows:
 | Command | Purpose | Best For |
 |---------|---------|----------|
 | `arena init` | Interactive setup wizard | First-time setup, changing preferences |
-| `arena process` | All-in-one processing | Quick results, single command workflow |
-| `arena transcribe` | Transcription only | Reusing transcripts, debugging |
+| `arena process` | All-in-one processing (files, URLs, audio) | Quick results, single command workflow |
+| `arena transcribe` | Transcription only (files, URLs, audio) | Reusing transcripts, debugging |
 | `arena analyze` | Find moments without generating clips | Fast preview, cost optimization |
 | `arena generate` | Generate clips from analysis | Selective generation, review workflow |
 | `arena format` | Format clips for social media platforms | Platform-specific aspect ratios, TikTok, Instagram, YouTube |
@@ -35,7 +35,23 @@ Arena CLI provides 9 commands for flexible video clip generation workflows:
 ### Quick Start (All-in-One)
 
 ```bash
-arena process <video-file> [options]
+arena process <video-or-url> [options]
+```
+
+Arena accepts local files, audio files, and URLs (YouTube, Vimeo, Twitter, and 1000+ sites via yt-dlp):
+
+```bash
+# Local video file
+arena process video.mp4
+
+# YouTube URL
+arena process "https://www.youtube.com/watch?v=VIDEO_ID" -n 5
+
+# YouTube with browser cookies (if you hit authentication errors)
+arena process "https://www.youtube.com/watch?v=VIDEO_ID" --cookies-from-browser chrome
+
+# Audio file (MP3, WAV, FLAC, etc.)
+arena process podcast.mp3 -n 5
 ```
 
 ## Options
@@ -102,23 +118,33 @@ $ arena init
 
 ### `arena transcribe` - Transcription Only
 
-Transcribe video without analysis or clip generation.
+Transcribe video or audio without analysis or clip generation. Supports local files and URLs.
 
 ```bash
-arena transcribe <video> [options]
+arena transcribe <video-or-url> [options]
 ```
 
 **Options:**
 - `-o, --output <file>` - Output transcript path (default: `transcript.json`)
 - `--no-cache` - Force re-transcription
+- `--cookies-from-browser <browser>` - Use browser cookies for YouTube downloads (chrome, firefox, safari, brave)
 
 **Examples:**
 ```bash
-# Transcribe video to default location
+# Transcribe local video
 arena transcribe video.mp4
 
 # Transcribe to specific file
 arena transcribe video.mp4 -o my-transcript.json
+
+# Transcribe from YouTube URL
+arena transcribe "https://www.youtube.com/watch?v=VIDEO_ID" -o transcript.json
+
+# Transcribe from YouTube with cookies (if authentication required)
+arena transcribe "https://www.youtube.com/watch?v=VIDEO_ID" --cookies-from-browser chrome
+
+# Transcribe audio file (MP3, WAV, FLAC, etc.)
+arena transcribe podcast.mp3 -o transcript.json
 
 # Force new transcription (ignore cache)
 arena transcribe video.mp4 --no-cache
@@ -126,6 +152,7 @@ arena transcribe video.mp4 --no-cache
 
 **Use Cases:**
 - Pre-transcribe large videos once
+- Transcribe YouTube videos without downloading manually
 - Debug transcription quality
 - Reuse transcripts across multiple runs
 - Extract transcript for other tools
