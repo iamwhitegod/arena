@@ -5,13 +5,13 @@ python-dotenv~=1.0
 # Video processing
 moviepy~=1.0
 opencv-python~=4.8
-scenedetect[opencv]~=0.6
+scenedetect~=0.6
 ffmpeg-python~=0.2
 
 # Audio processing
 librosa~=0.10
 soundfile~=0.12
-numba~=0.58
+numba>=0.59,<0.60
 noisereduce~=3.0
 pyloudnorm~=0.1
 scipy~=1.11

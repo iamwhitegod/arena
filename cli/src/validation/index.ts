@@ -214,13 +214,13 @@ export async function validatePython(): Promise<string> {
         if (versionMatch) {
           const [, major, minor] = versionMatch.map(Number);
 
-          // Check minimum version (Python 3.9+)
-          if (major < 3 || (major === 3 && minor < 9)) {
+          // Arena's scientific dependency set currently supports Python 3.9–3.12.
+          if (major !== 3 || minor < 9 || minor >= 13) {
             reject(
               new PreflightError(
                 'PYTHON_VERSION_TOO_OLD',
-                `Python 3.9 or higher is required, found Python ${major}.${minor}`,
-                'Upgrade Python: brew install python3 (macOS) or apt install python3 (Ubuntu)'
+                `Python 3.9–3.12 is required, found Python ${major}.${minor}`,
+                'Run "arena setup" after installing a supported Python version'
               )
             );
             return;

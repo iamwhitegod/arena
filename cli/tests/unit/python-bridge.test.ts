@@ -27,6 +27,15 @@ vi.mock('fs-extra', () => ({
   },
 }));
 
+vi.mock('../../src/core/runtime.js', () => ({
+  getActiveBinDir: () => '/tmp/arena/runtime/python/bin',
+  getActivePythonPath: () => '/tmp/arena/runtime/python/bin/python',
+  getArenaHome: () => '/tmp/arena',
+  prependPath: (currentPath: string | undefined, directory: string) =>
+    currentPath ? `${directory}:${currentPath}` : directory,
+  resolveEnginePath: () => '/test/engine',
+}));
+
 import { PythonBridge } from '../../src/bridge/python-bridge.js';
 import { ProcessingError, SystemError } from '../../src/errors/index.js';
 

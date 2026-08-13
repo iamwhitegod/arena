@@ -1,176 +1,97 @@
 #!/usr/bin/env node
 
 /**
- * Post-install script
- * Checks dependencies and provides setup guidance
+ * Read-only npm lifecycle check.
+ *
+ * Heavy dependency installation belongs to the explicit `arena setup`
+ * command, never to npm postinstall. This script does not use a shell, make
+ * network requests, or modify the host system.
  */
 
-const { promisify } = require('util');
-const { exec } = require('child_process');
+const { spawn } = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
-const execAsync = promisify(exec);
-
-const platform = process.platform;
-
-// ANSI color codes (chalk alternative for CommonJS)
-const colors = {
-  cyan: (text) => `\x1b[36m${text}\x1b[0m`,
-  green: (text) => `\x1b[32m${text}\x1b[0m`,
-  red: (text) => `\x1b[31m${text}\x1b[0m`,
-  yellow: (text) => `\x1b[33m${text}\x1b[0m`,
-  white: (text) => `\x1b[37m${text}\x1b[0m`,
-  gray: (text) => `\x1b[90m${text}\x1b[0m`,
-};
-
-async function checkCommand(command) {
-  try {
-    await execAsync(`${command} --version`);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function checkPython() {
-  // Try python commands in order of preference based on platform
-  const pythonCommands = platform === 'win32'
-    ? ['python', 'python3', 'py']
-    : ['python3', 'python'];
-
-  for (const cmd of pythonCommands) {
-    if (await checkCommand(cmd)) {
-      return true;
+const color = process.stdout.isTTY
+  ? {
+      cyan: (text) => `\x1b[36m${text}\x1b[0m`,
+      green: (text) => `\x1b[32m${text}\x1b[0m`,
+      yellow: (text) => `\x1b[33m${text}\x1b[0m`,
+      gray: (text) => `\x1b[90m${text}\x1b[0m`,
     }
-  }
-  return false;
-}
+  : { cyan: String, green: String, yellow: String, gray: String };
 
-async function checkFFmpeg() {
-  // Try ffmpeg in PATH first
-  if (await checkCommand('ffmpeg')) {
-    return true;
-  }
-
-  // On Windows, check common installation paths
-  if (platform === 'win32') {
-    const fs = require('fs');
-    const path = require('path');
-
-    const commonPaths = [
-      'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe',
-      'C:\\Program Files (x86)\\ffmpeg\\bin\\ffmpeg.exe',
-      'C:\\ffmpeg\\bin\\ffmpeg.exe',
-    ];
-
-    // Check if ProgramData chocolatey path exists
-    if (process.env.ProgramData) {
-      commonPaths.push(path.join(process.env.ProgramData, 'chocolatey', 'bin', 'ffmpeg.exe'));
-    }
-
-    for (const ffmpegPath of commonPaths) {
-      if (fs.existsSync(ffmpegPath)) {
-        return true;
+function commandWorks(command, args) {
+  return new Promise((resolve) => {
+    // `where.exe` recognizes PATHEXT entries such as Chocolatey's .cmd
+    // wrappers without executing them through a shell.
+    const useWindowsLookup = process.platform === 'win32' && !path.isAbsolute(command);
+    const child = spawn(
+      useWindowsLookup ? 'where.exe' : command,
+      useWindowsLookup ? [command] : args,
+      {
+        shell: false,
+        stdio: 'ignore',
+        windowsHide: true,
       }
-    }
-  }
-
-  return false;
-}
-
-async function checkDeno() {
-  return await checkCommand('deno');
+    );
+    let settled = false;
+    const finish = (available) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        resolve(available);
+      }
+    };
+    const timer = setTimeout(() => {
+      child.kill();
+      finish(false);
+    }, 15000);
+    child.once('error', () => finish(false));
+    child.once('close', (code) => finish(code === 0));
+  });
 }
 
 async function main() {
-  console.log('\n');
-  console.log(colors.cyan('🎉 Arena CLI installed successfully!\n'));
+  const arenaHome = process.env.ARENA_HOME
+    ? path.resolve(process.env.ARENA_HOME)
+    : path.join(os.homedir(), '.arena');
+  const manifestPath = path.join(arenaHome, 'runtime', 'install.json');
+  let pythonPath = path.join(
+    arenaHome,
+    'runtime',
+    'python',
+    process.platform === 'win32' ? 'Scripts' : 'bin',
+    process.platform === 'win32' ? 'python.exe' : 'python'
+  );
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    if (typeof manifest.pythonPath === 'string') {
+      pythonPath = manifest.pythonPath;
+    }
+  } catch {
+    // A missing manifest means setup has not completed yet.
+  }
 
-  // Check dependencies
-  const pythonExists = await checkPython();
-  const ffmpegExists = await checkFFmpeg();
-  const denoExists = await checkDeno();
+  const [ffmpeg, ffprobe] = await Promise.all([
+    commandWorks('ffmpeg', ['-version']),
+    commandWorks('ffprobe', ['-version']),
+  ]);
+  const runtime = fs.existsSync(pythonPath) && (await commandWorks(pythonPath, ['--version']));
 
-  const allInstalled = pythonExists && ffmpegExists && denoExists;
-
-  if (allInstalled) {
-    console.log(colors.green('✓ All dependencies found!\n'));
-    console.log(colors.white('Quick start:'));
-    console.log(colors.gray('  1. Set your OpenAI API key:'));
-    console.log(colors.cyan('     export OPENAI_API_KEY="sk-..."\n'));
-    console.log(colors.gray('  2. Process a video:'));
-    console.log(colors.cyan('     arena process video.mp4 -p tiktok\n'));
+  console.log(color.cyan('\nArena CLI installed.'));
+  if (runtime && ffmpeg && ffprobe) {
+    console.log(color.green('Your Arena processing runtime is ready.'));
+    console.log(color.gray('Verify it with: arena setup --check\n'));
   } else {
-    console.log(colors.yellow('⚠️  Some dependencies are missing:\n'));
-
-    if (!pythonExists) {
-      console.log(colors.red('  ✗ Python 3.9+'));
-    } else {
-      console.log(colors.green('  ✓ Python 3.9+'));
-    }
-
-    if (!ffmpegExists) {
-      console.log(colors.red('  ✗ FFmpeg'));
-    } else {
-      console.log(colors.green('  ✓ FFmpeg'));
-    }
-
-    if (!denoExists) {
-      console.log(colors.red('  ✗ Deno (needed for YouTube downloads)'));
-    } else {
-      console.log(colors.green('  ✓ Deno'));
-    }
-
-    console.log('\n' + colors.cyan('📦 Easy Installation (Works on ALL platforms):\n'));
-    console.log(colors.white('  Run the automated setup command:'));
-    console.log(colors.cyan('    arena setup\n'));
-    console.log(colors.gray('  This will automatically install missing dependencies'));
-    console.log(colors.gray('  on Windows, macOS, and Linux.\n'));
-
-    // Show platform-specific manual instructions as alternative
-    console.log(colors.white('  Or install manually:\n'));
-
-    if (platform === 'darwin') {
-      console.log(colors.gray('  macOS (Homebrew):'));
-      if (!pythonExists) console.log(colors.gray('    brew install python3'));
-      if (!ffmpegExists) console.log(colors.gray('    brew install ffmpeg'));
-      if (!denoExists) console.log(colors.gray('    brew install deno'));
-    } else if (platform === 'linux') {
-      console.log(colors.gray('  Linux (apt):'));
-      if (!pythonExists) console.log(colors.gray('    sudo apt-get install python3 python3-pip'));
-      if (!ffmpegExists) console.log(colors.gray('    sudo apt-get install ffmpeg'));
-      if (!denoExists) console.log(colors.gray('    curl -fsSL https://deno.land/install.sh | sh'));
-      console.log(colors.gray('\n  Linux (yum/dnf):'));
-      if (!pythonExists) console.log(colors.gray('    sudo yum install python3 python3-pip'));
-      if (!ffmpegExists) console.log(colors.gray('    sudo yum install ffmpeg'));
-      console.log(colors.gray('\n  Linux (pacman):'));
-      if (!pythonExists) console.log(colors.gray('    sudo pacman -S python python-pip'));
-      if (!ffmpegExists) console.log(colors.gray('    sudo pacman -S ffmpeg'));
-    } else if (platform === 'win32') {
-      console.log(colors.gray('  Windows (winget):'));
-      if (!pythonExists) console.log(colors.gray('    winget install Python.Python.3.11'));
-      if (!ffmpegExists) console.log(colors.gray('    winget install Gyan.FFmpeg'));
-      if (!denoExists) console.log(colors.gray('    winget install DenoLand.Deno'));
-      console.log(colors.gray('\n  Windows (chocolatey):'));
-      if (!pythonExists) console.log(colors.gray('    choco install python'));
-      if (!ffmpegExists) console.log(colors.gray('    choco install ffmpeg'));
-      if (!denoExists) console.log(colors.gray('    choco install deno'));
-      console.log(colors.gray('\n  Windows (manual):'));
-      if (!pythonExists) console.log(colors.gray('    https://www.python.org/downloads/'));
-      if (!ffmpegExists) console.log(colors.gray('    https://ffmpeg.org/download.html'));
-      if (!denoExists) console.log(colors.gray('    https://deno.land'));
-    } else {
-      console.log(colors.gray('  Visit:'));
-      if (!pythonExists) console.log(colors.gray('    https://www.python.org/downloads/'));
-      if (!ffmpegExists) console.log(colors.gray('    https://ffmpeg.org/download.html'));
-      if (!denoExists) console.log(colors.gray('    https://deno.land'));
-    }
-
-    console.log('');
+    console.log(color.yellow('One explicit setup step remains:'));
+    console.log('  arena setup');
+    console.log(color.gray('This creates a private Python environment and verifies FFmpeg.\n'));
   }
 }
 
-main().catch((error) => {
-  console.error('Setup check failed:', error.message);
-  // Don't fail npm install
-  process.exit(0);
+main().catch(() => {
+  // npm installation must not fail because a read-only advisory check failed.
+  console.log('\nArena CLI installed. Run `arena setup` to finish installation.\n');
 });

@@ -7,6 +7,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
+import { getManagedPythonPath, readRuntimeManifest } from '../core/runtime.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -80,7 +81,19 @@ async function commandExists(command: string): Promise<boolean> {
 export async function getPythonPath(): Promise<string> {
   const config = await loadDepsConfig();
 
-  // Try bundled Python first
+  // The runtime manifest is authoritative. This keeps preflight, diagnostics,
+  // and processing on the same interpreter installed by `arena setup`.
+  const manifest = await readRuntimeManifest();
+  if (manifest?.pythonPath && (await fs.pathExists(manifest.pythonPath))) {
+    return manifest.pythonPath;
+  }
+
+  const managedPythonPath = getManagedPythonPath();
+  if (await fs.pathExists(managedPythonPath)) {
+    return managedPythonPath;
+  }
+
+  // Backwards compatibility for early standalone package experiments.
   if (config.pythonPath && (await fs.pathExists(config.pythonPath))) {
     return config.pythonPath;
   }
@@ -124,12 +137,12 @@ export async function getFFmpegPath(): Promise<string> {
 export async function getPipPath(): Promise<string> {
   const pythonPath = await getPythonPath();
 
-  // If using bundled Python, pip is in the same directory
-  if (pythonPath.includes('.arena-deps')) {
-    const pipPath = pythonPath.replace(/python(3)?(.exe)?$/, 'pip$2');
-    if (await fs.pathExists(pipPath)) {
-      return pipPath;
-    }
+  const adjacentPipPath = path.join(
+    path.dirname(pythonPath),
+    process.platform === 'win32' ? 'pip.exe' : 'pip'
+  );
+  if (path.isAbsolute(pythonPath) && (await fs.pathExists(adjacentPipPath))) {
+    return adjacentPipPath;
   }
 
   // Try system pip

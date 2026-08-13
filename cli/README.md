@@ -47,38 +47,24 @@ arena setup
 ```
 
 The `setup` command automatically:
-- Detects your OS and package manager
-- Installs Python 3.9+ and FFmpeg if missing
-- Installs required Python packages
-- Verifies everything works
+- Verifies the bundled engine against its SHA-256 manifest
+- Finds Python 3.9–3.12 without modifying its global packages
+- Verifies FFmpeg, with an opt-in package-manager install when supported
+- Builds and verifies a versioned private runtime under `~/.arena/runtime/environments/`
+- Atomically replaces an old runtime only after all checks pass
 
 ### Manual Setup
 
-**Prerequisites:** Node.js 18+, Python 3.9+, FFmpeg
+**Prerequisites:** Node.js 18+, Python 3.9–3.12, FFmpeg and ffprobe. Deno is not required because Node.js is the yt-dlp JavaScript runtime.
 
-**macOS:**
-```bash
-brew install python3 ffmpeg
-pip3 install openai-whisper openai ffmpeg-python torch numpy scipy
-```
-
-**Linux (Ubuntu/Debian):**
-```bash
-sudo apt-get install python3 python3-pip ffmpeg
-pip3 install openai-whisper openai ffmpeg-python torch numpy scipy
-```
-
-**Windows:**
-```bash
-winget install Python.Python.3.11 Gyan.FFmpeg
-pip3 install openai-whisper openai ffmpeg-python torch numpy scipy
-```
+Do not install Arena packages with global `pip`. Install the system prerequisites, then run `arena setup`. For health checks, repair commands, CI usage, and source installs, see the [installation guide](https://github.com/iamwhitegod/arena/blob/main/docs/guides/INSTALLATION.md).
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `arena setup` | Check and install dependencies |
+| `arena setup` | Install or repair the private processing runtime |
+| `arena setup --check` | Read-only installation health check |
 | `arena init` | Interactive configuration wizard |
 | `arena process` | All-in-one: analyze + generate clips |
 | `arena analyze` | Find moments without generating video |
@@ -293,11 +279,13 @@ Typical costs per 10-minute video:
 ## Requirements
 
 - **Node.js** 18+
-- **Python** 3.9+
+- **Python** 3.9–3.12
 - **FFmpeg** 4.0+
 - **OpenAI API Key** ([Get one](https://platform.openai.com/api-keys))
 
 **Supported OS:** macOS, Linux, Windows
+
+Arena's Python packages are isolated under `~/.arena/runtime/environments/`. The current runtime uses approximately 650 MB on macOS arm64.
 
 ## Contributing
 

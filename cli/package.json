@@ -10,9 +10,9 @@
   },
   "files": [
     "dist/",
-    "scripts/",
+    "scripts/postinstall.cjs",
+    "scripts/verify-package.cjs",
     "engine/",
-    "requirements.txt",
     "README.md",
     "LICENSE"
   ],
@@ -32,11 +32,13 @@
     "lint:fix": "eslint src --ext .ts --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
-    "prepare": "husky",
+    "prepare": "npm run build && husky",
     "postinstall": "node scripts/postinstall.cjs",
-    "prepublishOnly": "npm run build && node scripts/prepare-package.cjs",
-    "prepack": "npm run build && node scripts/prepare-package.cjs",
-    "postpack": "node scripts/cleanup-package.cjs"
+    "prepack": "node scripts/require-staged-publish.cjs",
+    "prepublishOnly": "node scripts/require-staged-publish.cjs",
+    "package:stage": "npm run build && node scripts/stage-package.cjs",
+    "package:inspect": "npm run package:stage && npm pack .package --dry-run",
+    "publish:package": "npm run package:stage && npm publish .package --provenance --access public"
   },
   "lint-staged": {
     "src/**/*.ts": [
@@ -81,9 +83,7 @@
     "fs-extra": "^11.2.0",
     "inquirer": "^9.2.12",
     "node-fetch": "^3.3.2",
-    "ora": "^8.0.1",
-    "tar-fs": "^3.1.1",
-    "unzipper": "^0.12.3"
+    "ora": "^8.0.1"
   },
   "devDependencies": {
     "@types/cli-progress": "^3.11.5",

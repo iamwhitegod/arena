@@ -44,7 +44,12 @@ export function formatError(error: unknown, debug = false): string {
   // Stack trace (debug mode only)
   if (debug && formatted.stack) {
     output += chalk.gray(`\n  Stack trace:\n`);
-    output += chalk.gray(formatted.stack.split('\n').map(line => `    ${line}`).join('\n'));
+    output += chalk.gray(
+      formatted.stack
+        .split('\n')
+        .map((line) => `    ${line}`)
+        .join('\n')
+    );
     output += '\n';
   }
 
@@ -172,46 +177,44 @@ function getHelpText(code: string): string | null {
   const helpTexts: Record<string, string> = {
     API_KEY_MISSING: chalk.yellow(
       '  → Get an API key:\n' +
-      '    https://platform.openai.com/api-keys\n\n' +
-      '  → Set it in one of these ways:\n\n' +
-      '    1. Environment variable:\n' +
-      chalk.cyan('       export OPENAI_API_KEY="sk-..."\n\n') +
-      '    2. Config file (~/.arena/config.json):\n' +
-      chalk.cyan('       {\n' +
-      '         "openai_api_key": "sk-..."\n' +
-      '       }\n\n') +
-      '  → Then try again:\n' +
-      chalk.cyan('    arena process video.mp4\n')
+        '    https://platform.openai.com/api-keys\n\n' +
+        '  → Set it in one of these ways:\n\n' +
+        '    1. Environment variable:\n' +
+        chalk.cyan('       export OPENAI_API_KEY="sk-..."\n\n') +
+        '    2. Config file (~/.arena/config.json):\n' +
+        chalk.cyan('       {\n' + '         "openai_api_key": "sk-..."\n' + '       }\n\n') +
+        '  → Then try again:\n' +
+        chalk.cyan('    arena process video.mp4\n')
     ),
 
     DEPENDENCIES_MISSING: chalk.yellow(
-      '  → Install dependencies:\n\n' +
-      chalk.cyan('    cd engine && pip install -r requirements.txt\n\n') +
-      '  → Or use a virtual environment:\n\n' +
-      chalk.cyan('    python3 -m venv venv\n' +
-      '    source venv/bin/activate\n' +
-      '    pip install -r engine/requirements.txt\n')
+      '  → Repair Arena’s private processing runtime:\n\n' +
+        chalk.cyan('    arena setup --force\n\n') +
+        '  → Then verify it:\n\n' +
+        chalk.cyan('    arena setup --check\n')
     ),
 
     PYTHON_NOT_FOUND: chalk.yellow(
-      '  → Install Python 3.9 or higher:\n\n' +
-      '    macOS: brew install python3\n' +
-      '    Ubuntu: sudo apt install python3\n\n' +
-      '  → Or use pyenv for version management:\n\n' +
-      chalk.cyan('    curl https://pyenv.run | bash\n' +
-      '    pyenv install 3.11\n')
+      '  → Install Python 3.9–3.12:\n\n' +
+        '    macOS: brew install python@3.12\n' +
+        '    Ubuntu: sudo apt install python3 python3-venv\n' +
+        '    Windows: winget install --id Python.Python.3.12 --exact\n\n' +
+        '  → Then create Arena’s private runtime:\n\n' +
+        chalk.cyan('    arena setup\n')
     ),
 
     NO_CLIPS_GENERATED: chalk.yellow(
       '  → This usually means:\n\n' +
-      '    1. Video is too short (< 30 seconds)\n' +
-      '    2. No interesting moments detected\n' +
-      '    3. All clips failed quality validation\n\n' +
-      '  → Try:\n\n' +
-      '    1. Use a longer video (> 2 minutes)\n' +
-      '    2. Lower min duration: ' + chalk.cyan('--min 15\n') +
-      '    3. Disable 4-layer validation temporarily\n' +
-      '    4. Export layers to debug: ' + chalk.cyan('--export-layers\n')
+        '    1. Video is too short (< 30 seconds)\n' +
+        '    2. No interesting moments detected\n' +
+        '    3. All clips failed quality validation\n\n' +
+        '  → Try:\n\n' +
+        '    1. Use a longer video (> 2 minutes)\n' +
+        '    2. Lower min duration: ' +
+        chalk.cyan('--min 15\n') +
+        '    3. Disable 4-layer validation temporarily\n' +
+        '    4. Export layers to debug: ' +
+        chalk.cyan('--export-layers\n')
     ),
   };
 

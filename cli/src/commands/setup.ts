@@ -1,978 +1,800 @@
 /**
- * Setup command - Check and install dependencies
+ * Create and verify Arena's private Python runtime.
+ *
+ * System Python is only used to create the virtual environment. Arena never
+ * installs packages into the user's global Python environment.
  */
 
+import { spawn } from 'child_process';
 import chalk from 'chalk';
-import { promisify } from 'util';
-import { exec } from 'child_process';
-import ora from 'ora';
+import crypto from 'crypto';
+import fs from 'fs-extra';
 import inquirer from 'inquirer';
-import { existsSync } from 'fs';
-import { join } from 'path';
-import { spawnWithErrorHandling, getUserFriendlyError } from '../utils/resilience.js';
-import { logger, logCommand } from '../utils/logger.js';
+import ora from 'ora';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import {
+  RUNTIME_SCHEMA_VERSION,
+  findCompatibleSystemPython,
+  getManagedEnvironmentsDir,
+  getManagedVenvDir,
+  getRuntimeDir,
+  isSupportedPythonVersion,
+  parsePythonVersion,
+  readRuntimeManifest,
+  resolveEnginePath,
+  writeRuntimeManifest,
+  type PythonCommand,
+} from '../core/runtime.js';
+import { logCommand, logger } from '../utils/logger.js';
 
-const execAsync = promisify(exec);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const packageJson = fs.readJsonSync(path.resolve(__dirname, '../../package.json')) as {
+  version: string;
+  arenaPreparedArtifact?: boolean;
+};
+const DEFAULT_SETUP_TIMEOUT_MS = 15 * 60 * 1000;
+const COMMAND_CHECK_TIMEOUT_MS = 15 * 1000;
 
-interface DependencyCheck {
-  name: string;
+export interface SetupOptions {
+  check?: boolean;
+  force?: boolean;
+  yes?: boolean;
+}
+
+interface CommandResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
+interface RuntimeStatus {
+  ready: boolean;
+  pythonVersion?: string;
+  reason?: string;
+}
+
+interface InstallerCommand {
   command: string;
-  versionCommand?: string;
-  requiredVersion?: string;
-  installInstructions: {
-    [key: string]: string;
-  };
-  optional?: boolean;
+  args: string[];
+  label: string;
 }
 
-const dependencies: DependencyCheck[] = [
-  {
-    name: 'Python 3.9+',
-    command: 'python3 --version',
-    requiredVersion: '3.9',
-    installInstructions: {
-      'darwin-brew': 'brew install python3',
-      'darwin-port': 'sudo port install python311',
-      'linux-apt': 'sudo apt-get update && sudo apt-get install -y python3 python3-pip',
-      'linux-yum': 'sudo yum install -y python3 python3-pip',
-      'linux-dnf': 'sudo dnf install -y python3 python3-pip',
-      'linux-pacman': 'sudo pacman -S --noconfirm python python-pip',
-      'linux-zypper': 'sudo zypper install -n python3 python3-pip',
-      'win32-winget':
-        'winget install --accept-source-agreements --accept-package-agreements Python.Python.3.11',
-      'win32-choco': 'choco install -y python',
-      'win32-manual': 'https://www.python.org/downloads/',
-    },
-  },
-  {
-    name: 'pip (Python package manager)',
-    command: 'pip3 --version',
-    installInstructions: {
-      'darwin-brew': 'python3 -m ensurepip --upgrade',
-      'darwin-port': 'python3 -m ensurepip --upgrade',
-      'linux-apt': 'sudo apt-get install -y python3-pip',
-      'linux-yum': 'sudo yum install -y python3-pip',
-      'linux-dnf': 'sudo dnf install -y python3-pip',
-      'linux-pacman': 'sudo pacman -S --noconfirm python-pip',
-      'linux-zypper': 'sudo zypper install -n python3-pip',
-      'win32-winget': 'python -m ensurepip --upgrade',
-      'win32-choco': 'python -m ensurepip --upgrade',
-      'win32-manual': 'python -m ensurepip --upgrade',
-    },
-  },
-  {
-    name: 'FFmpeg',
-    command: 'ffmpeg -version',
-    installInstructions: {
-      'darwin-brew': 'brew install ffmpeg',
-      'darwin-port': 'sudo port install ffmpeg',
-      'linux-apt': 'sudo apt-get install -y ffmpeg',
-      'linux-yum': 'sudo yum install -y ffmpeg',
-      'linux-dnf': 'sudo dnf install -y ffmpeg',
-      'linux-pacman': 'sudo pacman -S --noconfirm ffmpeg',
-      'linux-zypper': 'sudo zypper install -n ffmpeg',
-      'win32-winget':
-        'winget install --accept-source-agreements --accept-package-agreements Gyan.FFmpeg',
-      'win32-choco': 'choco install -y ffmpeg',
-      'win32-manual': 'https://ffmpeg.org/download.html',
-    },
-  },
-  {
-    name: 'Deno (for YouTube downloads)',
-    command: 'deno --version',
-    optional: true,
-    installInstructions: {
-      'darwin-brew': 'brew install deno',
-      'darwin-port': 'curl -fsSL https://deno.land/install.sh | sh',
-      'linux-apt': 'curl -fsSL https://deno.land/install.sh | sh',
-      'linux-yum': 'curl -fsSL https://deno.land/install.sh | sh',
-      'linux-dnf': 'curl -fsSL https://deno.land/install.sh | sh',
-      'linux-pacman': 'sudo pacman -S --noconfirm deno',
-      'linux-zypper': 'curl -fsSL https://deno.land/install.sh | sh',
-      'win32-winget': 'winget install --accept-source-agreements DenoLand.Deno',
-      'win32-choco': 'choco install -y deno',
-      'win32-manual': 'https://deno.land',
-    },
-  },
-];
+interface IntegrityStatus {
+  valid: boolean;
+  detail: string;
+}
 
-async function detectPackageManager(): Promise<string> {
-  const platform = process.platform;
-
-  if (platform === 'darwin') {
-    // macOS: Check for brew or port
-    try {
-      await execAsync('which brew');
-      return 'darwin-brew';
-    } catch {
-      try {
-        await execAsync('which port');
-        return 'darwin-port';
-      } catch {
-        return 'darwin-brew'; // Default to brew instructions
-      }
-    }
-  } else if (platform === 'win32') {
-    // Windows: Check for winget or choco
-    try {
-      await execAsync('winget --version');
-      return 'win32-winget';
-    } catch {
-      try {
-        await execAsync('choco --version');
-        return 'win32-choco';
-      } catch {
-        return 'win32-manual';
-      }
-    }
-  } else {
-    // Linux: Check for various package managers
-    const packageManagers = ['apt-get', 'yum', 'dnf', 'pacman', 'zypper'];
-
-    for (const pm of packageManagers) {
-      try {
-        await execAsync(`which ${pm}`);
-        return `linux-${pm === 'apt-get' ? 'apt' : pm}`;
-      } catch {
-        continue;
-      }
-    }
-
-    return 'linux-apt'; // Default to apt
+function getSetupTimeoutMs(): number {
+  const configuredMinutes = process.env.ARENA_SETUP_TIMEOUT_MINUTES;
+  if (configuredMinutes === undefined) {
+    return DEFAULT_SETUP_TIMEOUT_MS;
   }
+
+  const minutes = Number(configuredMinutes);
+  if (!Number.isFinite(minutes) || minutes <= 0) {
+    throw new Error('ARENA_SETUP_TIMEOUT_MINUTES must be a positive number');
+  }
+  return Math.round(minutes * 60 * 1000);
 }
 
-async function checkCommand(command: string): Promise<{ installed: boolean; version?: string }> {
+function formatTimeout(timeoutMs: number): string {
+  if (timeoutMs < 1000) {
+    return `${timeoutMs} ms`;
+  }
+  if (timeoutMs < 60 * 1000) {
+    return `${Math.round(timeoutMs / 1000)} seconds`;
+  }
+  return `${Number((timeoutMs / 60000).toFixed(2))} minutes`;
+}
+
+const INSTALL_LOCK_NAME = 'install.lock';
+
+function processIsRunning(pid: number): boolean {
   try {
-    const { stdout } = await execAsync(command);
-    const versionMatch = stdout.match(/(\d+\.\d+\.\d+)/);
-    return {
-      installed: true,
-      version: versionMatch ? versionMatch[1] : stdout.trim().split('\n')[0],
-    };
-  } catch {
-    return { installed: false };
-  }
-}
-
-async function checkPython(): Promise<{ installed: boolean; version?: string }> {
-  // Try python commands in order of preference based on platform
-  const pythonCommands =
-    process.platform === 'win32'
-      ? ['python --version', 'python3 --version', 'py --version']
-      : ['python3 --version', 'python --version'];
-
-  for (const cmd of pythonCommands) {
-    try {
-      const { stdout } = await execAsync(cmd);
-      const versionMatch = stdout.match(/(\d+\.\d+\.\d+)/);
-      return {
-        installed: true,
-        version: versionMatch ? versionMatch[1] : stdout.trim().split('\n')[0],
-      };
-    } catch {
-      continue;
-    }
-  }
-
-  return { installed: false };
-}
-
-async function checkPip(): Promise<{ installed: boolean; version?: string }> {
-  // Try pip commands in order of preference based on platform
-  const pipCommands =
-    process.platform === 'win32'
-      ? ['pip --version', 'pip3 --version', 'python -m pip --version', 'python3 -m pip --version']
-      : ['pip3 --version', 'pip --version', 'python3 -m pip --version', 'python -m pip --version'];
-
-  for (const cmd of pipCommands) {
-    try {
-      const { stdout } = await execAsync(cmd);
-      const versionMatch = stdout.match(/(\d+\.\d+\.\d+)/);
-      return {
-        installed: true,
-        version: versionMatch ? versionMatch[1] : stdout.trim().split('\n')[0],
-      };
-    } catch {
-      continue;
-    }
-  }
-
-  return { installed: false };
-}
-
-async function checkFFmpeg(): Promise<{
-  installed: boolean;
-  version?: string;
-  foundPath?: string;
-}> {
-  // Try ffmpeg in PATH first
-  try {
-    const { stdout } = await execAsync('ffmpeg -version');
-    const versionMatch = stdout.match(/ffmpeg version (\S+)/);
-    return {
-      installed: true,
-      version: versionMatch ? versionMatch[1] : stdout.trim().split('\n')[0],
-    };
-  } catch {
-    // On Windows, check common installation paths
-    if (process.platform === 'win32') {
-      const commonPaths = [
-        'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe',
-        'C:\\Program Files (x86)\\ffmpeg\\bin\\ffmpeg.exe',
-        'C:\\ffmpeg\\bin\\ffmpeg.exe',
-      ];
-
-      // Check ProgramData chocolatey path
-      if (process.env.ProgramData) {
-        commonPaths.push(join(process.env.ProgramData, 'chocolatey', 'bin', 'ffmpeg.exe'));
-      }
-
-      for (const ffmpegPath of commonPaths) {
-        try {
-          if (existsSync(ffmpegPath)) {
-            const { stdout } = await execAsync(`"${ffmpegPath}" -version`);
-            const versionMatch = stdout.match(/ffmpeg version (\S+)/);
-            return {
-              installed: true,
-              version: versionMatch ? versionMatch[1] : 'found',
-              foundPath: ffmpegPath,
-            };
-          }
-        } catch {
-          continue;
-        }
-      }
-    }
-  }
-
-  return { installed: false };
-}
-
-async function getPipCommand(): Promise<string> {
-  // Try pip commands in order of preference
-  const pipCommands =
-    process.platform === 'win32'
-      ? ['pip', 'pip3', 'python -m pip', 'python3 -m pip']
-      : ['pip3', 'pip', 'python3 -m pip', 'python -m pip'];
-
-  for (const cmd of pipCommands) {
-    try {
-      await execAsync(`${cmd} --version`);
-      return cmd;
-    } catch {
-      continue;
-    }
-  }
-
-  // Fallback to pip3 on Unix, pip on Windows
-  return process.platform === 'win32' ? 'pip' : 'pip3';
-}
-
-async function installPythonPackages(): Promise<boolean> {
-  console.log(chalk.cyan('\n📦 Installing Python packages...\n'));
-
-  const pipCommand = await getPipCommand();
-
-  // Check if requirements.txt exists
-  // Try npm package location first (../../requirements.txt from dist/commands/setup.js)
-  // Then try development location (../../../engine/requirements.txt)
-  const { fileURLToPath } = await import('url');
-  const { dirname } = await import('path');
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
-
-  const npmRequirementsPath = join(__dirname, '../../requirements.txt');
-  const devRequirementsPath = join(__dirname, '../../../engine/requirements.txt');
-
-  let requirementsPath: string;
-  let hasRequirementsFile = false;
-
-  if (existsSync(npmRequirementsPath)) {
-    requirementsPath = npmRequirementsPath;
-    hasRequirementsFile = true;
-  } else if (existsSync(devRequirementsPath)) {
-    requirementsPath = devRequirementsPath;
-    hasRequirementsFile = true;
-  } else {
-    requirementsPath = npmRequirementsPath; // Default for error messages
-  }
-
-  if (hasRequirementsFile) {
-    console.log(chalk.gray('   Using engine/requirements.txt\n'));
-  }
-
-  // On Windows, show warning about installation time
-  if (process.platform === 'win32') {
-    console.log(
-      chalk.yellow('⏱️  Note: This may take 5-10 minutes (torch, librosa are large packages)')
-    );
-    console.log(chalk.gray('   You can watch progress below...\n'));
-  }
-
-  const spinner = ora('Installing Python dependencies').start();
-
-  logger.info('Installing Python packages', {
-    source: hasRequirementsFile ? 'requirements.txt' : 'hardcoded packages',
-  });
-
-  try {
-    // Handle "python -m pip" vs "pip" command format
-    let command: string;
-    let args: string[];
-
-    if (hasRequirementsFile) {
-      // Install from requirements.txt
-      if (pipCommand.includes(' -m ')) {
-        const parts = pipCommand.split(' ');
-        command = parts[0];
-        args = [...parts.slice(1), 'install', '-r', requirementsPath];
-      } else {
-        command = pipCommand;
-        args = ['install', '-r', requirementsPath];
-      }
-    } else {
-      // Fallback to hardcoded packages
-      const fallbackPackages = [
-        'openai-whisper',
-        'openai',
-        'ffmpeg-python',
-        'torch',
-        'numpy',
-        'scipy',
-      ];
-      if (pipCommand.includes(' -m ')) {
-        const parts = pipCommand.split(' ');
-        command = parts[0];
-        args = [...parts.slice(1), 'install', ...fallbackPackages];
-      } else {
-        command = pipCommand;
-        args = ['install', ...fallbackPackages];
-      }
-    }
-
-    // Add --user flag on Windows to avoid permission issues
-    if (process.platform === 'win32') {
-      args.push('--user');
-    }
-
-    // Add flags to avoid cache and hash issues
-    args.push('--no-cache-dir'); // Avoid stale cache causing hash mismatches
-    args.push('--upgrade'); // Ensure we get latest compatible versions
-
-    const result = await spawnWithErrorHandling(command, args, {
-      shell: false, // Avoid shell for security (args are properly escaped)
-      onStdout: (data) => {
-        // Update spinner with current package
-        const match = data.match(/Collecting (\S+)/);
-        if (match) {
-          spinner.text = `Installing ${match[1]}...`;
-        }
-      },
-      onError: (error) => {
-        logger.error('Python package installation spawn error', error);
-      },
-    });
-
-    if (result.code === 0) {
-      spinner.succeed('Python packages installed successfully');
-      logger.info('Python packages installed successfully');
-      return true;
-    } else {
-      spinner.fail('Failed to install Python packages');
-      logger.error('Python package installation failed', undefined, {
-        stdout: result.stdout,
-        stderr: result.stderr,
-      });
-
-      console.log(chalk.red('\nError output:'));
-      console.log(chalk.gray(result.stderr || result.stdout));
-
-      // Detect specific errors and provide solutions
-      const output = (result.stderr || result.stdout).toLowerCase();
-
-      if (output.includes('access is denied') || output.includes('permission denied')) {
-        console.log(chalk.yellow('\n⚠️  Permission Error Detected:'));
-        if (process.platform === 'win32') {
-          console.log(chalk.white('Solution 1 (Recommended): Install to user directory'));
-          console.log(chalk.cyan(`  ${pipCommand} install --user -r requirements.txt\n`));
-          console.log(chalk.white('Solution 2: Run PowerShell as Administrator'));
-          console.log(chalk.gray('  Right-click PowerShell → "Run as Administrator"'));
-          console.log(chalk.cyan(`  ${pipCommand} install -r requirements.txt\n`));
-        } else {
-          console.log(chalk.white('Try with --user flag:'));
-          console.log(chalk.cyan(`  ${pipCommand} install --user -r requirements.txt\n`));
-        }
-      } else if (output.includes('timeout') || output.includes('timed out')) {
-        console.log(chalk.yellow('\n⚠️  Network Timeout:'));
-        console.log(chalk.white('The installation timed out. Try again with:'));
-        const userFlag = process.platform === 'win32' ? ' --user' : '';
-        console.log(
-          chalk.cyan(`  ${pipCommand} install${userFlag} --timeout 300 -r requirements.txt\n`)
-        );
-      } else if (output.includes('hash') || output.includes('these packages do not match')) {
-        console.log(chalk.yellow('\n⚠️  Corrupted Cache Detected:'));
-        console.log(
-          chalk.white('Pip cache has corrupted or outdated files. Clear it and retry:\n')
-        );
-        console.log(chalk.cyan(`  ${pipCommand} cache purge`));
-        const userFlag = process.platform === 'win32' ? ' --user' : '';
-        console.log(
-          chalk.cyan(`  ${pipCommand} install${userFlag} --no-cache-dir -r requirements.txt\n`)
-        );
-        console.log(
-          chalk.gray('Note: --no-cache-dir flag was added to avoid this issue in future.\n')
-        );
-      } else {
-        console.log(chalk.yellow('\n💡 Tip: Try running manually:'));
-        const userFlag = process.platform === 'win32' ? ' --user' : '';
-        console.log(
-          chalk.cyan(`  ${pipCommand} install${userFlag} --no-cache-dir -r requirements.txt\n`)
-        );
-      }
-
-      return false;
-    }
-  } catch (error) {
-    spinner.fail('Failed to start pip');
-    logger.error('Python package installation error', error as Error);
-    console.log(chalk.red(`\nError: ${getUserFriendlyError(error as Error)}`));
-    console.log(chalk.yellow('\n💡 Try installing manually:'));
-    const userFlag = process.platform === 'win32' ? ' --user' : '';
-    console.log(
-      chalk.cyan(`  ${pipCommand} install${userFlag} --no-cache-dir -r requirements.txt\n`)
-    );
-    return false;
-  }
-}
-
-/**
- * Install Arena engine package
- */
-async function installArenaEngine(): Promise<boolean> {
-  console.log(chalk.cyan('\n📦 Installing Arena engine package...\n'));
-
-  const pipCommand = await getPipCommand();
-  const spinner = ora('Installing Arena engine').start();
-
-  try {
-    // Get engine path
-    // Try npm package location first (../../engine from dist/commands/setup.js)
-    // Then try development location (../../../engine)
-    const { fileURLToPath } = await import('url');
-    const { dirname } = await import('path');
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = dirname(__filename);
-
-    const npmEnginePath = join(__dirname, '../../engine');
-    const devEnginePath = join(__dirname, '../../../engine');
-
-    let enginePath: string;
-
-    if (existsSync(npmEnginePath)) {
-      enginePath = npmEnginePath;
-    } else if (existsSync(devEnginePath)) {
-      enginePath = devEnginePath;
-    } else {
-      spinner.warn('Engine directory not found, skipping');
-      console.log(chalk.yellow('⚠️  Could not find engine directory'));
-      console.log(chalk.gray('   This is optional if running from npm package\n'));
-      return true; // Non-fatal
-    }
-
-    let command: string;
-    let args: string[];
-
-    if (pipCommand.includes(' -m ')) {
-      const parts = pipCommand.split(' ');
-      command = parts[0];
-      args = [...parts.slice(1), 'install', '-e', enginePath];
-    } else {
-      command = pipCommand;
-      args = ['install', '-e', enginePath];
-    }
-
-    // Add --user flag on Windows
-    if (process.platform === 'win32') {
-      args.push('--user');
-    }
-
-    args.push('--no-cache-dir');
-
-    const result = await spawnWithErrorHandling(command, args, {
-      shell: false,
-      onStdout: (data) => {
-        if (data.includes('Successfully installed')) {
-          spinner.text = 'Arena engine installed';
-        }
-      },
-    });
-
-    if (result.code === 0) {
-      spinner.succeed('Arena engine installed successfully');
-      return true;
-    } else {
-      spinner.warn('Arena engine installation had issues');
-      console.log(chalk.yellow('\n⚠️  Arena engine installation failed'));
-      console.log(chalk.gray('   You can install it manually:'));
-      console.log(chalk.cyan(`   cd engine && ${pipCommand} install -e .`));
-      return true; // Non-fatal, return true to continue
-    }
-  } catch (error) {
-    spinner.warn('Could not install Arena engine');
-    console.log(chalk.yellow('\n⚠️  Arena engine installation skipped'));
-    console.log(chalk.gray('   You can install it manually:'));
-    console.log(chalk.cyan(`   cd engine && ${pipCommand} install -e .`));
-    return true; // Non-fatal, return true to continue
-  }
-}
-
-async function autoInstallDependency(
-  dep: DependencyCheck,
-  packageManager: string
-): Promise<boolean> {
-  const installCommand =
-    dep.installInstructions[packageManager] ||
-    dep.installInstructions[`${packageManager.split('-')[0]}-manual`];
-
-  if (!installCommand || installCommand.startsWith('http')) {
-    console.log(chalk.yellow(`\n📥 ${dep.name} requires manual installation:`));
-    console.log(chalk.cyan(`   ${installCommand}\n`));
-    return false;
-  }
-
-  console.log(chalk.cyan(`\n📥 Installing ${dep.name}...\n`));
-  console.log(chalk.gray(`Command: ${installCommand}\n`));
-
-  const spinner = ora(`Installing ${dep.name}`).start();
-
-  try {
-    // Use shell mode for better compatibility (especially on Windows)
-    await execAsync(installCommand);
-    spinner.succeed(`${dep.name} installed successfully`);
+    process.kill(pid, 0);
     return true;
   } catch (error) {
-    spinner.fail(`Failed to install ${dep.name}`);
-
-    const err = error as { stderr?: string; stdout?: string; message?: string };
-    const errorMessage = err.stderr || err.stdout || err.message || '';
-
-    if (errorMessage) {
-      console.log(chalk.red('\nError details:'));
-      console.log(chalk.gray(errorMessage));
-    }
-
-    console.log(chalk.yellow('\n💡 Please install manually:'));
-    console.log(chalk.cyan(`  ${installCommand}\n`));
-
-    // Detect and provide specific solutions for common errors
-    const errorLower = errorMessage.toLowerCase();
-
-    // Repository/package not found errors
-    if (errorLower.includes('unable to locate package') || errorLower.includes('no package')) {
-      console.log(chalk.yellow('Repository Issue Detected:'));
-      if (process.platform === 'linux') {
-        console.log(chalk.gray('Ubuntu/Debian: Enable universe repository:'));
-        console.log(chalk.cyan('  sudo add-apt-repository universe'));
-        console.log(chalk.cyan('  sudo apt-get update\n'));
-      }
-    }
-
-    // EPEL needed (RHEL/CentOS)
-    if (errorLower.includes('no match for argument') && installCommand.includes('yum')) {
-      console.log(chalk.yellow('EPEL Repository Needed:'));
-      console.log(chalk.gray('RHEL/CentOS: Install EPEL first:'));
-      console.log(chalk.cyan('  sudo yum install -y epel-release\n'));
-    }
-
-    // RPM Fusion needed (Fedora)
-    if (
-      errorLower.includes('no match') &&
-      installCommand.includes('ffmpeg') &&
-      installCommand.includes('dnf')
-    ) {
-      console.log(chalk.yellow('RPM Fusion Repository Needed:'));
-      console.log(chalk.gray('Fedora: Enable RPM Fusion:'));
-      console.log(
-        chalk.cyan(
-          '  sudo dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm\n'
-        )
-      );
-    }
-
-    // Permission denied
-    if (errorLower.includes('permission denied') || errorLower.includes('access denied')) {
-      console.log(chalk.yellow('Permission Issue:'));
-      if (process.platform === 'win32') {
-        console.log(chalk.gray('Run PowerShell/CMD as Administrator:'));
-        console.log(chalk.gray('  Right-click → "Run as Administrator"\n'));
-      } else {
-        console.log(chalk.gray('This command needs sudo privileges'));
-        console.log(chalk.gray('Make sure your user has sudo access\n'));
-      }
-    }
-
-    // Command not found
-    if (errorLower.includes('command not found') || errorLower.includes('not recognized')) {
-      if (installCommand.includes('brew') && process.platform === 'darwin') {
-        console.log(chalk.yellow('Homebrew Not Installed:'));
-        console.log(chalk.gray('Install Homebrew first:'));
-        console.log(
-          chalk.cyan(
-            '  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"\n'
-          )
-        );
-      } else if (installCommand.includes('choco') && process.platform === 'win32') {
-        console.log(chalk.yellow('Chocolatey Not Installed:'));
-        console.log(chalk.gray('Install Chocolatey first:'));
-        console.log(chalk.cyan('  Visit: https://chocolatey.org/install\n'));
-      }
-    }
-
-    // Show additional help for common issues
-    if (
-      installCommand.includes('sudo') &&
-      process.platform !== 'win32' &&
-      !errorLower.includes('password')
-    ) {
-      console.log(chalk.gray('Note: This command requires administrator privileges (sudo)'));
-    } else if (installCommand.includes('winget') && process.platform === 'win32') {
-      console.log(chalk.gray('Note: winget requires Windows 10 1809 or later'));
-      console.log(chalk.gray('      You may need to run PowerShell/CMD as Administrator'));
-    }
-
-    return false;
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
   }
 }
 
-export async function setupCommand(): Promise<void> {
-  logCommand('setup', {});
+async function acquireInstallLock(): Promise<string> {
+  const runtimeDir = getRuntimeDir();
+  const lockPath = path.join(runtimeDir, INSTALL_LOCK_NAME);
+  await fs.ensureDir(runtimeDir, { mode: 0o700 });
 
-  const isPackaged = typeof (process as any).pkg !== 'undefined';
-  if (isPackaged) {
-    console.log(chalk.cyan('\n🔧 ARENA SETUP\n'));
-    console.log(chalk.green('✓ Everything is pre-packaged and ready to go!\n'));
+  const createLock = async () => {
+    await fs.writeJson(
+      lockPath,
+      { pid: process.pid, startedAt: new Date().toISOString() },
+      { mode: 0o600, flag: 'wx' }
+    );
+    await fs.chmod(lockPath, 0o600);
+  };
+
+  try {
+    await createLock();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+      throw new Error(`Could not acquire the Arena setup lock: ${(error as Error).message}`);
+    }
+
+    try {
+      const lock = (await fs.readJson(lockPath)) as { pid?: number };
+      if (typeof lock.pid === 'number' && processIsRunning(lock.pid)) {
+        throw new Error(`Another Arena setup is already running (process ${lock.pid})`);
+      }
+    } catch (readError) {
+      if (readError instanceof Error && readError.message.startsWith('Another Arena setup')) {
+        throw readError;
+      }
+      // A malformed lock is stale.
+    }
+
+    const staleLockPath = `${lockPath}.stale-${process.pid}-${Date.now()}`;
+    try {
+      // Rename is atomic: only one contender can claim a stale lock, and no
+      // contender ever deletes a newly-created lock owned by another process.
+      await fs.rename(lockPath, staleLockPath);
+    } catch {
+      try {
+        await createLock();
+        return lockPath;
+      } catch (retryError) {
+        if ((retryError as NodeJS.ErrnoException).code === 'EEXIST') {
+          throw new Error('Another Arena setup started while the stale lock was being recovered');
+        }
+        throw new Error(`Could not acquire the Arena setup lock: ${(retryError as Error).message}`);
+      }
+    }
+
+    try {
+      try {
+        await createLock();
+      } catch (retryError) {
+        if ((retryError as NodeJS.ErrnoException).code === 'EEXIST') {
+          throw new Error('Another Arena setup started while the stale lock was being recovered');
+        }
+        throw retryError;
+      }
+    } finally {
+      await fs.remove(staleLockPath);
+    }
+  }
+
+  return lockPath;
+}
+
+async function recoverInterruptedInstall(runtimeDir: string, finalVenvDir: string): Promise<void> {
+  const entries = await fs.readdir(runtimeDir, { withFileTypes: true });
+  const installing = entries
+    .filter((entry) => entry.isDirectory() && /^python\.installing-\d+$/.test(entry.name))
+    .map((entry) => path.join(runtimeDir, entry.name));
+  const previous = entries
+    .filter((entry) => entry.isDirectory() && /^python\.previous-\d+$/.test(entry.name))
+    .map((entry) => path.join(runtimeDir, entry.name));
+  const engineSources = entries
+    .filter((entry) => entry.isDirectory() && /^engine-source-\d+$/.test(entry.name))
+    .map((entry) => path.join(runtimeDir, entry.name));
+
+  for (const directory of [...installing, ...engineSources]) {
+    await fs.remove(directory);
+  }
+
+  if (await fs.pathExists(finalVenvDir)) {
+    for (const directory of previous) {
+      await fs.remove(directory);
+    }
+  } else if (previous.length > 0) {
+    const [restore, ...discard] = previous;
+    await fs.move(restore, finalVenvDir, { overwrite: true });
+    for (const directory of discard) {
+      await fs.remove(directory);
+    }
+  }
+
+  const manifest = await readRuntimeManifest();
+  const activeVenvDir = manifest ? path.dirname(path.dirname(manifest.pythonPath)) : null;
+  const environmentsDir = getManagedEnvironmentsDir();
+  if (await fs.pathExists(environmentsDir)) {
+    const environments = await fs.readdir(environmentsDir, { withFileTypes: true });
+    for (const environment of environments) {
+      const environmentPath = path.join(environmentsDir, environment.name);
+      if (
+        environment.isDirectory() &&
+        path.resolve(environmentPath) !== (activeVenvDir ? path.resolve(activeVenvDir) : null)
+      ) {
+        await fs.remove(environmentPath);
+      }
+    }
+  }
+
+  // Migrate away from the old fixed venv only after a new active manifest exists.
+  if (
+    activeVenvDir &&
+    path.resolve(activeVenvDir) !== path.resolve(finalVenvDir) &&
+    (await fs.pathExists(finalVenvDir))
+  ) {
+    await fs.remove(finalVenvDir);
+  }
+}
+
+async function recoverInterruptedRuntime(): Promise<void> {
+  const lockPath = await acquireInstallLock();
+  try {
+    await recoverInterruptedInstall(getRuntimeDir(), getManagedVenvDir());
+  } finally {
+    await fs.remove(lockPath);
+  }
+}
+
+function runCommand(
+  command: string,
+  args: string[],
+  options: {
+    inherit?: boolean;
+    env?: NodeJS.ProcessEnv;
+    onOutput?: (output: string) => void;
+    timeoutMs?: number;
+  } = {}
+): Promise<CommandResult> {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      shell: false,
+      windowsHide: true,
+      stdio: options.inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'],
+      env: options.env ?? process.env,
+    });
+
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    let timedOut = false;
+    let forceKillTimer: NodeJS.Timeout | undefined;
+    const finish = (result: CommandResult) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timeoutTimer) {
+        clearTimeout(timeoutTimer);
+      }
+      if (forceKillTimer) {
+        clearTimeout(forceKillTimer);
+      }
+      resolve(result);
+    };
+    const timeoutMs = options.timeoutMs;
+    const timeoutTimer = timeoutMs
+      ? setTimeout(() => {
+          timedOut = true;
+          stderr = `${stderr}\nTimed out after ${formatTimeout(timeoutMs)}`.trim();
+          child.kill('SIGTERM');
+          forceKillTimer = setTimeout(() => child.kill('SIGKILL'), 5000);
+        }, timeoutMs)
+      : undefined;
+
+    child.stdout?.on('data', (data: Buffer) => {
+      const output = data.toString();
+      stdout += output;
+      options.onOutput?.(output);
+    });
+    child.stderr?.on('data', (data: Buffer) => {
+      const output = data.toString();
+      stderr += output;
+      options.onOutput?.(output);
+    });
+    child.once('error', (error: Error) => {
+      finish({ code: timedOut ? 124 : 1, stdout, stderr: `${stderr}\n${error.message}`.trim() });
+    });
+    child.once('close', (code: number | null) => {
+      finish({ code: timedOut ? 124 : (code ?? 1), stdout, stderr });
+    });
+  });
+}
+
+async function commandAvailable(command: string, args = ['--version']): Promise<boolean> {
+  return (await runCommand(command, args, { timeoutMs: COMMAND_CHECK_TIMEOUT_MS })).code === 0;
+}
+
+async function verifyEngineIntegrity(enginePath: string): Promise<IntegrityStatus> {
+  if (packageJson.arenaPreparedArtifact !== true) {
+    return { valid: true, detail: 'development source tree' };
+  }
+
+  const manifestPath = path.join(enginePath, 'MANIFEST.sha256');
+  if (!(await fs.pathExists(manifestPath))) {
+    return { valid: false, detail: 'engine checksum manifest is missing' };
+  }
+
+  const engineRoot = path.resolve(enginePath);
+  const lines = (await fs.readFile(manifestPath, 'utf8')).split('\n').filter(Boolean);
+  if (lines.length < 2) {
+    return { valid: false, detail: 'engine checksum manifest is empty' };
+  }
+
+  for (const line of lines) {
+    const match = line.match(/^([a-f0-9]{64}) {2}(.+)$/);
+    if (!match) {
+      return { valid: false, detail: 'engine checksum manifest is malformed' };
+    }
+
+    const [, expectedHash, relativePath] = match;
+    const absolutePath = path.resolve(engineRoot, relativePath);
+    if (!absolutePath.startsWith(`${engineRoot}${path.sep}`)) {
+      return { valid: false, detail: `unsafe manifest path: ${relativePath}` };
+    }
+    if (!(await fs.pathExists(absolutePath)) || !(await fs.stat(absolutePath)).isFile()) {
+      return { valid: false, detail: `engine file is missing: ${relativePath}` };
+    }
+
+    const content = await fs.readFile(absolutePath);
+    const actualHash = crypto.createHash('sha256').update(content).digest('hex');
+    if (actualHash !== expectedHash) {
+      return { valid: false, detail: `engine checksum failed: ${relativePath}` };
+    }
+  }
+
+  return { valid: true, detail: `${lines.length} files verified` };
+}
+
+function managedPythonAt(venvDir: string): string {
+  return path.join(
+    venvDir,
+    process.platform === 'win32' ? 'Scripts' : 'bin',
+    process.platform === 'win32' ? 'python.exe' : 'python'
+  );
+}
+
+async function verifyPython(pythonPath: string, verifyImports = true): Promise<RuntimeStatus> {
+  if (!(await fs.pathExists(pythonPath))) {
+    return { ready: false, reason: 'managed Python is missing' };
+  }
+
+  const versionResult = await runCommand(pythonPath, ['--version']);
+  const pythonVersion = parsePythonVersion(`${versionResult.stdout}\n${versionResult.stderr}`);
+  if (versionResult.code !== 0 || !pythonVersion || !isSupportedPythonVersion(pythonVersion)) {
+    return {
+      ready: false,
+      pythonVersion: pythonVersion ?? undefined,
+      reason: 'unsupported Python',
+    };
+  }
+
+  if (!verifyImports) {
+    return { ready: true, pythonVersion };
+  }
+
+  const importResult = await runCommand(pythonPath, [
+    '-c',
+    'import arena, cv2, librosa, numpy, openai, yt_dlp; print("arena-runtime-ok")',
+  ]);
+  if (importResult.code !== 0 || !importResult.stdout.includes('arena-runtime-ok')) {
+    return {
+      ready: false,
+      pythonVersion,
+      reason: importResult.stderr.trim().split('\n').slice(-1)[0] || 'engine import check failed',
+    };
+  }
+
+  return { ready: true, pythonVersion };
+}
+
+async function getInstalledRuntimeStatus(): Promise<RuntimeStatus> {
+  const manifest = await readRuntimeManifest();
+  if (!manifest) {
+    return { ready: false, reason: 'runtime manifest is missing' };
+  }
+  if (manifest.cliVersion !== packageJson.version) {
+    return {
+      ready: false,
+      pythonVersion: manifest.pythonVersion,
+      reason: `runtime was installed for Arena ${manifest.cliVersion}`,
+    };
+  }
+
+  return verifyPython(manifest.pythonPath);
+}
+
+async function detectFfmpegInstaller(): Promise<InstallerCommand | null> {
+  if (process.platform === 'darwin' && (await commandAvailable('brew'))) {
+    return { command: 'brew', args: ['install', 'ffmpeg'], label: 'brew install ffmpeg' };
+  }
+
+  if (process.platform === 'win32') {
+    if (await commandAvailable('winget')) {
+      return {
+        command: 'winget',
+        args: [
+          'install',
+          '--id',
+          'Gyan.FFmpeg',
+          '--exact',
+          '--accept-source-agreements',
+          '--accept-package-agreements',
+        ],
+        label: 'winget install --id Gyan.FFmpeg',
+      };
+    }
+    if (await commandAvailable('choco')) {
+      return { command: 'choco', args: ['install', '-y', 'ffmpeg'], label: 'choco install ffmpeg' };
+    }
+    return null;
+  }
+
+  const linuxInstallers: Array<[string, InstallerCommand]> = [
+    [
+      'apt-get',
+      {
+        command: 'sudo',
+        args: ['apt-get', 'install', '-y', 'ffmpeg'],
+        label: 'sudo apt-get install -y ffmpeg',
+      },
+    ],
+    [
+      'dnf',
+      {
+        command: 'sudo',
+        args: ['dnf', 'install', '-y', 'ffmpeg'],
+        label: 'sudo dnf install -y ffmpeg',
+      },
+    ],
+    [
+      'yum',
+      {
+        command: 'sudo',
+        args: ['yum', 'install', '-y', 'ffmpeg'],
+        label: 'sudo yum install -y ffmpeg',
+      },
+    ],
+    [
+      'pacman',
+      {
+        command: 'sudo',
+        args: ['pacman', '-S', '--noconfirm', 'ffmpeg'],
+        label: 'sudo pacman -S --noconfirm ffmpeg',
+      },
+    ],
+    [
+      'zypper',
+      {
+        command: 'sudo',
+        args: ['zypper', 'install', '-y', 'ffmpeg'],
+        label: 'sudo zypper install -y ffmpeg',
+      },
+    ],
+  ];
+
+  for (const [detector, installer] of linuxInstallers) {
+    if (await commandAvailable(detector)) {
+      return installer;
+    }
+  }
+  return null;
+}
+
+async function ensureFfmpeg(options: SetupOptions): Promise<boolean> {
+  if (
+    (await commandAvailable('ffmpeg', ['-version'])) &&
+    (await commandAvailable('ffprobe', ['-version']))
+  ) {
+    return true;
+  }
+
+  const installer = await detectFfmpegInstaller();
+  if (!installer) {
+    console.log(chalk.red('✗ FFmpeg and ffprobe are required but were not found.'));
     console.log(
       chalk.white(
-        'Arena is running in standalone mode. All dependencies (Python, PyTorch, Whisper, FFmpeg) are compiled directly into the application.\n'
+        '  Install FFmpeg from https://ffmpeg.org/download.html, then rerun arena setup.\n'
       )
     );
+    return false;
+  }
+
+  let shouldInstall = options.yes === true;
+  if (!shouldInstall && process.stdin.isTTY && process.stdout.isTTY) {
+    const answer = await inquirer.prompt<{ install: boolean }>([
+      {
+        type: 'confirm',
+        name: 'install',
+        message: `FFmpeg is missing. Run “${installer.label}”?`,
+        default: true,
+      },
+    ]);
+    shouldInstall = answer.install;
+  }
+
+  if (!shouldInstall) {
+    console.log(chalk.yellow('! FFmpeg installation needs confirmation.'));
+    console.log(chalk.white(`  Run ${installer.label}, or rerun with arena setup --yes.\n`));
+    return false;
+  }
+
+  console.log(chalk.cyan(`\nInstalling FFmpeg with: ${installer.label}\n`));
+  const result = await runCommand(installer.command, installer.args, { inherit: true });
+  if (result.code !== 0) {
+    console.log(chalk.red(`\n✗ FFmpeg installation failed (exit ${result.code}).`));
+    console.log(chalk.white(`  Run ${installer.label} manually, then rerun arena setup.\n`));
+    return false;
+  }
+
+  return (
+    (await commandAvailable('ffmpeg', ['-version'])) &&
+    (await commandAvailable('ffprobe', ['-version']))
+  );
+}
+
+function pythonInstallHelp(): string {
+  if (process.platform === 'darwin') {
+    return 'brew install python@3.12';
+  }
+  if (process.platform === 'win32') {
+    return 'winget install --id Python.Python.3.12 --exact';
+  }
+  return 'Install Python 3.9–3.12 (including the venv module) with your distribution package manager.';
+}
+
+function commandFailure(step: string, result: CommandResult): Error {
+  const details = `${result.stderr}\n${result.stdout}`.trim().split('\n').slice(-12).join('\n');
+  return new Error(`${step} failed with exit code ${result.code}${details ? `:\n${details}` : ''}`);
+}
+
+async function buildRuntime(
+  basePython: PythonCommand,
+  enginePath: string,
+  onProgress?: (message: string) => void
+): Promise<RuntimeStatus> {
+  const runtimeDir = getRuntimeDir();
+  const environmentsDir = getManagedEnvironmentsDir();
+  const candidateVenvDir = path.join(
+    environmentsDir,
+    `python-${packageJson.version}-${Date.now()}-${process.pid}`
+  );
+  const engineSourceDir = path.join(runtimeDir, `engine-source-${process.pid}`);
+
+  const setupTimeoutMs = getSetupTimeoutMs();
+  const lockPath = await acquireInstallLock();
+  let promoted = false;
+
+  const pipEnvironment = {
+    ...process.env,
+    PIP_DISABLE_PIP_VERSION_CHECK: '1',
+    PIP_NO_INPUT: '1',
+    PYTHONUNBUFFERED: '1',
+  };
+  const reportOutput = (output: string) => {
+    const lastLine = output
+      .replace(/\r/g, '\n')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .pop();
+    if (lastLine) {
+      onProgress?.(lastLine.slice(0, 100));
+    }
+  };
+  const safePipArgs = [
+    '--disable-pip-version-check',
+    '--no-input',
+    '--default-timeout',
+    '30',
+    '--retries',
+    '3',
+    '--progress-bar',
+    process.stdout.isTTY ? 'on' : 'off',
+    '--prefer-binary',
+  ];
+
+  try {
+    await recoverInterruptedInstall(runtimeDir, getManagedVenvDir());
+    await fs.ensureDir(environmentsDir, { mode: 0o700 });
+    await fs.ensureDir(engineSourceDir, { mode: 0o700 });
+    await fs.copy(path.join(enginePath, 'arena'), path.join(engineSourceDir, 'arena'), {
+      filter: (sourcePath) => {
+        const parts = sourcePath.split(path.sep);
+        return (
+          !parts.includes('__pycache__') &&
+          !parts.includes('.pytest_cache') &&
+          !sourcePath.endsWith('.pyc') &&
+          !sourcePath.endsWith('.pyo')
+        );
+      },
+    });
+    for (const filename of ['setup.py', 'requirements.txt']) {
+      await fs.copy(path.join(enginePath, filename), path.join(engineSourceDir, filename));
+    }
+
+    onProgress?.('Creating private Python environment');
+    const createResult = await runCommand(basePython.command, [
+      ...basePython.args,
+      '-m',
+      'venv',
+      candidateVenvDir,
+    ]);
+    if (createResult.code !== 0) {
+      throw commandFailure('Creating the private Python environment', createResult);
+    }
+
+    const candidatePython = managedPythonAt(candidateVenvDir);
+    onProgress?.('Preparing Python package tooling');
+    const toolingResult = await runCommand(
+      candidatePython,
+      ['-m', 'pip', 'install', ...safePipArgs, '--upgrade', 'setuptools', 'wheel'],
+      { env: pipEnvironment, onOutput: reportOutput, timeoutMs: setupTimeoutMs }
+    );
+    if (toolingResult.code !== 0) {
+      throw commandFailure('Preparing pip', toolingResult);
+    }
+
+    onProgress?.('Resolving and installing Arena engine dependencies');
+    const engineResult = await runCommand(
+      candidatePython,
+      ['-m', 'pip', 'install', ...safePipArgs, '--upgrade', engineSourceDir],
+      { env: pipEnvironment, onOutput: reportOutput, timeoutMs: setupTimeoutMs }
+    );
+    if (engineResult.code !== 0) {
+      throw commandFailure('Installing the Arena engine', engineResult);
+    }
+
+    onProgress?.('Verifying engine imports');
+    const verification = await verifyPython(candidatePython);
+    if (!verification.ready) {
+      throw new Error(`Runtime verification failed: ${verification.reason}`);
+    }
+
+    await writeRuntimeManifest({
+      schemaVersion: RUNTIME_SCHEMA_VERSION,
+      cliVersion: packageJson.version,
+      pythonPath: candidatePython,
+      pythonVersion: verification.pythonVersion ?? basePython.version,
+      installedAt: new Date().toISOString(),
+    });
+    promoted = true;
+    await recoverInterruptedInstall(runtimeDir, getManagedVenvDir()).catch(() => undefined);
+    return verification;
+  } finally {
+    if (!promoted) {
+      await fs.remove(candidateVenvDir);
+    }
+    await fs.remove(engineSourceDir);
+    await fs.remove(lockPath);
+  }
+}
+
+async function printCheck(): Promise<boolean> {
+  console.log(chalk.cyan('\nARENA INSTALLATION CHECK\n'));
+
+  const enginePath = resolveEnginePath(__dirname);
+  const integrity = enginePath
+    ? await verifyEngineIntegrity(enginePath)
+    : { valid: false, detail: 'engine unavailable' };
+  const runtime = await getInstalledRuntimeStatus();
+  const ffmpeg = await commandAvailable('ffmpeg', ['-version']);
+  const ffprobe = await commandAvailable('ffprobe', ['-version']);
+  const systemPython = await findCompatibleSystemPython();
+
+  const rows: Array<[string, boolean, string]> = [
+    ['Bundled engine', enginePath !== null, enginePath ?? 'not found in this installation'],
+    ['Engine integrity', integrity.valid, integrity.detail],
+    [
+      'Managed runtime',
+      runtime.ready,
+      runtime.ready ? `Python ${runtime.pythonVersion}` : (runtime.reason ?? 'not installed'),
+    ],
+    [
+      'System Python',
+      systemPython !== null,
+      systemPython ? `Python ${systemPython.version}` : 'requires Python 3.9–3.12',
+    ],
+    ['FFmpeg', ffmpeg, ffmpeg ? 'available' : 'not found'],
+    ['ffprobe', ffprobe, ffprobe ? 'available' : 'not found'],
+    ['yt-dlp JS runtime', true, `Node ${process.versions.node}`],
+  ];
+
+  for (const [name, ready, detail] of rows) {
+    console.log(`${ready ? chalk.green('✓') : chalk.red('✗')} ${name}: ${chalk.gray(detail)}`);
+  }
+
+  const ready = enginePath !== null && integrity.valid && runtime.ready && ffmpeg && ffprobe;
+  console.log(
+    ready
+      ? chalk.green('\nArena is ready.\n')
+      : chalk.yellow('\nRun arena setup to install or repair Arena.\n')
+  );
+  return ready;
+}
+
+export async function setupCommand(options: SetupOptions = {}): Promise<void> {
+  logCommand('setup', { ...options });
+
+  if (typeof (process as NodeJS.Process & { pkg?: unknown }).pkg !== 'undefined') {
+    console.log(chalk.green('\n✓ Arena standalone includes its processing runtime.\n'));
     return;
   }
 
-  const startTime = Date.now();
+  if (options.check) {
+    if (!(await printCheck())) {
+      process.exitCode = 1;
+    }
+    return;
+  }
 
-  console.log(chalk.cyan('\n🔧 ARENA SETUP\n'));
-  console.log(chalk.white('Checking system dependencies...\n'));
+  console.log(chalk.cyan('\nARENA SETUP\n'));
+  console.log(chalk.gray(`Runtime location: ${getRuntimeDir()}\n`));
+
+  const enginePath = resolveEnginePath(__dirname);
+  if (!enginePath) {
+    console.log(chalk.red('✗ This Arena installation does not contain the Python engine.'));
+    console.log(chalk.white('  Reinstall the npm package, then run arena setup again.\n'));
+    process.exitCode = 1;
+    return;
+  }
+
+  const integrity = await verifyEngineIntegrity(enginePath);
+  if (!integrity.valid) {
+    console.log(chalk.red(`✗ ${integrity.detail}`));
+    console.log(chalk.white('  Reinstall Arena from npm before running setup again.\n'));
+    process.exitCode = 1;
+    return;
+  }
+
+  if (!(await ensureFfmpeg(options))) {
+    process.exitCode = 1;
+    return;
+  }
 
   try {
-    const packageManager = await detectPackageManager();
-    console.log(
-      chalk.gray(`Detected package manager: ${packageManager.split('-')[1] || 'manual'}\n`)
-    );
-
-    const results: Array<{ dep: DependencyCheck; installed: boolean; version?: string }> = [];
-
-    // Check all dependencies
-    for (const dep of dependencies) {
-      const spinner = ora(`Checking ${dep.name}`).start();
-
-      // Use special checks for Python, pip, and FFmpeg to handle cross-platform variations
-      let result;
-      if (dep.name.includes('Python')) {
-        result = await checkPython();
-      } else if (dep.name.includes('pip')) {
-        result = await checkPip();
-      } else if (dep.name.includes('FFmpeg')) {
-        result = await checkFFmpeg();
-      } else {
-        result = await checkCommand(dep.command);
-      }
-
-      if (result.installed) {
-        spinner.succeed(`${dep.name} ${chalk.gray(result.version || '')}`);
-      } else {
-        spinner.fail(`${dep.name} not found`);
-      }
-
-      results.push({ dep, ...result });
-    }
-
-    // Check if FFmpeg was found on Windows but not in PATH
-    if (process.platform === 'win32') {
-      const ffmpegResult = results.find((r) => r.dep.name.includes('FFmpeg'));
-      const ffmpegPath =
-        ffmpegResult && 'foundPath' in ffmpegResult
-          ? (ffmpegResult as { foundPath?: string }).foundPath
-          : undefined;
-      if (ffmpegResult && ffmpegResult.installed && ffmpegPath) {
-        console.log(chalk.yellow('\n⚠️  FFmpeg found but not in PATH'));
-        console.log(chalk.white('FFmpeg is installed at:'));
-        console.log(chalk.cyan(`  ${ffmpegPath}\n`));
-        console.log(chalk.white('To use it from anywhere, add it to your PATH:'));
-        console.log(chalk.gray('  1. Open System Properties → Environment Variables'));
-        console.log(chalk.gray(`  2. Add to PATH: ${ffmpegPath.replace('\\ffmpeg.exe', '')}\n`));
-        console.log(chalk.white('Or restart your terminal after installation.\n'));
-      }
-    }
-
-    // Summary
-    const missing = results.filter((r) => !r.installed);
-
-    console.log(chalk.cyan('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
-
-    if (missing.length === 0) {
-      console.log(chalk.green('✓ All system dependencies installed!\n'));
-
-      // Check Python packages
-      console.log(chalk.cyan('Checking Python packages...\n'));
-
-      const { installPackages } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'installPackages',
-          message: 'Install/update required Python packages?',
-          default: true,
-        },
-      ]);
-
-      if (installPackages) {
-        const success = await installPythonPackages();
-
-        if (success) {
-          // Install Arena engine package
-          await installArenaEngine();
-
-          console.log(chalk.green('\n✓ Setup complete! Arena is ready to use.\n'));
-          console.log(chalk.cyan('Try it out:'));
-          console.log(chalk.white('  arena process video.mp4 -p tiktok\n'));
-        } else {
-          console.log(chalk.yellow('\n⚠️  Setup completed with errors'));
-          console.log(chalk.white('You may need to install Python packages manually:\n'));
-          console.log(chalk.gray(`  pip3 install -r engine/requirements.txt\n`));
-        }
-      } else {
-        console.log(chalk.yellow('\nSkipped Python package installation'));
-        console.log(chalk.white('Install them later with:\n'));
-        console.log(chalk.gray(`  pip3 install -r engine/requirements.txt\n`));
-      }
-    } else {
-      console.log(chalk.red(`✗ Missing ${missing.length} dependencies:\n`));
-
-      missing.forEach(({ dep }) => {
-        console.log(chalk.white(`  • ${dep.name}`));
-        const instruction =
-          dep.installInstructions[packageManager] ||
-          dep.installInstructions[`${packageManager.split('-')[0]}-manual`] ||
-          'Manual installation required';
-        console.log(chalk.gray(`    ${instruction}\n`));
-      });
-
-      // Show platform-specific notes
-      if (process.platform === 'win32') {
-        console.log(chalk.yellow('⚠️  Windows Note:'));
-        console.log(chalk.gray('   Automatic installation may require running as Administrator'));
-        console.log(chalk.gray('   Right-click PowerShell/CMD → "Run as Administrator"\n'));
-      } else if (process.platform === 'linux') {
-        console.log(chalk.yellow('⚠️  Linux Note:'));
-        console.log(chalk.gray('   Automatic installation requires sudo privileges'));
-        console.log(chalk.gray('   You may be prompted for your password\n'));
-      }
-
-      // Ask if user wants to auto-install
-      const { autoInstall } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'autoInstall',
-          message: 'Would you like to try automatic installation?',
-          default: true,
-        },
-      ]);
-
-      if (autoInstall) {
-        const installResults = new Map<string, boolean>();
-
-        // Install dependencies with smart sequencing
-        // Install Python first if needed (pip depends on it)
-        const pythonDep = missing.find(({ dep }) => dep.name.includes('Python'));
-        if (pythonDep && !pythonDep.installed) {
-          const success = await autoInstallDependency(pythonDep.dep, packageManager);
-          installResults.set('Python', success);
-
-          if (success) {
-            console.log(chalk.yellow('\n⏳ Waiting for Python to be available in PATH...'));
-            console.log(chalk.gray('   (This may take a few seconds)\n'));
-
-            // Wait and retry to detect Python
-            let pythonFound = false;
-            for (let i = 0; i < 5; i++) {
-              await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
-              const result = await checkPython();
-              if (result.installed) {
-                console.log(chalk.green('✓ Python is now available!\n'));
-                pythonFound = true;
-                break;
-              }
-            }
-
-            if (!pythonFound) {
-              console.log(chalk.yellow('⚠️  Python installed but not yet in PATH\n'));
-              console.log(
-                chalk.white('You need to restart your terminal for Python to be available.\n')
-              );
-
-              const { restartNow } = await inquirer.prompt([
-                {
-                  type: 'confirm',
-                  name: 'restartNow',
-                  message: 'Do you want to restart your terminal now and continue setup later?',
-                  default: true,
-                },
-              ]);
-
-              if (restartNow) {
-                console.log(chalk.cyan('\n📋 After restarting your terminal, run:\n'));
-                console.log(chalk.white('  arena setup\n'));
-                console.log(chalk.yellow('Instructions to restart:'));
-                if (process.platform === 'win32') {
-                  console.log(chalk.gray('  1. Close this PowerShell/CMD window'));
-                  console.log(chalk.gray('  2. Open a new PowerShell/CMD window'));
-                  console.log(chalk.gray('  3. Run: arena setup\n'));
-                } else {
-                  console.log(chalk.gray('  1. Close this terminal'));
-                  console.log(chalk.gray('  2. Open a new terminal'));
-                  console.log(chalk.gray('  3. Run: arena setup\n'));
-                }
-                return;
-              } else {
-                console.log(chalk.yellow('\nContinuing anyway (pip installation may fail)...\n'));
-              }
-            }
-          }
-        }
-
-        // Install remaining dependencies
-        for (const { dep, installed } of missing) {
-          if (!installed && !dep.name.includes('Python')) {
-            const success = await autoInstallDependency(dep, packageManager);
-            installResults.set(dep.name, success);
-
-            // If pip was just installed, wait for it to be available
-            if (success && dep.name.includes('pip')) {
-              console.log(chalk.yellow('\n⏳ Verifying pip is available...\n'));
-              await new Promise((resolve) => setTimeout(resolve, 1000));
-            }
-          }
-        }
-
-        // Re-check
-        console.log(chalk.cyan('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
-        console.log(chalk.white('Re-checking dependencies...\n'));
-
-        let allInstalled = true;
-        const stillMissing: string[] = [];
-
-        for (const { dep } of missing) {
-          // Use cross-platform detection for re-check
-          let result;
-          if (dep.name.includes('Python')) {
-            result = await checkPython();
-          } else if (dep.name.includes('pip')) {
-            result = await checkPip();
-          } else if (dep.name.includes('FFmpeg')) {
-            result = await checkFFmpeg();
-          } else {
-            result = await checkCommand(dep.command);
-          }
-
-          if (result.installed) {
-            console.log(chalk.green(`✓ ${dep.name} ${chalk.gray(result.version || '')}`));
-          } else {
-            console.log(chalk.red(`✗ ${dep.name} still not found`));
-            stillMissing.push(dep.name);
-            allInstalled = false;
-          }
-        }
-
-        if (allInstalled) {
-          console.log(chalk.green('\n✓ All dependencies installed!\n'));
-
-          // Install Python packages
-          const success = await installPythonPackages();
-
-          if (success) {
-            // Install Arena engine package
-            await installArenaEngine();
-
-            console.log(chalk.green('\n✓ Setup complete! Arena is ready to use.\n'));
-            console.log(chalk.cyan('Try it out:'));
-            console.log(chalk.white('  arena process video.mp4 -p tiktok\n'));
-          }
-        } else {
-          console.log(
-            chalk.yellow('\n⚠️  Some dependencies could not be installed automatically\n')
-          );
-
-          // Check if any were actually installed but not found (PATH issue)
-          const installedButNotFound = stillMissing.filter((name) => installResults.get(name));
-
-          if (installedButNotFound.length > 0) {
-            console.log(chalk.yellow(`⚠️  These were installed but not found in PATH:`));
-            installedButNotFound.forEach((name) => {
-              console.log(chalk.white(`   • ${name}`));
-            });
-            console.log();
-
-            console.log(chalk.white('This usually means you need to restart your terminal.\n'));
-            console.log(chalk.cyan('To fix this:\n'));
-
-            if (process.platform === 'win32') {
-              console.log(chalk.white('  1. Close this PowerShell/CMD window'));
-              console.log(chalk.white('  2. Open a new PowerShell/CMD window'));
-              console.log(chalk.white('  3. Run: arena setup\n'));
-            } else {
-              console.log(chalk.white('  Option 1 (Recommended):'));
-              console.log(chalk.gray('    - Close and reopen your terminal'));
-              console.log(chalk.gray('    - Run: arena setup\n'));
-
-              console.log(chalk.white('  Option 2 (Quick):'));
-              if (existsSync(`${process.env.HOME}/.zshrc`)) {
-                console.log(chalk.gray('    - Run: source ~/.zshrc && arena setup'));
-              } else if (existsSync(`${process.env.HOME}/.bashrc`)) {
-                console.log(chalk.gray('    - Run: source ~/.bashrc && arena setup'));
-              } else {
-                console.log(chalk.gray('    - Run: source ~/.profile && arena setup'));
-              }
-              console.log();
-            }
-          } else {
-            console.log(chalk.white('Please install them manually using the commands above.\n'));
-
-            // Show PATH restart warning
-            console.log(chalk.yellow('💡 After manual installation:'));
-            console.log(chalk.gray('   Restart your terminal to update PATH'));
-            if (process.platform === 'win32') {
-              console.log(chalk.gray('   - Close and reopen PowerShell/CMD'));
-            } else {
-              console.log(chalk.gray('   - Or run: source ~/.bashrc (or ~/.zshrc)'));
-            }
-            console.log(chalk.gray('   Then run: arena setup\n'));
-          }
-        }
-      } else {
-        console.log(chalk.yellow('\nPlease install the missing dependencies manually, then run:'));
-        console.log(chalk.cyan('  arena setup\n'));
-      }
-    }
-
-    const duration = Date.now() - startTime;
-    logger.info('Setup completed', { durationMs: duration });
+    await recoverInterruptedRuntime();
   } catch (error) {
-    logger.error('Setup failed with unexpected error', error as Error);
-    console.log(chalk.red('\n✗ Setup failed with unexpected error:'));
-    console.log(chalk.gray(getUserFriendlyError(error as Error)));
-    console.log(chalk.yellow('\n💡 For help, run:'));
-    console.log(chalk.cyan('  arena diagnose\n'));
-    process.exit(1);
+    console.log(chalk.red(`✗ ${(error as Error).message}\n`));
+    process.exitCode = 1;
+    return;
+  }
+
+  const currentStatus = await getInstalledRuntimeStatus();
+  if (currentStatus.ready && !options.force) {
+    console.log(
+      chalk.green(`✓ Arena runtime is already ready (Python ${currentStatus.pythonVersion}).`)
+    );
+    console.log(chalk.gray('  Use arena setup --force to rebuild it.\n'));
+    return;
+  }
+
+  const basePython = await findCompatibleSystemPython();
+  if (!basePython) {
+    console.log(chalk.red('✗ Arena requires Python 3.9, 3.10, 3.11, or 3.12.'));
+    console.log(chalk.white(`  ${pythonInstallHelp()}`));
+    console.log(chalk.gray('  Your global Python packages will not be modified.\n'));
+    process.exitCode = 1;
+    return;
+  }
+
+  if (options.force) {
+    console.log(chalk.gray('Rebuilding the managed runtime from scratch.'));
+  }
+
+  const spinner = ora(`Installing Arena engine with Python ${basePython.version}`).start();
+  try {
+    const installed = await buildRuntime(basePython, enginePath, (message) => {
+      spinner.text = message;
+      if (!process.stdout.isTTY) {
+        console.log(chalk.gray(`  ${message}`));
+      }
+    });
+    spinner.succeed(`Arena runtime installed (Python ${installed.pythonVersion})`);
+    console.log(chalk.green('\n✓ Arena installation is ready.'));
+    console.log(chalk.white('  Next: arena init'));
+    console.log(chalk.white('  Verify anytime: arena setup --check\n'));
+  } catch (error) {
+    const setupError = error instanceof Error ? error : new Error(String(error));
+    spinner.fail('Arena runtime installation failed');
+    logger.error('Arena setup failed', setupError, { enginePath, python: basePython.command });
+    console.log(chalk.red(`\n${setupError.message}\n`));
+    console.log(chalk.white('Your previous working runtime, if any, was preserved.'));
+    console.log(chalk.gray('Fix the reported issue and rerun arena setup --force.\n'));
+    process.exitCode = 1;
   }
 }

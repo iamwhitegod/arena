@@ -64,10 +64,14 @@ Burn subtitles into clips from the Whisper transcript:
 # Install CLI globally via npm
 npm install -g @whitegodkingsley/arena-cli
 
+# Create and verify Arena's private processing runtime
+arena setup
+
 # Or clone the repository
 git clone https://github.com/iamwhitegod/arena.git
-cd arena
-npm install -g ./cli
+cd arena/cli
+npm install
+npm link
 
 # Set up your OpenAI API key
 export OPENAI_API_KEY="sk-..."
@@ -181,7 +185,7 @@ arena process "https://www.youtube.com/watch?v=VIDEO_ID" --cookies-from-browser 
 arena transcribe https://vimeo.com/123456789
 ```
 
-**Requirements:** `yt-dlp` (`pip install yt-dlp`) and `deno` (`brew install deno`). Downloads are cached.
+URL support is included in Arena's private runtime. Node.js provides yt-dlp's JavaScript runtime, and downloads are cached.
 
 ## 📊 4-Layer Editorial System
 
@@ -259,11 +263,11 @@ Arena uses a hybrid TypeScript + Python architecture:
 ### Prerequisites
 
 - **Node.js** 18 or higher
-- **Python 3.9+** (for video processing engine)
+- **Python 3.9–3.12** (used only to create Arena's private processing runtime)
 - **FFmpeg** (for video encoding)
-- **Deno** (for YouTube URL downloads: `brew install deno`)
 - **OpenAI API Key** (for AI analysis)
-- **yt-dlp** (optional, for URL support: `pip install yt-dlp`)
+
+Node.js supplies yt-dlp's JavaScript runtime; Deno is not required.
 
 ### Install Node CLI
 
@@ -273,23 +277,20 @@ npm install -g @whitegodkingsley/arena-cli
 
 # Option 2: Install from source
 git clone https://github.com/iamwhitegod/arena.git
-cd arena
-npm install -g ./cli
+cd arena/cli
+npm install
+npm link
 
 # Verify installation
 arena --version
 arena --help
+arena setup
+arena setup --check
 ```
 
 ### Install Python Engine
 
-```bash
-cd engine
-pip install -r requirements.txt
-
-# Verify FFmpeg is installed
-ffmpeg -version
-```
+Do not install Arena's Python packages globally. `arena setup` creates and verifies an isolated runtime under `~/.arena/runtime/environments/`. See the [installation guide](docs/guides/INSTALLATION.md) for repair, CI, source-install, and publishing details.
 
 ### Set Up API Key
 
@@ -455,10 +456,13 @@ npx @whitegodkingsley/arena-cli process video.mp4
 
 ```bash
 # macOS
-brew install python3
+brew install python@3.12
 
 # Ubuntu
-sudo apt install python3
+sudo apt install python3 python3-venv
+
+# Then repair Arena's private runtime
+arena setup --force
 ```
 
 ### "FFmpeg not found"

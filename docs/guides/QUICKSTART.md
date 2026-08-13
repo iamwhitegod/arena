@@ -5,7 +5,7 @@ Get started with Arena in 5 minutes! Generate professional video clips from long
 ## Prerequisites
 
 1. **Node.js 18+** - Download from [nodejs.org](https://nodejs.org)
-2. **Python 3.9+** - Check with `python3 --version`
+2. **Python 3.9–3.12** - Check with `python3 --version`
 3. **FFmpeg** - Install with `brew install ffmpeg` (macOS) or `apt install ffmpeg` (Ubuntu)
 4. **OpenAI API Key** - Get from [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
 
@@ -15,6 +15,8 @@ Get started with Arena in 5 minutes! Generate professional video clips from long
 
 ```bash
 npm install -g @whitegodkingsley/arena-cli
+arena setup
+arena setup --check
 ```
 
 ### Option 2: Install from source
@@ -26,15 +28,14 @@ cd arena
 # Install CLI
 cd cli
 npm install
-npm run build
 npm link
 
-# Install Python engine
-cd ../engine
-pip install -r requirements.txt
+# Install the engine into Arena's private runtime
+arena setup
 
 # Verify installation
 arena --version
+arena setup --check
 ```
 
 ## Setup

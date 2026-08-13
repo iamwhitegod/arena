@@ -43,8 +43,14 @@ program
 // Init command - Setup wizard
 program.command('init').description('Interactive setup wizard for Arena').action(initCommand);
 
-// Setup command - Check and install dependencies
-program.command('setup').description('Check and install system dependencies').action(setupCommand);
+// Setup command - Create and verify Arena's managed runtime
+program
+  .command('setup')
+  .description('Install or repair Arena processing dependencies')
+  .option('--check', 'check installation health without changing anything')
+  .option('--force', 'rebuild the Arena-managed Python runtime')
+  .option('-y, --yes', 'approve supported system dependency installation')
+  .action(setupCommand);
 
 // Process command - All-in-one processing
 program

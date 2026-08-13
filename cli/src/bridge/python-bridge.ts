@@ -3,8 +3,14 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import chalk from 'chalk';
 import fs from 'fs-extra';
-import os from 'os';
 import { ProcessingError, SystemError } from '../errors/index.js';
+import {
+  getActiveBinDir,
+  getActivePythonPath,
+  getArenaHome,
+  prependPath,
+  resolveEnginePath,
+} from '../core/runtime.js';
 
 export interface ProcessOptions {
   videoPath: string;
@@ -96,7 +102,7 @@ export interface ProgressUpdate {
 }
 
 export class PythonBridge {
-  private enginePath: string;
+  private enginePath: string | null;
   private currentProcess: ChildProcess | null = null;
   private isShuttingDown = false;
 
@@ -105,7 +111,7 @@ export class PythonBridge {
     // ES module equivalent of __dirname
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
-    this.enginePath = path.join(__dirname, '../../../engine');
+    this.enginePath = resolveEnginePath(__dirname);
 
     // Setup graceful shutdown handlers
     this.setupShutdownHandlers();
@@ -116,7 +122,7 @@ export class PythonBridge {
    * are extracted to user's home directory.
    */
   private ensureBinariesExtracted(): string {
-    const targetBinDir = path.join(os.homedir(), '.arena', 'bin');
+    const targetBinDir = path.join(getArenaHome(), 'bin');
     fs.ensureDirSync(targetBinDir);
 
     const binaries = [
@@ -169,7 +175,23 @@ export class PythonBridge {
       };
     }
 
-    const arenaCliPath = path.join(this.enginePath, 'arena-cli');
+    const managedPython = getActivePythonPath();
+    if (fs.existsSync(managedPython)) {
+      return {
+        command: managedPython,
+        args: ['-m', 'arena.cli.main', subcommand, ...args],
+      };
+    }
+
+    const enginePath = this.enginePath;
+    if (!enginePath) {
+      throw new SystemError(
+        'ENGINE_NOT_FOUND',
+        'The Arena engine is missing from this installation',
+        'Reinstall Arena, then run "arena setup --check"'
+      );
+    }
+    const arenaCliPath = path.join(enginePath, 'arena-cli');
 
     if (process.platform === 'win32') {
       // Windows: Use python command
@@ -192,9 +214,9 @@ export class PythonBridge {
   getEnginePath(): string {
     const isPackaged = typeof (process as any).pkg !== 'undefined';
     if (isPackaged) {
-      return path.join(os.homedir(), '.arena', 'bin');
+      return path.join(getArenaHome(), 'bin');
     }
-    return this.enginePath;
+    return this.enginePath ?? '';
   }
 
   /**
@@ -440,20 +462,24 @@ export class PythonBridge {
     onError?: (error: string) => void
   ): void {
     const isPackaged = typeof (process as any).pkg !== 'undefined';
-    const binDir = path.join(os.homedir(), '.arena', 'bin');
-    const separator = process.platform === 'win32' ? ';' : ':';
+    const binDir = path.join(getArenaHome(), 'bin');
+    const managedBinDir = getActiveBinDir();
+    const hasManagedRuntime = fs.existsSync(getActivePythonPath());
 
-    // Prepend ~/.arena/bin to system path so compiled engine can find bundled FFmpeg/FFprobe
+    // Put the runtime's console scripts (including yt-dlp) on PATH. Standalone
+    // builds use ~/.arena/bin for their extracted sidecars.
     const updatedPath = isPackaged
-      ? `${binDir}${separator}${process.env.PATH || ''}`
-      : process.env.PATH || '';
+      ? prependPath(process.env.PATH, binDir)
+      : hasManagedRuntime
+        ? prependPath(process.env.PATH, managedBinDir)
+        : process.env.PATH || '';
 
     // Windows-specific spawn options to avoid job object errors
     const spawnOptions: any = {
-      cwd: isPackaged ? binDir : this.enginePath,
+      cwd: isPackaged ? binDir : (this.enginePath ?? process.cwd()),
       env: {
         ...process.env,
-        ...(isPackaged ? { PATH: updatedPath } : {}),
+        ...(isPackaged || hasManagedRuntime ? { PATH: updatedPath } : {}),
       },
     };
 
@@ -557,7 +583,7 @@ export class PythonBridge {
         new SystemError(
           'PYTHON_START_FAILED',
           `Failed to start Python process: ${error.message}`,
-          'Ensure the arena-cli script is executable: chmod +x engine/arena-cli'
+          'Run "arena setup --force" to repair the Arena runtime'
         )
       );
     });
@@ -675,8 +701,12 @@ export class PythonBridge {
     }
 
     return new Promise((resolve) => {
-      // Use python on Windows, python3 on Unix
-      const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+      const managedPython = getActivePythonPath();
+      const pythonCmd = fs.existsSync(managedPython)
+        ? managedPython
+        : process.platform === 'win32'
+          ? 'python'
+          : 'python3';
 
       // Windows-specific spawn options to avoid job object errors
       const spawnOptions: any = {};
@@ -705,7 +735,7 @@ export class PythonBridge {
         } else {
           resolve({
             available: false,
-            error: 'Python 3 is not installed or not in PATH',
+            error: 'Arena runtime is unavailable; run "arena setup"',
           });
         }
       });
@@ -713,7 +743,7 @@ export class PythonBridge {
       pythonProcess.on('error', () => {
         resolve({
           available: false,
-          error: 'Python 3 is not installed or not in PATH',
+          error: 'Arena runtime is unavailable; run "arena setup"',
         });
       });
     });
@@ -726,13 +756,20 @@ export class PythonBridge {
     }
 
     return new Promise((resolve) => {
-      // Use python on Windows, python3 on Unix
-      const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+      const managedPython = getActivePythonPath();
+      const pythonCmd = fs.existsSync(managedPython)
+        ? managedPython
+        : process.platform === 'win32'
+          ? 'python'
+          : 'python3';
 
       // Windows-specific spawn options to avoid job object errors
       const spawnOptions: any = {
-        cwd: this.enginePath,
-        env: { ...process.env, PYTHONPATH: this.enginePath },
+        cwd: this.enginePath ?? process.cwd(),
+        env: {
+          ...process.env,
+          ...(this.enginePath ? { PYTHONPATH: this.enginePath } : {}),
+        },
       };
 
       if (process.platform === 'win32') {

@@ -37,12 +37,16 @@ jobs:
         working-directory: ./cli
         run: npm test
 
-      - name: Build
+      - name: Build minimal package artifact
         working-directory: ./cli
-        run: npm run build
+        run: npm run package:stage
+
+      - name: Inspect package contents
+        working-directory: ./cli
+        run: npm pack .package --dry-run
 
       - name: Publish to npm
         working-directory: ./cli
-        run: npm publish --provenance --access public
+        run: npm publish .package --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

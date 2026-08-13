@@ -4,16 +4,17 @@
 
 import chalk from 'chalk';
 import ora from 'ora';
+import { spawn } from 'child_process';
 import { existsSync, statSync } from 'fs';
-import { homedir, platform, arch, release, totalmem, freemem } from 'os';
+import { platform, arch, release, totalmem, freemem } from 'os';
 import { join } from 'path';
 import {
   checkNetworkConnectivity,
   testApiKey,
   checkDiskSpace,
   formatBytes,
-  execWithRetry,
 } from '../utils/resilience.js';
+import { getArenaHome, readRuntimeManifest } from '../core/runtime.js';
 
 interface DiagnosticResult {
   category: string;
@@ -23,6 +24,43 @@ interface DiagnosticResult {
     message: string;
     solution?: string;
   }>;
+}
+
+interface ProcessResult {
+  code: number;
+  output: string;
+}
+
+function runProcess(command: string, args: string[], timeoutMs = 15000): Promise<ProcessResult> {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      shell: false,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let output = '';
+    let settled = false;
+    const finish = (result: ProcessResult) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        resolve(result);
+      }
+    };
+    const timer = setTimeout(() => {
+      child.kill();
+      finish({ code: 1, output: `${output}\nTimed out` });
+    }, timeoutMs);
+
+    child.stdout?.on('data', (data: Buffer) => {
+      output += data.toString();
+    });
+    child.stderr?.on('data', (data: Buffer) => {
+      output += data.toString();
+    });
+    child.once('error', (error: Error) => finish({ code: 1, output: error.message }));
+    child.once('close', (code: number | null) => finish({ code: code ?? 1, output }));
+  });
 }
 
 export async function diagnoseCommand(): Promise<void> {
@@ -125,10 +163,11 @@ async function checkSystemInfo(): Promise<DiagnosticResult> {
   // Node.js version
   checks.push({
     name: 'Node.js Version',
-    status: process.versions.node >= '18.0.0' ? ('pass' as const) : ('fail' as const),
+    status:
+      Number(process.versions.node.split('.')[0]) >= 18 ? ('pass' as const) : ('fail' as const),
     message: `v${process.versions.node}`,
     solution:
-      process.versions.node < '18.0.0'
+      Number(process.versions.node.split('.')[0]) < 18
         ? 'Upgrade to Node.js 18.0.0 or later: https://nodejs.org'
         : undefined,
   });
@@ -152,102 +191,46 @@ async function checkSystemInfo(): Promise<DiagnosticResult> {
 
 async function checkDependencies(): Promise<DiagnosticResult> {
   const checks = [];
+  const spinner = ora('Checking managed runtime and media tools...').start();
+  const manifest = await readRuntimeManifest();
+  const python = manifest
+    ? await runProcess(manifest.pythonPath, ['--version'])
+    : { code: 1, output: 'runtime manifest not found' };
+  const [ffmpeg, ffprobe] = await Promise.all([
+    runProcess('ffmpeg', ['-version']),
+    runProcess('ffprobe', ['-version']),
+  ]);
+  spinner.stop();
 
-  // Python
-  const pythonSpinner = ora('Checking Python...').start();
-  try {
-    const { stdout } = await execWithRetry('python3 --version || python --version', {
-      maxAttempts: 1,
-      timeoutMs: 5000,
-    });
-    const version = stdout.match(/(\d+\.\d+\.\d+)/)?.[1];
-    pythonSpinner.stop();
-    checks.push({
-      name: 'Python',
-      status: 'pass' as const,
-      message: `v${version} installed`,
-    });
-  } catch {
-    pythonSpinner.stop();
-    checks.push({
-      name: 'Python',
-      status: 'fail' as const,
-      message: 'Not found',
-      solution: 'Run: arena setup',
-    });
-  }
-
-  // pip
-  const pipSpinner = ora('Checking pip...').start();
-  try {
-    const { stdout } = await execWithRetry('pip3 --version || pip --version', {
-      maxAttempts: 1,
-      timeoutMs: 5000,
-    });
-    const version = stdout.match(/(\d+\.\d+\.\d+)/)?.[1];
-    pipSpinner.stop();
-    checks.push({
-      name: 'pip',
-      status: 'pass' as const,
-      message: `v${version} installed`,
-    });
-  } catch {
-    pipSpinner.stop();
-    checks.push({
-      name: 'pip',
-      status: 'fail' as const,
-      message: 'Not found',
-      solution: 'Run: arena setup',
-    });
-  }
-
-  // FFmpeg
-  const ffmpegSpinner = ora('Checking FFmpeg...').start();
-  try {
-    const { stdout } = await execWithRetry('ffmpeg -version', {
-      maxAttempts: 1,
-      timeoutMs: 5000,
-    });
-    const version = stdout.match(/ffmpeg version (\S+)/)?.[1];
-    ffmpegSpinner.stop();
-    checks.push({
-      name: 'FFmpeg',
-      status: 'pass' as const,
-      message: `v${version} installed`,
-    });
-  } catch {
-    ffmpegSpinner.stop();
-    checks.push({
-      name: 'FFmpeg',
-      status: 'fail' as const,
-      message: 'Not found',
-      solution: 'Run: arena setup',
-    });
-  }
-
-  // Deno (optional, for YouTube downloads)
-  const denoSpinner = ora('Checking Deno...').start();
-  try {
-    const { stdout } = await execWithRetry('deno --version', {
-      maxAttempts: 1,
-      timeoutMs: 5000,
-    });
-    const version = stdout.match(/deno (\S+)/)?.[1];
-    denoSpinner.stop();
-    checks.push({
-      name: 'Deno',
-      status: 'pass' as const,
-      message: `v${version} installed`,
-    });
-  } catch {
-    denoSpinner.stop();
-    checks.push({
-      name: 'Deno',
-      status: 'warn' as const,
-      message: 'Not found (needed for YouTube URL downloads)',
-      solution: 'brew install deno (macOS) or curl -fsSL https://deno.land/install.sh | sh',
-    });
-  }
+  checks.push({
+    name: 'Arena-managed Python',
+    status: python.code === 0 ? ('pass' as const) : ('fail' as const),
+    message:
+      python.code === 0
+        ? python.output.trim().split('\n')[0]
+        : 'Private processing runtime is not ready',
+    solution: python.code === 0 ? undefined : 'Run: arena setup',
+  });
+  checks.push({
+    name: 'FFmpeg',
+    status: ffmpeg.code === 0 ? ('pass' as const) : ('fail' as const),
+    message:
+      ffmpeg.code === 0
+        ? ffmpeg.output.match(/ffmpeg version (\S+)/)?.[1] || 'Available'
+        : 'Not found',
+    solution: ffmpeg.code === 0 ? undefined : 'Run: arena setup',
+  });
+  checks.push({
+    name: 'ffprobe',
+    status: ffprobe.code === 0 ? ('pass' as const) : ('fail' as const),
+    message: ffprobe.code === 0 ? 'Available' : 'Not found',
+    solution: ffprobe.code === 0 ? undefined : 'Run: arena setup',
+  });
+  checks.push({
+    name: 'yt-dlp JavaScript runtime',
+    status: 'pass' as const,
+    message: `Node.js v${process.versions.node}`,
+  });
 
   return {
     category: '🔧 System Dependencies',
@@ -257,33 +240,23 @@ async function checkDependencies(): Promise<DiagnosticResult> {
 
 async function checkPythonEnvironment(): Promise<DiagnosticResult> {
   const checks = [];
-  const packages = ['whisper', 'openai', 'ffmpeg', 'torch', 'numpy', 'scipy'];
-
-  const spinner = ora('Checking Python packages...').start();
-
-  for (const pkg of packages) {
-    try {
-      const pipCommand = process.platform === 'win32' ? 'pip' : 'pip3';
-      await execWithRetry(`${pipCommand} show ${pkg}`, {
-        maxAttempts: 1,
-        timeoutMs: 3000,
-      });
-      checks.push({
-        name: pkg,
-        status: 'pass' as const,
-        message: 'Installed',
-      });
-    } catch {
-      checks.push({
-        name: pkg,
-        status: 'fail' as const,
-        message: 'Not installed',
-        solution: `Run: pip3 install ${pkg === 'whisper' ? 'openai-whisper' : pkg}`,
-      });
-    }
-  }
-
+  const manifest = await readRuntimeManifest();
+  const spinner = ora('Verifying Arena engine imports...').start();
+  const verification = manifest
+    ? await runProcess(
+        manifest.pythonPath,
+        ['-c', 'import arena, cv2, librosa, numpy, openai, yt_dlp; print("ok")'],
+        15000
+      )
+    : { code: 1, output: 'runtime manifest not found' };
   spinner.stop();
+
+  checks.push({
+    name: 'Arena engine imports',
+    status: verification.code === 0 ? ('pass' as const) : ('fail' as const),
+    message: verification.code === 0 ? 'Verified in the managed runtime' : 'Import check failed',
+    solution: verification.code === 0 ? undefined : 'Run: arena setup --force',
+  });
 
   return {
     category: '🐍 Python Environment',
@@ -374,7 +347,7 @@ async function checkConfiguration(): Promise<DiagnosticResult> {
   const checks = [];
 
   // Check for config file
-  const configPath = join(homedir(), '.arena', 'config.json');
+  const configPath = join(getArenaHome(), 'config.json');
   const hasConfig = existsSync(configPath);
 
   checks.push({
@@ -385,7 +358,7 @@ async function checkConfiguration(): Promise<DiagnosticResult> {
   });
 
   // Check workspace directory
-  const workspaceDir = join(homedir(), '.arena', 'workspace');
+  const workspaceDir = join(getArenaHome(), 'workspace');
   const hasWorkspace = existsSync(workspaceDir);
 
   checks.push({

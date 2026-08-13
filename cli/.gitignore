@@ -6,3 +6,4 @@ dist/
 .arena/
 engine/
 requirements.txt
+.package/
