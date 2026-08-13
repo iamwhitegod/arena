@@ -39,9 +39,7 @@ export interface PreflightResult {
  * @param options - Options to validate
  * @returns Result with any errors or warnings
  */
-export async function runPreflightChecks(
-  options: PreflightOptions
-): Promise<PreflightResult> {
+export async function runPreflightChecks(options: PreflightOptions): Promise<PreflightResult> {
   const errors: PreflightError[] = [];
   const warnings: string[] = [];
   let pythonVersion: string | undefined;

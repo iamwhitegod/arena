@@ -4,8 +4,8 @@ import os from 'os';
 import path from 'path';
 
 export const RUNTIME_SCHEMA_VERSION = 1;
-export const MIN_PYTHON_VERSION = { major: 3, minor: 9 } as const;
-// Exclusive upper bound: supported versions are Python 3.9 through 3.12.
+export const MIN_PYTHON_VERSION = { major: 3, minor: 10 } as const;
+// Exclusive upper bound: supported versions are Python 3.10 through 3.12.
 export const MAX_PYTHON_VERSION = { major: 3, minor: 13 } as const;
 const CLI_PACKAGE_NAME = '@whitegodkingsley/arena-cli';
 
@@ -157,11 +157,9 @@ function pythonCandidates(platform: NodeJS.Platform = process.platform): Array<{
       { command: 'py', args: ['-3.12'] },
       { command: 'py', args: ['-3.11'] },
       { command: 'py', args: ['-3.10'] },
-      { command: 'py', args: ['-3.9'] },
       { command: 'python3.12', args: [] },
       { command: 'python3.11', args: [] },
       { command: 'python3.10', args: [] },
-      { command: 'python3.9', args: [] },
       { command: 'python', args: [] },
       { command: 'python3', args: [] },
     ];
@@ -171,7 +169,6 @@ function pythonCandidates(platform: NodeJS.Platform = process.platform): Array<{
     { command: 'python3.12', args: [] },
     { command: 'python3.11', args: [] },
     { command: 'python3.10', args: [] },
-    { command: 'python3.9', args: [] },
     { command: 'python3', args: [] },
     { command: 'python', args: [] },
   ];

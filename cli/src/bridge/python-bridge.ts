@@ -526,7 +526,7 @@ export class PythonBridge {
             } else if (update.type === 'result') {
               resolve(update.data);
             }
-          } catch (e) {
+          } catch {
             // Not JSON, just regular output
             console.log(chalk.gray(line));
           }

@@ -11,7 +11,7 @@ setup(
     license="MIT",
     packages=find_packages(),
     install_requires=requirements,
-    python_requires=">=3.9,<3.13",
+    python_requires=">=3.10,<3.13",
     entry_points={
         "console_scripts": [
             "arena-engine=arena.main:main",

@@ -7,6 +7,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import { spawn } from 'child_process';
 import { PreflightError } from '../errors/index.js';
+import { isSupportedPythonVersion } from '../core/runtime.js';
 import { isUrl } from '../utils/url.js';
 
 /**
@@ -75,7 +76,7 @@ export async function validateOutputDir(outputDir: string): Promise<void> {
   // Try to create directory if it doesn't exist
   try {
     await fs.ensureDir(absolutePath);
-  } catch (error) {
+  } catch {
     throw new PreflightError(
       'OUTPUT_DIR_NOT_WRITABLE',
       `Cannot create output directory: ${outputDir}`,
@@ -214,12 +215,12 @@ export async function validatePython(): Promise<string> {
         if (versionMatch) {
           const [, major, minor] = versionMatch.map(Number);
 
-          // Arena's scientific dependency set currently supports Python 3.9–3.12.
-          if (major !== 3 || minor < 9 || minor >= 13) {
+          // Arena supports maintained Python versions covered by its audited lockfile.
+          if (!isSupportedPythonVersion(`${major}.${minor}.0`)) {
             reject(
               new PreflightError(
                 'PYTHON_VERSION_TOO_OLD',
-                `Python 3.9–3.12 is required, found Python ${major}.${minor}`,
+                `Python 3.10–3.12 is required, found Python ${major}.${minor}`,
                 'Run "arena setup" after installing a supported Python version'
               )
             );

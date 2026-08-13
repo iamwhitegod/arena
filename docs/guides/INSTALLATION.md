@@ -7,11 +7,11 @@ Arena is local-first software. The npm package installs the TypeScript CLI; `are
 | Dependency | Supported | Purpose |
 | --- | --- | --- |
 | Node.js | 18 or newer | Arena CLI and the JavaScript runtime used by yt-dlp |
-| Python | 3.9–3.12 | Creates Arena's private processing environment |
+| Python | 3.10–3.12 | Creates Arena's private processing environment |
 | FFmpeg and ffprobe | Available on `PATH` | Local video and audio processing |
 | macOS, Linux, Windows | Current supported releases | Host operating system |
 
-Python 3.13 is not supported yet because Arena's current scientific-processing dependency set targets Python 3.9–3.12. Deno is not required; Arena already runs on Node.js.
+Python 3.13 is not supported yet because Arena's current scientific-processing dependency set targets Python 3.10–3.12. Deno is not required; Arena already runs on Node.js.
 
 ## Install from npm
 
@@ -94,7 +94,7 @@ brew install python@3.12
 winget install --id Python.Python.3.12 --exact
 ```
 
-On Linux, install Python 3.9–3.12 and its `venv` module with the distribution package manager.
+On Linux, install Python 3.10–3.12 and its `venv` module with the distribution package manager.
 
 ### FFmpeg is missing
 

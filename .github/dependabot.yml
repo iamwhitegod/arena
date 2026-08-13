@@ -1,0 +1,25 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /cli
+    schedule:
+      interval: weekly
+    groups:
+      cli-dependencies:
+        patterns: ['*']
+
+  - package-ecosystem: pip
+    directory: /engine
+    schedule:
+      interval: weekly
+    groups:
+      engine-dependencies:
+        patterns: ['*']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']

@@ -62,20 +62,20 @@ class TestCompletenessScoring(unittest.TestCase):
     @patch('arena.editorial.completeness_scorer.call_api_with_smart_retry')
     @patch('openai.OpenAI')
     def test_high_scores_meet_production_standard(self, mock_openai_cls, mock_retry):
-        """Scores with all components >= 5.5 and avg >= 0.60 should meet production."""
-        mock_retry.return_value = make_mock_response(premise=8.0, claim=7.5, resolution=7.0)
+        """Scores with all components >= 8.0 and avg >= 0.85 should meet production."""
+        mock_retry.return_value = make_mock_response(premise=9.0, claim=8.5, resolution=8.0)
 
         scorer = CompletenessScorer(api_key='sk-test')
         unit = make_thought_unit()
         result = scorer.score(unit)
 
         self.assertTrue(result['meets_production_standard'])
-        self.assertAlmostEqual(result['completeness_score'], (8.0 + 7.5 + 7.0) / 30.0, places=2)
+        self.assertAlmostEqual(result['completeness_score'], (9.0 + 8.5 + 8.0) / 30.0, places=2)
 
     @patch('arena.editorial.completeness_scorer.call_api_with_smart_retry')
     @patch('openai.OpenAI')
     def test_low_scores_fail_production_standard(self, mock_openai_cls, mock_retry):
-        """Scores with any component < 5.5 should fail production."""
+        """Scores with any component < 8.0 should fail production."""
         mock_retry.return_value = make_mock_response(premise=8.0, claim=4.0, resolution=7.0)
 
         scorer = CompletenessScorer(api_key='sk-test')
@@ -211,9 +211,8 @@ class TestCompletenessScoring(unittest.TestCase):
     @patch('arena.editorial.completeness_scorer.call_api_with_smart_retry')
     @patch('openai.OpenAI')
     def test_production_requires_all_components_above_threshold(self, mock_openai_cls, mock_retry):
-        """Even if average is >= 0.60, all components must be >= 5.5."""
-        # Average = (9 + 9 + 3) / 30 = 0.70, but resolution is below 5.5
-        mock_retry.return_value = make_mock_response(premise=9.0, claim=9.0, resolution=3.0)
+        """Even if average is >= 0.85, all components must be >= 8.0."""
+        mock_retry.return_value = make_mock_response(premise=9.5, claim=9.5, resolution=7.5)
 
         scorer = CompletenessScorer(api_key='sk-test')
         unit = make_thought_unit()

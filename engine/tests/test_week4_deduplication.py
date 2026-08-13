@@ -17,6 +17,7 @@ Success Criteria:
 
 import sys
 import os
+import pytest
 sys.path.insert(0, '../')
 
 from arena.editorial.thought_seed_detector import ThoughtSeedDetector
@@ -60,7 +61,7 @@ def test_week4_deduplication():
 
     if not transcript_file:
         print(f"❌ Transcript not found")
-        return False
+        pytest.skip("test_007 transcript fixture is not available")
 
     with open(transcript_file, 'r') as f:
         transcript_data = json.load(f)
@@ -72,7 +73,7 @@ def test_week4_deduplication():
     api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
         print("\n❌ OPENAI_API_KEY not set")
-        return False
+        pytest.skip("OPENAI_API_KEY is required for the live Week 4 validation")
 
     # Step 1-3: Get ThoughtUnits from Week 1-3 pipeline
     print(f"\n🏗️  STEP 1-3: Constructing and Scoring ThoughtUnits (Week 1-3 pipeline)...")
@@ -292,13 +293,11 @@ def test_week4_deduplication():
     if passed_count >= 3:
         print("\n🎉 WEEK 4 VALIDATION SUCCESSFUL!")
         print("Deduplication and variant selection working as expected.")
-        return True
     else:
         print("\n⚠️  WEEK 4 NEEDS IMPROVEMENT")
         print("Review failed checks and adjust thresholds.")
-        return False
+    assert passed_count >= 3, f"Only {passed_count}/{len(checks)} Week 4 checks passed"
 
 
 if __name__ == '__main__':
-    success = test_week4_deduplication()
-    sys.exit(0 if success else 1)
+    test_week4_deduplication()

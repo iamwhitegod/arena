@@ -13,6 +13,10 @@ dist/
 cli/dist/
 build/
 coverage/
+test-results/
+cli/tests/
+engine/tests/
+website/
 
 # Arena workspace & output
 .arena/

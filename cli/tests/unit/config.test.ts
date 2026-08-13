@@ -9,11 +9,14 @@ describe('ConfigManager', () => {
   let tempProjectDir: string;
   let originalHome: string;
   let originalCwd: string;
+  let originalApiKey: string | undefined;
 
   beforeEach(async () => {
     // Save original paths
     originalHome = os.homedir();
     originalCwd = process.cwd();
+    originalApiKey = process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
 
     // Create temp directories
     tempHomeDir = path.join(os.tmpdir(), `arena-home-${Date.now()}`);
@@ -39,6 +42,11 @@ describe('ConfigManager', () => {
       value: () => originalHome,
       writable: true,
     });
+    if (originalApiKey === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = originalApiKey;
+    }
 
     // Clean up temp directories
     await fs.remove(tempHomeDir);
@@ -57,6 +65,11 @@ describe('ConfigManager', () => {
       expect(config.whisper_mode).toBe('api');
       expect(config.clip_duration).toEqual([30, 90]);
       expect(config.output_format).toBe('mp4');
+
+      if (process.platform !== 'win32') {
+        expect((await fs.stat(configPath)).mode & 0o777).toBe(0o600);
+        expect((await fs.stat(path.dirname(configPath))).mode & 0o777).toBe(0o700);
+      }
     });
 
     it('should read existing global config', async () => {
@@ -77,16 +90,65 @@ describe('ConfigManager', () => {
       await manager.ensureGlobalConfig();
 
       await manager.updateGlobalConfig({
-        openai_api_key: 'sk-test-key',
         whisper_mode: 'local',
       });
 
       const config = await manager.getGlobalConfig();
 
-      expect(config.openai_api_key).toBe('sk-test-key');
       expect(config.whisper_mode).toBe('local');
       // Should preserve other fields
       expect(config.clip_duration).toBeDefined();
+    });
+
+    it('should refuse secrets in the non-sensitive config file', async () => {
+      const manager = new ConfigManager();
+
+      await expect(manager.updateGlobalConfig({ openai_api_key: 'sk-test-key' })).rejects.toThrow(
+        'credential store'
+      );
+    });
+
+    it('should store credentials separately with owner-only permissions', async () => {
+      const manager = new ConfigManager();
+      const apiKey = `sk-${'x'.repeat(48)}`;
+
+      await manager.setOpenAIApiKey(apiKey);
+
+      expect(await manager.resolveOpenAIApiKey()).toBe(apiKey);
+      expect(await manager.hasStoredOpenAIApiKey()).toBe(true);
+      expect(await manager.getGlobalConfig()).not.toHaveProperty('openai_api_key');
+      expect(await fs.readJson(manager.getCredentialsPath())).toMatchObject({
+        version: 1,
+        openai_api_key: apiKey,
+      });
+      if (process.platform !== 'win32') {
+        expect((await fs.stat(manager.getCredentialsPath())).mode & 0o777).toBe(0o600);
+      }
+    });
+
+    it('should prefer the environment over stored credentials', async () => {
+      const manager = new ConfigManager();
+      await manager.setOpenAIApiKey(`sk-${'s'.repeat(48)}`);
+      process.env.OPENAI_API_KEY = `sk-${'e'.repeat(48)}`;
+
+      expect(await manager.resolveOpenAIApiKey()).toBe(process.env.OPENAI_API_KEY);
+    });
+
+    it('should migrate a legacy API key out of config.json', async () => {
+      const manager = new ConfigManager();
+      const apiKey = `sk-${'m'.repeat(48)}`;
+      await manager.ensureGlobalConfig();
+      const legacyConfig = await fs.readJson(manager.getGlobalConfigPath());
+      await fs.writeJson(manager.getGlobalConfigPath(), {
+        ...legacyConfig,
+        openai_api_key: apiKey,
+      });
+
+      expect(await manager.resolveOpenAIApiKey()).toBe(apiKey);
+      expect(await fs.readJson(manager.getGlobalConfigPath())).not.toHaveProperty('openai_api_key');
+      expect(await fs.readJson(manager.getCredentialsPath())).toMatchObject({
+        openai_api_key: apiKey,
+      });
     });
 
     it('should not duplicate config on multiple ensures', async () => {
@@ -101,6 +163,30 @@ describe('ConfigManager', () => {
 
       // Should still have default values, not duplicated
       expect(config.whisper_mode).toBe('api');
+    });
+
+    it('should reject a symlinked global config file', async () => {
+      if (process.platform === 'win32') return;
+
+      const manager = new ConfigManager();
+      const outsideFile = path.join(tempHomeDir, 'outside-config.json');
+      await fs.writeJson(outsideFile, { whisper_mode: 'local' });
+      await fs.ensureDir(path.dirname(manager.getGlobalConfigPath()));
+      await fs.symlink(outsideFile, manager.getGlobalConfigPath());
+
+      await expect(manager.getGlobalConfig()).rejects.toThrow('unsafe Arena configuration file');
+    });
+
+    it('should reject a symlinked project config directory', async () => {
+      if (process.platform === 'win32') return;
+
+      const outsideDir = path.join(tempHomeDir, 'outside-project-config');
+      await fs.ensureDir(outsideDir);
+      await fs.symlink(outsideDir, path.join(tempProjectDir, '.arena'));
+
+      await expect(new ConfigManager().createProjectConfig('/tmp/video.mp4')).rejects.toThrow(
+        'unsafe Arena configuration directory'
+      );
     });
   });
 
@@ -174,7 +260,7 @@ describe('ConfigManager', () => {
       await manager.ensureGlobalConfig();
       await manager.createProjectConfig('/path/to/video.mp4');
 
-      await manager.updateGlobalConfig({ openai_api_key: 'sk-global' });
+      await manager.setOpenAIApiKey('sk-global');
       await manager.updateProjectConfig({
         preferences: { clip_count: 15 },
       });
@@ -182,7 +268,7 @@ describe('ConfigManager', () => {
       const globalConfig = await manager.getGlobalConfig();
       const projectConfig = await manager.getProjectConfig();
 
-      expect(globalConfig.openai_api_key).toBe('sk-global');
+      expect(await manager.hasStoredOpenAIApiKey()).toBe(true);
       expect(projectConfig?.preferences?.clip_count).toBe(15);
 
       // Global config shouldn't have project fields

@@ -145,11 +145,17 @@ export async function initCommand(): Promise<void> {
   // Build configuration
   const config = buildConfiguration(answers);
 
-  // Save configuration
+  // Save non-sensitive configuration separately from credentials.
   await configManager.updateGlobalConfig(config);
+  if (answers.apiKey) {
+    await configManager.setOpenAIApiKey(answers.apiKey);
+  }
 
   // Display success
   console.log(chalk.green('\n✓ Created ~/.arena/config.json'));
+  if (answers.apiKey) {
+    console.log(chalk.green('✓ Stored API key with owner-only permissions'));
+  }
   console.log(chalk.green('✓ Workspace ready!\n'));
 
   // Show next steps
@@ -157,13 +163,13 @@ export async function initCommand(): Promise<void> {
 }
 
 interface ConfigurationObject {
+  [key: string]: unknown;
   workflow: string;
   minDuration?: number;
   maxDuration?: number;
   editorialModel?: string;
   numClips?: number;
   padding?: number;
-  openai_api_key?: string;
 }
 
 /**
@@ -201,11 +207,6 @@ function buildConfiguration(answers: InitAnswers): ConfigurationObject {
   } else if (answers.workflow === 'course') {
     config.numClips = 3;
     config.padding = 0.5;
-  }
-
-  // API key (if provided)
-  if (answers.apiKey) {
-    config.openai_api_key = answers.apiKey;
   }
 
   return config;

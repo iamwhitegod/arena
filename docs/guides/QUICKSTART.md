@@ -4,8 +4,8 @@ Get started with Arena in 5 minutes! Generate professional video clips from long
 
 ## Prerequisites
 
-1. **Node.js 18+** - Download from [nodejs.org](https://nodejs.org)
-2. **Python 3.9–3.12** - Check with `python3 --version`
+1. **Node.js 22–24** - Download from [nodejs.org](https://nodejs.org)
+2. **Python 3.10–3.12** - Check with `python3 --version`
 3. **FFmpeg** - Install with `brew install ffmpeg` (macOS) or `apt install ffmpeg` (Ubuntu)
 4. **OpenAI API Key** - Get from [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
 

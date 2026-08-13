@@ -9,11 +9,15 @@ Scores on 0-10 scale:
 - Resolution closure: How satisfying and complete is the ending?
 
 Combined into overall completeness score (0.0-1.0) = (premise + claim + resolution) / 30
-Target: 0.60+ for production quality
+Target: 0.85+ for production quality, with every component at 8.0+
 """
 
 from typing import Dict, List
-from .thought_unit import ThoughtUnit
+from .thought_unit import (
+    PRODUCTION_COMPLETENESS_THRESHOLD,
+    PRODUCTION_COMPONENT_THRESHOLD,
+    ThoughtUnit,
+)
 from .retry import call_api_with_smart_retry
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
@@ -82,7 +86,7 @@ class CompletenessScorer:
                 'claim_strength': float,  # 0.0-10.0
                 'resolution_closure': float,  # 0.0-10.0
                 'completeness_score': float,  # 0.0-1.0
-                'meets_production_standard': bool,  # >= 0.60
+                'meets_production_standard': bool,  # >= 0.85; components >= 8.0
                 'reasoning': {
                     'premise': str,
                     'claim': str,
@@ -221,12 +225,12 @@ class CompletenessScorer:
             completeness_score = (premise_score + claim_score + resolution_score) / 30.0
 
             # Check if meets production standard
-            # Production bar: 0.60+ (6.0-7.4 range, most components >= 5.5)
+            # Keep this result aligned with ThoughtUnit.meets_production_standard().
             meets_production = (
-                completeness_score >= 0.60 and
-                premise_score >= 5.5 and
-                claim_score >= 5.5 and
-                resolution_score >= 5.5
+                completeness_score >= PRODUCTION_COMPLETENESS_THRESHOLD and
+                premise_score >= PRODUCTION_COMPONENT_THRESHOLD and
+                claim_score >= PRODUCTION_COMPONENT_THRESHOLD and
+                resolution_score >= PRODUCTION_COMPONENT_THRESHOLD
             )
 
             return {

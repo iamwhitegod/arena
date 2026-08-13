@@ -1,0 +1,29 @@
+name: Feature request
+description: Propose an Arena OSS improvement
+title: '[Feature]: '
+labels: [enhancement, triage]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user problem should Arena solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe behavior, local-first implications, and alternatives.
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Product scope
+      options:
+        - Arena OSS local workflow
+        - Optional Arena Cloud integration
+        - Documentation or developer tooling
+    validations:
+      required: true

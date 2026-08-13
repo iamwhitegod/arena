@@ -6,59 +6,71 @@ on:
   pull_request:
     branches: [main, develop]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
+    name: ${{ matrix.os }} / Node ${{ matrix.node-version }} / Python ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
 
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        node-version: [18.x, 20.x]
-        python-version: ['3.9', '3.11']
+        node-version: [22.x, 24.x]
+        python-version: ['3.10', '3.12']
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'npm'
+          cache: npm
           cache-dependency-path: cli/package-lock.json
 
       - name: Setup Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: engine/requirements-dev.lock
 
       - name: Install Node dependencies
-        working-directory: ./cli
-        run: npm ci
+        working-directory: cli
+        run: npm ci --ignore-scripts
 
-      - name: Run linter
-        working-directory: ./cli
+      - name: Install hash-locked Python dependencies
+        run: python -m pip install --require-hashes -r engine/requirements-dev.lock
+
+      - name: Check TypeScript formatting
+        working-directory: cli
+        run: npm run format:check
+
+      - name: Lint TypeScript
+        working-directory: cli
         run: npm run lint
 
+      - name: Lint Python correctness
+        run: ruff check --config engine/ruff.toml engine/arena engine/tests
+
       - name: Run TypeScript tests
-        working-directory: ./cli
+        working-directory: cli
         run: npm test
 
-      - name: Build
-        working-directory: ./cli
-        run: npm run build
-
-      - name: Install Python dependencies
-        working-directory: ./engine
-        run: pip install -r requirements-dev.txt
-
       - name: Run Python tests
-        working-directory: ./engine
-        run: python -m pytest tests/ -v --tb=short
+        run: python -m pytest engine/tests -v --tb=short
 
-      - name: Upload coverage reports
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == '20.x'
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./cli/coverage/coverage-final.json
-          flags: unittests
+      - name: Build CLI
+        working-directory: cli
+        run: npm run build

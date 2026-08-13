@@ -55,7 +55,7 @@ function verifyArtifact(root = path.resolve(__dirname, '..')) {
     /^(package\.json|README\.md|LICENSE)$/,
     /^dist\//,
     /^scripts\/(postinstall|verify-package)\.cjs$/,
-    /^engine\/(setup\.py|requirements\.txt|arena-cli|MANIFEST\.sha256)$/,
+    /^engine\/(setup\.py|requirements\.txt|requirements\.lock|build-requirements\.txt|build-requirements\.lock|arena-cli|MANIFEST\.sha256)$/,
     /^engine\/arena\//,
   ];
   const forbidden = [
@@ -86,6 +86,8 @@ function verifyArtifact(root = path.resolve(__dirname, '..')) {
     'scripts/verify-package.cjs',
     'engine/setup.py',
     'engine/requirements.txt',
+    'engine/requirements.lock',
+    'engine/build-requirements.lock',
     'engine/arena/__init__.py',
     'engine/arena/cli/main.py',
     'engine/MANIFEST.sha256',

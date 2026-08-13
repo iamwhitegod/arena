@@ -59,7 +59,10 @@ export async function generateCommand(
     // Parse selection if provided
     let selectedIndices: number[] | undefined;
     if (options.select) {
-      selectedIndices = options.select.split(',').map((s) => parseInt(s.trim())).filter((n) => !isNaN(n));
+      selectedIndices = options.select
+        .split(',')
+        .map((s) => parseInt(s.trim()))
+        .filter((n) => !isNaN(n));
 
       if (selectedIndices.length === 0) {
         throw new PreflightError(
@@ -69,7 +72,11 @@ export async function generateCommand(
         );
       }
 
-      console.log(chalk.cyan(`\n✂️  Generating ${selectedIndices.length} selected clip${selectedIndices.length !== 1 ? 's' : ''}...\n`));
+      console.log(
+        chalk.cyan(
+          `\n✂️  Generating ${selectedIndices.length} selected clip${selectedIndices.length !== 1 ? 's' : ''}...\n`
+        )
+      );
     } else {
       console.log(chalk.cyan('\n✂️  Generating clips from analysis...\n'));
     }

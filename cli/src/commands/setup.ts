@@ -534,7 +534,7 @@ function pythonInstallHelp(): string {
   if (process.platform === 'win32') {
     return 'winget install --id Python.Python.3.12 --exact';
   }
-  return 'Install Python 3.9–3.12 (including the venv module) with your distribution package manager.';
+  return 'Install Python 3.10–3.12 (including the venv module) with your distribution package manager.';
 }
 
 function commandFailure(step: string, result: CommandResult): Error {
@@ -603,7 +603,13 @@ async function buildRuntime(
         );
       },
     });
-    for (const filename of ['setup.py', 'requirements.txt']) {
+    for (const filename of [
+      'setup.py',
+      'requirements.txt',
+      'requirements.lock',
+      'build-requirements.txt',
+      'build-requirements.lock',
+    ]) {
       await fs.copy(path.join(enginePath, filename), path.join(engineSourceDir, filename));
     }
 
@@ -619,20 +625,57 @@ async function buildRuntime(
     }
 
     const candidatePython = managedPythonAt(candidateVenvDir);
-    onProgress?.('Preparing Python package tooling');
+    onProgress?.('Installing hash-verified Python build tooling');
     const toolingResult = await runCommand(
       candidatePython,
-      ['-m', 'pip', 'install', ...safePipArgs, '--upgrade', 'setuptools', 'wheel'],
+      [
+        '-m',
+        'pip',
+        'install',
+        ...safePipArgs,
+        '--require-hashes',
+        '--no-build-isolation',
+        '--requirement',
+        path.join(engineSourceDir, 'build-requirements.lock'),
+      ],
       { env: pipEnvironment, onOutput: reportOutput, timeoutMs: setupTimeoutMs }
     );
     if (toolingResult.code !== 0) {
       throw commandFailure('Preparing pip', toolingResult);
     }
 
-    onProgress?.('Resolving and installing Arena engine dependencies');
+    onProgress?.('Installing hash-verified Arena engine dependencies');
+    const dependencyResult = await runCommand(
+      candidatePython,
+      [
+        '-m',
+        'pip',
+        'install',
+        ...safePipArgs,
+        '--require-hashes',
+        '--no-build-isolation',
+        '--requirement',
+        path.join(engineSourceDir, 'requirements.lock'),
+      ],
+      { env: pipEnvironment, onOutput: reportOutput, timeoutMs: setupTimeoutMs }
+    );
+    if (dependencyResult.code !== 0) {
+      throw commandFailure('Installing Arena engine dependencies', dependencyResult);
+    }
+
+    onProgress?.('Installing the Arena engine');
     const engineResult = await runCommand(
       candidatePython,
-      ['-m', 'pip', 'install', ...safePipArgs, '--upgrade', engineSourceDir],
+      [
+        '-m',
+        'pip',
+        'install',
+        ...safePipArgs,
+        '--no-deps',
+        '--no-build-isolation',
+        '--upgrade',
+        engineSourceDir,
+      ],
       { env: pipEnvironment, onOutput: reportOutput, timeoutMs: setupTimeoutMs }
     );
     if (engineResult.code !== 0) {
@@ -687,7 +730,7 @@ async function printCheck(): Promise<boolean> {
     [
       'System Python',
       systemPython !== null,
-      systemPython ? `Python ${systemPython.version}` : 'requires Python 3.9–3.12',
+      systemPython ? `Python ${systemPython.version}` : 'requires Python 3.10–3.12',
     ],
     ['FFmpeg', ffmpeg, ffmpeg ? 'available' : 'not found'],
     ['ffprobe', ffprobe, ffprobe ? 'available' : 'not found'],
@@ -765,7 +808,7 @@ export async function setupCommand(options: SetupOptions = {}): Promise<void> {
 
   const basePython = await findCompatibleSystemPython();
   if (!basePython) {
-    console.log(chalk.red('✗ Arena requires Python 3.9, 3.10, 3.11, or 3.12.'));
+    console.log(chalk.red('✗ Arena requires Python 3.10, 3.11, or 3.12.'));
     console.log(chalk.white(`  ${pythonInstallHelp()}`));
     console.log(chalk.gray('  Your global Python packages will not be modified.\n'));
     process.exitCode = 1;

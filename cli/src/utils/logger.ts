@@ -11,10 +11,46 @@ import {
   readdirSync,
   renameSync,
   readFileSync,
+  chmodSync,
+  lstatSync,
 } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import chalk from 'chalk';
+import { getArenaHome } from '../core/runtime.js';
+
+const REDACTED = '[REDACTED]';
+const SENSITIVE_KEY_PATTERN = /api[-_]?key|authorization|cookie|password|secret|token/i;
+
+function redactString(value: string): string {
+  return value
+    .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, REDACTED)
+    .replace(/\bBearer\s+[^\s"']+/gi, `Bearer ${REDACTED}`)
+    .replace(
+      /\b(api[-_]?key|authorization|password|secret|token)=([^\s&]+)/gi,
+      (_match, key: string) => `${key}=${REDACTED}`
+    );
+}
+
+export function redactSensitiveData(value: unknown, key?: string): unknown {
+  if (key && SENSITIVE_KEY_PATTERN.test(key)) {
+    return REDACTED;
+  }
+  if (typeof value === 'string') {
+    return redactString(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => redactSensitiveData(item));
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([entryKey, entryValue]) => [
+        entryKey,
+        redactSensitiveData(entryValue, entryKey),
+      ])
+    );
+  }
+  return value;
+}
 
 export enum LogLevel {
   DEBUG = 0,
@@ -42,9 +78,10 @@ class Logger {
   private maxLogFiles = 5;
   private minLevel: LogLevel = LogLevel.INFO;
   private enableConsole = false;
+  private logPathIsSafe = false;
 
   constructor() {
-    this.logDir = join(homedir(), '.arena', 'logs');
+    this.logDir = join(getArenaHome(), 'logs');
     this.logFile = join(this.logDir, `arena-${this.getDateString()}.log`);
     this.ensureLogDir();
     this.rotateLogsIfNeeded();
@@ -101,21 +138,34 @@ class Logger {
    * Log with level
    */
   private log(level: LogLevel, message: string, context?: Record<string, unknown>): void {
-    if (level < this.minLevel) {
+    if (level < this.minLevel || !this.logPathIsSafe) {
       return;
     }
 
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
       level,
-      message,
-      context,
+      message: redactString(message),
+      context: redactSensitiveData(context) as Record<string, unknown> | undefined,
     };
 
     // Write to file
     try {
+      if (existsSync(this.logFile)) {
+        const stats = lstatSync(this.logFile);
+        if (!stats.isFile() || stats.isSymbolicLink()) {
+          return;
+        }
+      }
       const logLine = this.formatLogEntry(entry);
-      appendFileSync(this.logFile, logLine + '\n', 'utf8');
+      appendFileSync(this.logFile, logLine + '\n', {
+        encoding: 'utf8',
+        mode: 0o600,
+        flag: 'a',
+      });
+      if (process.platform !== 'win32') {
+        chmodSync(this.logFile, 0o600);
+      }
     } catch {
       // Silently fail if can't write to log file
     }
@@ -182,8 +232,16 @@ class Logger {
   private ensureLogDir(): void {
     try {
       if (!existsSync(this.logDir)) {
-        mkdirSync(this.logDir, { recursive: true });
+        mkdirSync(this.logDir, { recursive: true, mode: 0o700 });
       }
+      const stats = lstatSync(this.logDir);
+      if (!stats.isDirectory() || stats.isSymbolicLink()) {
+        return;
+      }
+      if (process.platform !== 'win32') {
+        chmodSync(this.logDir, 0o700);
+      }
+      this.logPathIsSafe = true;
     } catch {
       // Can't create log dir, logs won't be written
     }
@@ -205,11 +263,15 @@ class Logger {
    */
   private rotateLogsIfNeeded(): void {
     try {
-      if (!existsSync(this.logFile)) {
+      if (!this.logPathIsSafe || !existsSync(this.logFile)) {
         return;
       }
 
-      const stats = statSync(this.logFile);
+      const stats = lstatSync(this.logFile);
+      if (!stats.isFile() || stats.isSymbolicLink()) {
+        this.logPathIsSafe = false;
+        return;
+      }
       const sizeMB = stats.size / (1024 * 1024);
 
       if (sizeMB > this.maxLogSizeMB) {

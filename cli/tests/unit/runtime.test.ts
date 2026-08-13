@@ -57,14 +57,15 @@ describe('Python compatibility', () => {
     expect(parsePythonVersion('not python')).toBeNull();
   });
 
-  it('accepts Python 3.9 through 3.12', () => {
-    expect(isSupportedPythonVersion('3.9.0')).toBe(true);
+  it('accepts Python 3.10 through 3.12', () => {
+    expect(isSupportedPythonVersion('3.10.0')).toBe(true);
     expect(isSupportedPythonVersion('3.11.9')).toBe(true);
     expect(isSupportedPythonVersion('3.12.4')).toBe(true);
   });
 
   it('rejects unsupported Python versions', () => {
     expect(isSupportedPythonVersion('3.8.19')).toBe(false);
+    expect(isSupportedPythonVersion('3.9.19')).toBe(false);
     expect(isSupportedPythonVersion('3.13.0')).toBe(false);
     expect(isSupportedPythonVersion('2.7.18')).toBe(false);
     expect(isSupportedPythonVersion('invalid')).toBe(false);

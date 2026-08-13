@@ -16,6 +16,7 @@ Success Criteria:
 
 import sys
 import os
+import pytest
 sys.path.insert(0, '../')
 
 from arena.editorial.thought_seed_detector import ThoughtSeedDetector
@@ -57,7 +58,7 @@ def test_week3_validation():
 
     if not transcript_file:
         print(f"❌ Transcript not found")
-        return False
+        pytest.skip("test_007 transcript fixture is not available")
 
     with open(transcript_file, 'r') as f:
         transcript_data = json.load(f)
@@ -69,7 +70,7 @@ def test_week3_validation():
     api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
         print("\n❌ OPENAI_API_KEY not set")
-        return False
+        pytest.skip("OPENAI_API_KEY is required for the live Week 3 validation")
 
     # Step 1: Get ThoughtUnits from Week 2 pipeline
     print(f"\n🏗️  STEP 1: Constructing ThoughtUnits (Week 1+2 pipeline)...")
@@ -270,13 +271,11 @@ def test_week3_validation():
     if passed_count >= 3:
         print("\n🎉 WEEK 3 VALIDATION SUCCESSFUL!")
         print("Completeness validation is working as expected.")
-        return True
     else:
         print("\n⚠️  WEEK 3 NEEDS IMPROVEMENT")
         print("Review failed checks and adjust scoring/validation.")
-        return False
+    assert passed_count >= 3, f"Only {passed_count}/{len(checks)} Week 3 checks passed"
 
 
 if __name__ == '__main__':
-    success = test_week3_validation()
-    sys.exit(0 if success else 1)
+    test_week3_validation()

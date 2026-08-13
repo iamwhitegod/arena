@@ -16,6 +16,11 @@ from typing import Optional, List, Dict, Any
 import json
 
 
+PRODUCTION_COMPLETENESS_THRESHOLD = 0.85
+PRODUCTION_COMPONENT_THRESHOLD = 8.0
+UNRESOLVED_REFERENCE_SCORE_CAP = 0.4
+
+
 class RhetoricalType(Enum):
     """Types of rhetorical structures in content"""
     STORY = "story"                    # Narrative with arc (setup → event → lesson)
@@ -107,7 +112,9 @@ class ThoughtUnit:
     @property
     def duration(self) -> float:
         """Total duration of thought unit in seconds"""
-        return self.resolution_end - self.premise_start
+        # Transcript timestamps are decimal seconds. Normalizing the result keeps
+        # serialized output stable despite binary floating-point representation.
+        return round(self.resolution_end - self.premise_start, 3)
 
     @property
     def full_text(self) -> str:
@@ -134,9 +141,10 @@ class ThoughtUnit:
         """
         Does this unit have a clear resolution?
 
-        A resolution should be at least 20 characters to be meaningful.
+        A resolution may be a short emphatic sentence, but should still contain
+        enough text to distinguish it from an empty or fragmentary boundary.
         """
-        return bool(self.resolution_text and len(self.resolution_text.strip()) > 20)
+        return bool(self.resolution_text and len(self.resolution_text.strip()) > 10)
 
     def is_complete(self) -> bool:
         """
@@ -164,20 +172,22 @@ class ThoughtUnit:
         """
         Does this meet production quality bar?
 
-        Requirements for production quality (calibrated for real-world content):
-        - Completeness score >= 0.60 (60%+, usable quality)
-        - All three components score >= 5.5/10 (adequate closure)
-        - Standalone validation is informational but not required
-          (since content-specific references like "God" in sermons are acceptable)
+        Requirements for production quality:
+        - Completeness score >= 0.85
+        - All three components score >= 8.0/10
+        - No unresolved references
+        - Standalone dependency level
 
         Returns:
             True if meets production standard, False otherwise
         """
         return (
-            self.completeness_score >= 0.60 and
-            self.premise_clarity >= 5.5 and
-            self.claim_strength >= 5.5 and
-            self.resolution_closure >= 5.5
+            self.completeness_score >= PRODUCTION_COMPLETENESS_THRESHOLD and
+            self.premise_clarity >= PRODUCTION_COMPONENT_THRESHOLD and
+            self.claim_strength >= PRODUCTION_COMPONENT_THRESHOLD and
+            self.resolution_closure >= PRODUCTION_COMPONENT_THRESHOLD and
+            not self.has_unresolved_refs and
+            self.dependency_level == DependencyLevel.STANDALONE
         )
 
     def calculate_completeness_score(self) -> float:
@@ -186,7 +196,8 @@ class ThoughtUnit:
 
         Formula: (premise_clarity + claim_strength + resolution_closure) / 30
 
-        If has unresolved refs, apply a soft 15% penalty instead of a hard cap.
+        Units with unresolved references are capped at 0.4 because they are not
+        safe to publish without surrounding context.
 
         Returns:
             Completeness score between 0.0 and 1.0
@@ -194,7 +205,7 @@ class ThoughtUnit:
         raw_score = (self.premise_clarity + self.claim_strength + self.resolution_closure) / 30
 
         if self.has_unresolved_refs:
-            return raw_score * 0.85  # Soft penalty instead of hard cap at 0.4
+            return min(raw_score, UNRESOLVED_REFERENCE_SCORE_CAP)
 
         return raw_score
 

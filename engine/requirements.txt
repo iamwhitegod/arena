@@ -17,7 +17,7 @@ pyloudnorm~=0.1
 scipy~=1.11
 
 # Image processing
-pillow~=10.0
+pillow>=12.1.1,<13.0.0
 
 # URL download support (broader range — tracks rapidly-changing site APIs)
 yt-dlp>=2025.1.0,<2027.0.0

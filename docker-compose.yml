@@ -1,16 +1,30 @@
-version: '3.8'
-
 services:
   arena:
     build:
       context: .
       dockerfile: Dockerfile
-    image: whitegodkingsley/arena:latest
-    container_name: arena-cli-container
+    image: arena:local
     volumes:
-      - .:/workspace
+      - type: bind
+        source: ${ARENA_WORKSPACE:-.}
+        target: /workspace
+      - type: volume
+        source: arena-data
+        target: /home/node/.arena
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=2g
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    stop_grace_period: 10s
     stdin_open: true
     tty: true
+
+volumes:
+  arena-data:

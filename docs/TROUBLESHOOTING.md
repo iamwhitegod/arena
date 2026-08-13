@@ -91,7 +91,7 @@ python3 --version
 
 ### "Python version too old"
 
-**Symptoms**: `Python 3.9 or higher is required, found Python 3.7`
+**Symptoms**: `Python 3.10–3.12 is required, found Python 3.9`
 
 **Solution (macOS with Homebrew)**:
 ```bash

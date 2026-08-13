@@ -22,14 +22,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const packageJson = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8'));
 
-// Load API key from config if not in env
+// Load the API key from the environment or Arena's owner-only credential store.
 try {
   const configManager = new ConfigManager();
-  const globalConfig = await configManager.getGlobalConfig();
-  if (globalConfig?.openai_api_key && !process.env.OPENAI_API_KEY) {
-    process.env.OPENAI_API_KEY = globalConfig.openai_api_key;
+  const apiKey = await configManager.resolveOpenAIApiKey();
+  if (apiKey && !process.env.OPENAI_API_KEY) {
+    process.env.OPENAI_API_KEY = apiKey;
   }
-} catch (error) {
+} catch {
   // Ignore config loading errors at startup
 }
 
@@ -58,7 +58,7 @@ program
   .description('Process a video and generate clips automatically')
   .argument('<video>', 'path to video/audio file or URL')
   .option('-o, --output <dir>', 'output directory', 'output')
-  .option('-n, --num-clips <number>', 'target number of clips to generate', '5')
+  .option('-n, --num-clips <number>', 'target number of clips to generate', '8')
   .option('--min <seconds>', 'minimum clip duration', '30')
   .option('--max <seconds>', 'maximum clip duration', '90')
   .option(

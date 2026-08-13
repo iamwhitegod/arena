@@ -120,7 +120,7 @@ Arena provides 11 commands for flexible video clip generation workflows:
 | `arena generate` | Generate clips from analysis | `arena generate video.mp4 analysis.json` |
 | `arena format` | Format for social platforms | `arena format clips/ -p tiktok` |
 | `arena detect-scenes` | Detect scene changes | `arena detect-scenes video.mp4` |
-| `arena config` | Manage configuration | `arena config set openai_api_key "sk-..."` |
+| `arena config` | Manage configuration | `arena config set openai_api_key` |
 | `arena extract-audio` | Extract audio from video | `arena extract-audio video.mp4` |
 | `arena setup` | Install dependencies automatically | `arena setup` |
 | `arena diagnose` | System diagnostics | `arena diagnose` |
@@ -263,7 +263,7 @@ Arena uses a hybrid TypeScript + Python architecture:
 ### Prerequisites
 
 - **Node.js** 18 or higher
-- **Python 3.9–3.12** (used only to create Arena's private processing runtime)
+- **Python 3.10–3.12** (used only to create Arena's private processing runtime)
 - **FFmpeg** (for video encoding)
 - **OpenAI API Key** (for AI analysis)
 

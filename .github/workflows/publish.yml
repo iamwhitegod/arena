@@ -7,46 +7,94 @@ on:
 permissions:
   contents: read
   id-token: write
+  attestations: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: npm
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Scan release source for secrets
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: '20.x'
-          registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
+          node-version: 22.x
+          registry-url: https://registry.npmjs.org
+          cache: npm
           cache-dependency-path: cli/package-lock.json
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: '3.11'
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: engine/requirements-dev.lock
 
-      - name: Install dependencies
-        working-directory: ./cli
-        run: npm ci
+      - name: Install Node dependencies
+        working-directory: cli
+        run: npm ci --ignore-scripts
 
-      - name: Run tests
-        working-directory: ./cli
-        run: npm test
+      - name: Install hash-locked Python dependencies
+        run: python -m pip install --require-hashes -r engine/requirements-dev.lock
 
-      - name: Build minimal package artifact
-        working-directory: ./cli
-        run: npm run package:stage
+      - name: Run TypeScript quality gates
+        working-directory: cli
+        run: |
+          npm run format:check
+          npm run lint
+          npm test
+          npm run build
 
-      - name: Inspect package contents
-        working-directory: ./cli
-        run: npm pack .package --dry-run
+      - name: Run Python quality gates
+        run: |
+          ruff check --config engine/ruff.toml engine/arena engine/tests
+          python -m pytest engine/tests -v --tb=short
+
+      - name: Audit production dependencies
+        run: |
+          npm audit --prefix cli --omit=dev --audit-level=high
+          python -m pip_audit --require-hashes -r engine/requirements.lock
+
+      - name: Build and inspect minimal package artifact
+        working-directory: cli
+        run: |
+          npm run package:stage
+          npm pack .package --dry-run
+          mkdir -p release-artifacts
+          npm pack .package --pack-destination release-artifacts
+
+      - name: Generate CycloneDX SBOMs
+        run: |
+          npm sbom --prefix cli --omit=dev --sbom-format cyclonedx > cli/release-artifacts/arena-cli.cdx.json
+          python -m pip_audit --require-hashes -r engine/requirements.lock --format cyclonedx-json --output cli/release-artifacts/arena-engine.cdx.json
+
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@8beda2b7ed98355c0e97c0a63bec38ae472e66c4 # v4
+        with:
+          subject-path: cli/release-artifacts/*
+
+      - name: Upload release evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: arena-release-evidence
+          path: cli/release-artifacts/
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Publish to npm
-        working-directory: ./cli
+        working-directory: cli
         run: npm publish .package --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

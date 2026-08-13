@@ -43,6 +43,12 @@ yarn-error.log*
 coverage/
 htmlcov/
 .pytest_cache/
+cli/tests/**/*.test.js
+cli/tests/**/*.test.js.map
+cli/tests/**/*.test.d.ts.map
+cli/tests/**/*.mock.js
+cli/tests/**/*.mock.js.map
+cli/tests/**/*.mock.d.ts.map
 *.mp3
 *.mp4
 *.mov

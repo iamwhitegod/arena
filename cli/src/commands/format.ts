@@ -17,10 +17,7 @@ interface FormatOptions {
   quality?: boolean;
 }
 
-export async function formatCommand(
-  input: string,
-  options: FormatOptions
-): Promise<void> {
+export async function formatCommand(input: string, options: FormatOptions): Promise<void> {
   try {
     console.log(chalk.cyan('\n📐 PLATFORM FORMATTING\n'));
 

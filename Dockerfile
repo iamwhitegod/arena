@@ -1,46 +1,94 @@
-# -----------------------------------------------------------------------------
-# Dockerfile for Arena Video Clipping Engine & CLI
-# -----------------------------------------------------------------------------
+# syntax=docker/dockerfile:1.7
 
-FROM python:3.10-slim-bullseye
+# Keep the human-readable tag for maintainers and the digest for reproducibility.
+# Dependabot should update both together when the official image is rebuilt.
+ARG NODE_IMAGE=node:22.23.2-bookworm-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436
 
-# Set environment variables to keep Python and apt-get quiet & efficient
+FROM ${NODE_IMAGE} AS builder
+
 ENV DEBIAN_FRONTEND=noninteractive \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_INPUT=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-# Install runtime system packages: FFmpeg, git, curl, build tools
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    ffmpeg \
-    git \
-    build-essential \
-    ca-certificates \
-    unzip \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
-    && curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh \
-    && apt-get clean \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        python3 \
+        python3-pip \
+        python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+WORKDIR /build
 
-# Install Python requirements first (leverage layer cache)
-COPY engine/requirements.txt ./engine/requirements.txt
-RUN pip install --no-cache-dir -r engine/requirements.txt
+COPY engine/build-requirements.txt engine/build-requirements.lock ./engine/
+COPY engine/requirements.txt engine/requirements.lock ./engine/
+COPY engine/setup.py engine/arena-cli ./engine/
+COPY engine/arena ./engine/arena
 
-# Copy CLI packages first and install Node packages
-COPY cli/package*.json ./cli/
-RUN cd cli && npm install --ignore-scripts
+RUN python3 -m venv /opt/arena-venv \
+    && /opt/arena-venv/bin/python -m pip install \
+        --no-cache-dir \
+        --no-build-isolation \
+        --require-hashes \
+        --requirement engine/build-requirements.lock \
+    && /opt/arena-venv/bin/python -m pip install \
+        --no-cache-dir \
+        --no-build-isolation \
+        --require-hashes \
+        --requirement engine/requirements.lock \
+    && /opt/arena-venv/bin/python -m pip install \
+        --no-cache-dir \
+        --no-build-isolation \
+        --no-deps \
+        ./engine \
+    && chmod 0755 engine/arena-cli
 
-# Copy source folders
-COPY engine/ ./engine/
-COPY cli/ ./cli/
+COPY cli/package.json cli/package-lock.json ./cli/
+RUN npm ci --prefix cli --ignore-scripts
 
-# Compile TypeScript CLI and register 'arena' globally
-RUN cd cli && npm run build && npm link
+COPY cli/tsconfig.json ./cli/tsconfig.json
+COPY cli/src ./cli/src
+RUN npm run build --prefix cli \
+    && npm prune --prefix cli --omit=dev --ignore-scripts
 
-# Establish clean mount point for the host workspace
+FROM ${NODE_IMAGE} AS runtime
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    ARENA_HOME=/home/node/.arena \
+    HOME=/home/node \
+    MPLCONFIGDIR=/tmp/matplotlib \
+    NUMBA_CACHE_DIR=/tmp/numba \
+    PATH=/opt/arena-venv/bin:$PATH \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    XDG_CACHE_HOME=/tmp/cache
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        ffmpeg \
+        libgl1 \
+        libglib2.0-0 \
+        libgomp1 \
+        libsndfile1 \
+        python3 \
+        tini \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /opt/arena-venv /opt/arena-venv
+COPY --from=builder --chown=node:node /build/cli/dist /opt/arena-cli/dist
+COPY --from=builder --chown=node:node /build/cli/node_modules /opt/arena-cli/node_modules
+COPY --from=builder --chown=node:node /build/cli/package.json /opt/arena-cli/package.json
+COPY --from=builder --chown=node:node /build/engine /opt/arena-cli/engine
+
+RUN mkdir -p /home/node/.arena /workspace \
+    && chown -R node:node /home/node/.arena /workspace \
+    && ln -s /opt/arena-cli/dist/index.js /usr/local/bin/arena
+
 WORKDIR /workspace
+USER node
 
-ENTRYPOINT ["arena"]
+ENTRYPOINT ["tini", "--", "arena"]
+CMD ["--help"]

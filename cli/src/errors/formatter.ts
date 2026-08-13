@@ -181,8 +181,8 @@ function getHelpText(code: string): string | null {
         '  → Set it in one of these ways:\n\n' +
         '    1. Environment variable:\n' +
         chalk.cyan('       export OPENAI_API_KEY="sk-..."\n\n') +
-        '    2. Config file (~/.arena/config.json):\n' +
-        chalk.cyan('       {\n' + '         "openai_api_key": "sk-..."\n' + '       }\n\n') +
+        '    2. Arena credential store (prompts without echo):\n' +
+        chalk.cyan('       arena config set openai_api_key\n\n') +
         '  → Then try again:\n' +
         chalk.cyan('    arena process video.mp4\n')
     ),
@@ -195,7 +195,7 @@ function getHelpText(code: string): string | null {
     ),
 
     PYTHON_NOT_FOUND: chalk.yellow(
-      '  → Install Python 3.9–3.12:\n\n' +
+      '  → Install Python 3.10–3.12:\n\n' +
         '    macOS: brew install python@3.12\n' +
         '    Ubuntu: sudo apt install python3 python3-venv\n' +
         '    Windows: winget install --id Python.Python.3.12 --exact\n\n' +

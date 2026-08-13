@@ -62,8 +62,8 @@
 ## Current Architecture (Baseline)
 
 ### Tech Stack
-- **CLI:** Node.js 18+ TypeScript (`/cli/`)
-- **Engine:** Python 3.9+ (`/engine/`)
+- **CLI:** Node.js 22–24 TypeScript (`/cli/`)
+- **Engine:** Python 3.10–3.12 (`/engine/`)
 - **Communication:** Subprocess bridge via JSON over stdout
 - **Config:** `~/.arena/config.json` (plain text)
 - **Output:** `.arena/output/` (local directory structure)

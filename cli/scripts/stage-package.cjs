@@ -22,7 +22,9 @@ async function listFiles(root, current = root) {
   for (const entry of entries) {
     const absolutePath = path.join(current, entry.name);
     if (entry.isSymbolicLink()) {
-      throw new Error(`Symlinks are not allowed in the npm artifact: ${normalized(path.relative(root, absolutePath))}`);
+      throw new Error(
+        `Symlinks are not allowed in the npm artifact: ${normalized(path.relative(root, absolutePath))}`
+      );
     }
     if (entry.isDirectory()) {
       files.push(...(await listFiles(root, absolutePath)));
@@ -84,7 +86,14 @@ async function copyArtifact() {
   await fs.copy(path.join(sourceEngine, 'arena'), path.join(stagedEngine, 'arena'), {
     filter: includeEngineSource,
   });
-  for (const filename of ['setup.py', 'requirements.txt', 'arena-cli']) {
+  for (const filename of [
+    'setup.py',
+    'requirements.txt',
+    'requirements.lock',
+    'build-requirements.txt',
+    'build-requirements.lock',
+    'arena-cli',
+  ]) {
     await fs.copy(path.join(sourceEngine, filename), path.join(stagedEngine, filename));
   }
   if (process.platform !== 'win32') {
@@ -111,7 +120,7 @@ async function verifyArtifact() {
     /^(package\.json|README\.md|LICENSE)$/,
     /^dist\//,
     /^scripts\/(postinstall|verify-package)\.cjs$/,
-    /^engine\/(setup\.py|requirements\.txt|arena-cli|MANIFEST\.sha256)$/,
+    /^engine\/(setup\.py|requirements\.txt|requirements\.lock|build-requirements\.txt|build-requirements\.lock|arena-cli|MANIFEST\.sha256)$/,
     /^engine\/arena\//,
   ];
   const forbidden = [
@@ -142,6 +151,8 @@ async function verifyArtifact() {
     'scripts/verify-package.cjs',
     'engine/setup.py',
     'engine/requirements.txt',
+    'engine/requirements.lock',
+    'engine/build-requirements.lock',
     'engine/arena/__init__.py',
     'engine/arena/cli/main.py',
     'engine/MANIFEST.sha256',

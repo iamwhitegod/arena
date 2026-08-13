@@ -48,14 +48,14 @@ arena setup
 
 The `setup` command automatically:
 - Verifies the bundled engine against its SHA-256 manifest
-- Finds Python 3.9–3.12 without modifying its global packages
+- Finds Python 3.10–3.12 without modifying its global packages
 - Verifies FFmpeg, with an opt-in package-manager install when supported
 - Builds and verifies a versioned private runtime under `~/.arena/runtime/environments/`
 - Atomically replaces an old runtime only after all checks pass
 
 ### Manual Setup
 
-**Prerequisites:** Node.js 18+, Python 3.9–3.12, FFmpeg and ffprobe. Deno is not required because Node.js is the yt-dlp JavaScript runtime.
+**Prerequisites:** Node.js 22–24, Python 3.10–3.12, FFmpeg and ffprobe. Deno is not required because Node.js is the yt-dlp JavaScript runtime.
 
 Do not install Arena packages with global `pip`. Install the system prerequisites, then run `arena setup`. For health checks, repair commands, CI usage, and source installs, see the [installation guide](https://github.com/iamwhitegod/arena/blob/main/docs/guides/INSTALLATION.md).
 
@@ -228,7 +228,7 @@ arena process video.mp4 -n 10
 arena setup
 
 # Or manually check
-python3 --version  # Should be 3.9+
+python3 --version  # Should be 3.10–3.12
 ffmpeg -version
 pip3 list | grep whisper
 ```
@@ -279,7 +279,7 @@ Typical costs per 10-minute video:
 ## Requirements
 
 - **Node.js** 18+
-- **Python** 3.9–3.12
+- **Python** 3.10–3.12
 - **FFmpeg** 4.0+
 - **OpenAI API Key** ([Get one](https://platform.openai.com/api-keys))
 

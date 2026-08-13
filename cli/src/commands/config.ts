@@ -5,7 +5,7 @@
 
 import chalk from 'chalk';
 import inquirer from 'inquirer';
-import { ConfigManager } from '../core/config.js';
+import { ConfigManager, isSensitiveConfigKey } from '../core/config.js';
 
 type ConfigAction = 'view' | 'set' | 'get' | 'reset';
 
@@ -22,9 +22,10 @@ export async function configCommand(action?: string, key?: string, value?: strin
         break;
 
       case 'set':
-        if (!key || value === undefined) {
-          console.error(chalk.red('\n✗ Usage: arena config set <key> <value>\n'));
+        if (!key) {
+          console.error(chalk.red('\n✗ Usage: arena config set <key> [value]\n'));
           process.exit(1);
+          return;
         }
         await setConfig(configManager, key, value);
         break;
@@ -33,6 +34,7 @@ export async function configCommand(action?: string, key?: string, value?: strin
         if (!key) {
           console.error(chalk.red('\n✗ Usage: arena config get <key>\n'));
           process.exit(1);
+          return;
         }
         await getConfig(configManager, key);
         break;
@@ -45,6 +47,7 @@ export async function configCommand(action?: string, key?: string, value?: strin
         console.error(chalk.red(`\n✗ Unknown action: ${action}\n`));
         console.log(chalk.white('  Valid actions: view, set, get, reset\n'));
         process.exit(1);
+        return;
     }
   } catch (error) {
     console.error(chalk.red('\n✗ Config operation failed\n'));
@@ -77,42 +80,85 @@ async function viewConfig(configManager: ConfigManager): Promise<void> {
 
   configEntries.forEach(([key, val]) => {
     const paddedKey = key.padEnd(maxKeyLength);
-    const displayValue = formatConfigValue(val);
+    const displayValue = formatConfigValue(val, key);
     console.log(`  ${chalk.white(paddedKey)} = ${displayValue}`);
   });
+
+  if (await configManager.hasStoredOpenAIApiKey()) {
+    console.log(
+      `  ${chalk.white('openai_api_key'.padEnd(maxKeyLength))} = ${chalk.gray('[stored securely]')}`
+    );
+  }
 
   console.log('\n' + separator);
   console.log(
     chalk.gray('\n💡 Tip: Use ') +
       chalk.cyan('arena config set <key> <value>') +
-      chalk.gray(' to update\n')
+      chalk.gray(' to update; omit the value for secret keys\n')
   );
 }
 
 /**
  * Set a configuration value
  */
-async function setConfig(configManager: ConfigManager, key: string, value: string): Promise<void> {
-  const config = (await configManager.getGlobalConfig()) || {};
+async function setConfig(configManager: ConfigManager, key: string, value?: string): Promise<void> {
+  if (isSensitiveConfigKey(key)) {
+    if (key.toLowerCase().replaceAll('-', '_') !== 'openai_api_key') {
+      throw new Error(`Unsupported credential key "${key}".`);
+    }
+    if (value !== undefined) {
+      throw new Error(
+        'Refusing an API key passed as a command-line argument because it may remain in shell history. Run: arena config set openai_api_key'
+      );
+    }
+
+    const { apiKey } = await inquirer.prompt<{ apiKey: string }>([
+      {
+        type: 'password',
+        name: 'apiKey',
+        message: 'OpenAI API key:',
+        mask: '*',
+        validate: validateOpenAIApiKey,
+      },
+    ]);
+    await configManager.setOpenAIApiKey(apiKey);
+    console.log(chalk.green(`\n✓ Stored ${chalk.white(key)} with owner-only permissions\n`));
+    return;
+  }
+
+  if (value === undefined) {
+    throw new Error(`A value is required for non-sensitive key "${key}".`);
+  }
 
   // Parse value (handle booleans, numbers, strings)
   const parsedValue = parseConfigValue(value);
+  await configManager.updateGlobalConfig({ [key]: parsedValue });
 
-  config[key] = parsedValue;
-
-  await configManager.updateGlobalConfig(config);
-
-  console.log(chalk.green(`\n✓ Set ${chalk.white(key)} = ${formatConfigValue(parsedValue)}\n`));
+  console.log(
+    chalk.green(`\n✓ Set ${chalk.white(key)} = ${formatConfigValue(parsedValue, key)}\n`)
+  );
 }
 
 /**
  * Get a specific configuration value
  */
 async function getConfig(configManager: ConfigManager, key: string): Promise<void> {
+  if (isSensitiveConfigKey(key)) {
+    const configured =
+      key.toLowerCase().replaceAll('-', '_') === 'openai_api_key' &&
+      (await configManager.hasStoredOpenAIApiKey());
+    console.log(
+      configured
+        ? chalk.white(`\n${key} = ${chalk.gray('[stored securely]')}\n`)
+        : chalk.yellow(`\n⚠️  Credential "${key}" is not configured\n`)
+    );
+    return;
+  }
+
   const config = (await configManager.getGlobalConfig()) || {};
 
   if (key in config) {
-    console.log(chalk.white(`\n${key} = ${formatConfigValue(config[key])}\n`));
+    console.log(chalk.white(`\n${key} = ${formatConfigValue(config[key], key)}\n`));
   } else {
     console.log(chalk.yellow(`\n⚠️  Key "${key}" not found in configuration\n`));
   }
@@ -136,17 +182,20 @@ async function resetConfig(configManager: ConfigManager): Promise<void> {
     return;
   }
 
-  // Clear config (set to empty object)
-  await configManager.updateGlobalConfig({});
+  await configManager.resetGlobalConfig(true);
 
-  console.log(chalk.green('\n✓ Configuration reset\n'));
+  console.log(chalk.green('\n✓ Configuration and stored credentials reset\n'));
   console.log(chalk.gray('  Run: ') + chalk.cyan('arena init') + chalk.gray(' to set up again\n'));
 }
 
 /**
  * Format config value for display
  */
-function formatConfigValue(value: any): string {
+function formatConfigValue(value: unknown, key?: string): string {
+  if (key && isSensitiveConfigKey(key)) {
+    return chalk.gray('[redacted]');
+  }
+
   if (typeof value === 'boolean') {
     return value ? chalk.green('true') : chalk.red('false');
   }
@@ -156,10 +205,6 @@ function formatConfigValue(value: any): string {
   }
 
   if (typeof value === 'string') {
-    // Mask API keys
-    if (value.startsWith('sk-')) {
-      return chalk.gray('sk-••••••••••••••••••');
-    }
     return chalk.yellow(`"${value}"`);
   }
 
@@ -177,7 +222,7 @@ function formatConfigValue(value: any): string {
 /**
  * Parse config value from string
  */
-function parseConfigValue(value: string): any {
+function parseConfigValue(value: string): unknown {
   // Boolean
   if (value === 'true') return true;
   if (value === 'false') return false;
@@ -208,4 +253,17 @@ function parseConfigValue(value: string): any {
 
   // String (default)
   return value;
+}
+
+function validateOpenAIApiKey(input: string): true | string {
+  if (!input) {
+    return 'API key is required';
+  }
+  if (!input.startsWith('sk-')) {
+    return 'API key should start with "sk-"';
+  }
+  if (input.length < 40) {
+    return 'API key appears to be incomplete';
+  }
+  return true;
 }

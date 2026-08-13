@@ -16,6 +16,7 @@ Success Criteria:
 
 import sys
 import os
+import pytest
 sys.path.insert(0, '../')
 
 from arena.editorial.thought_seed_detector import ThoughtSeedDetector
@@ -57,7 +58,7 @@ def test_week2_construction():
 
     if not transcript_file:
         print(f"❌ Transcript not found")
-        return False
+        pytest.skip("test_007 transcript fixture is not available")
 
     with open(transcript_file, 'r') as f:
         transcript_data = json.load(f)
@@ -70,7 +71,7 @@ def test_week2_construction():
     api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
         print("\n❌ OPENAI_API_KEY not set")
-        return False
+        pytest.skip("OPENAI_API_KEY is required for the live Week 2 validation")
 
     # Step 1: Detect seeds (from Week 1)
     print(f"\n🌱 STEP 1: Detecting thought seeds...")
@@ -83,7 +84,7 @@ def test_week2_construction():
         print(f"✓ Detected {len(seeds)} seeds")
     except Exception as e:
         print(f"\n❌ Seed detection failed: {e}")
-        return False
+        pytest.fail(f"Seed detection failed: {e}")
 
     # Step 2: Construct ThoughtUnits
     print(f"\n🏗️  STEP 2: Constructing ThoughtUnit instances...")
@@ -104,7 +105,7 @@ def test_week2_construction():
         print(f"\n❌ Construction failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        pytest.fail(f"Thought-unit construction failed: {e}")
 
     # Validation checks
     print("\n" + "=" * 70)
@@ -243,13 +244,11 @@ def test_week2_construction():
     if passed_count >= 3:
         print("\n🎉 WEEK 2 VALIDATION SUCCESSFUL!")
         print("ThoughtUnit construction is working as expected.")
-        return True
     else:
         print("\n⚠️  WEEK 2 NEEDS IMPROVEMENT")
         print("Review failed checks and adjust detection parameters.")
-        return False
+    assert passed_count >= 3, f"Only {passed_count}/{len(checks)} Week 2 checks passed"
 
 
 if __name__ == '__main__':
-    success = test_week2_construction()
-    sys.exit(0 if success else 1)
+    test_week2_construction()

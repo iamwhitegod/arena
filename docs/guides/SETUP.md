@@ -4,8 +4,8 @@ Complete setup instructions for Arena CLI - from installation to first clip.
 
 ## Prerequisites
 
-- **Node.js 18+**: [Download](https://nodejs.org/)
-- **Python 3.9+**: [Download](https://www.python.org/downloads/)
+- **Node.js 22–24**: [Download](https://nodejs.org/)
+- **Python 3.10–3.12**: [Download](https://www.python.org/downloads/)
 - **FFmpeg**: Required for video processing
 - **OpenAI API Key**: Get from [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
 
@@ -321,11 +321,11 @@ npx @whitegodkingsley/arena-cli process video.mp4
 
 ### "Python 3 is not installed"
 
-Make sure Python 3.9+ is installed and in your PATH:
+Make sure Python 3.10–3.12 is installed and in your PATH:
 ```bash
 python3 --version
 
-# Should output: Python 3.9.x or higher
+# Should output: Python 3.10.x through 3.12.x
 ```
 
 **Install Python:**

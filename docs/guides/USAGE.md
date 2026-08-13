@@ -1108,11 +1108,11 @@ arena generate video.mp4 moments.json --select 1,3,5
 
 ### Python or FFmpeg not found
 
-Arena CLI requires Python 3.9+ and FFmpeg:
+Arena CLI requires Python 3.10–3.12 and FFmpeg:
 
 ```bash
 # Check versions
-python3 --version  # Should be 3.9+
+python3 --version  # Should be 3.10–3.12
 ffmpeg -version
 
 # Install Python (macOS)

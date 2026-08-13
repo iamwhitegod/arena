@@ -110,11 +110,11 @@ describe('runPreflightChecks', () => {
   });
 
   it('should include python version in result', async () => {
-    mockValidatePython.mockResolvedValue('Python 3.9.18');
+    mockValidatePython.mockResolvedValue('Python 3.10.14');
 
     const result = await runPreflightChecks(baseOptions);
 
-    expect(result.pythonVersion).toBe('Python 3.9.18');
+    expect(result.pythonVersion).toBe('Python 3.10.14');
   });
 
   it('should check dependencies only when python is available and enginePath provided', async () => {

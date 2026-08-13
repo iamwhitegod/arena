@@ -1,0 +1,11 @@
+# Maintainer review is required for release and security boundaries.
+* @iamwhitegod
+/.github/ @iamwhitegod
+/cli/scripts/ @iamwhitegod
+/cli/src/core/config.ts @iamwhitegod
+/cli/src/commands/setup.ts @iamwhitegod
+/engine/requirements*.lock @iamwhitegod
+/engine/build-requirements.lock @iamwhitegod
+/engine/arena/video/ @iamwhitegod
+/Dockerfile @iamwhitegod
+/SECURITY.md @iamwhitegod

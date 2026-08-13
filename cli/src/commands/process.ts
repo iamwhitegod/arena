@@ -133,7 +133,7 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
         const files = await fs.readdir(clipsDir);
         clipsGenerated = files.filter((f) => f.endsWith('.mp4')).length;
       }
-    } catch (error) {
+    } catch {
       // Ignore errors
     }
 

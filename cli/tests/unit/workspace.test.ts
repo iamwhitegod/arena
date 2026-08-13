@@ -97,6 +97,44 @@ describe('Workspace', () => {
     expect(loaded).toBeNull();
   });
 
+  it('should reject traversal and absolute workspace filenames', async () => {
+    await workspace.initialize();
+
+    expect(() => workspace.getCachePath('../outside.json')).toThrow('Unsafe');
+    expect(() => workspace.getOutputPath(path.join(testDir, 'outside.mp4'))).toThrow('Unsafe');
+    await expect(workspace.saveCache('nested/cache.json', {})).rejects.toThrow('Unsafe');
+  });
+
+  it('should refuse to clean a directory without a valid Arena marker', async () => {
+    const unmarkedDir = path.join(testDir, 'unmarked-workspace');
+    await fs.ensureDir(unmarkedDir);
+    workspace = new Workspace(unmarkedDir);
+
+    await expect(workspace.clean()).rejects.toThrow('unmarked Arena workspace');
+    expect(await fs.pathExists(unmarkedDir)).toBe(true);
+  });
+
+  it('should reject dangerous workspace roots', () => {
+    expect(() => new Workspace(testDir)).toThrow('Unsafe Arena workspace root');
+    expect(() => new Workspace(path.parse(testDir).root)).toThrow('Unsafe Arena workspace root');
+  });
+
+  it('should reject symlinked workspace roots and targets', async () => {
+    if (process.platform === 'win32') return;
+
+    const outsideDir = path.join(testDir, 'outside');
+    const linkedRoot = path.join(testDir, 'linked-workspace');
+    await fs.ensureDir(outsideDir);
+    await fs.symlink(outsideDir, linkedRoot);
+    expect(() => new Workspace(linkedRoot)).toThrow('Unsafe Arena workspace root');
+
+    await workspace.initialize();
+    const outsideFile = path.join(testDir, 'outside.mp4');
+    await fs.writeFile(outsideFile, 'outside');
+    await fs.symlink(outsideFile, path.join(testDir, '.arena', 'output', 'linked.mp4'));
+    expect(() => workspace.getOutputPath('linked.mp4')).toThrow('Unsafe Arena workspace target');
+  });
+
   it('should clean workspace', async () => {
     await workspace.initialize();
     expect(await workspace.exists()).toBe(true);
