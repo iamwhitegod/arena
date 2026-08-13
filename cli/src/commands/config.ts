@@ -6,6 +6,7 @@
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { ConfigManager, isSensitiveConfigKey } from '../core/config.js';
+import { commandHeader } from '../ui/output.js';
 
 type ConfigAction = 'view' | 'set' | 'get' | 'reset';
 
@@ -68,11 +69,7 @@ async function viewConfig(configManager: ConfigManager): Promise<void> {
     return;
   }
 
-  const separator = chalk.gray('─'.repeat(60));
-
-  console.log('\n' + separator);
-  console.log(chalk.cyan('⚙️  Arena Configuration') + chalk.gray(' (~/.arena/config.json)'));
-  console.log(separator + '\n');
+  commandHeader('Arena configuration', [['File', '~/.arena/config.json']]);
 
   // Format and display config
   const configEntries = Object.entries(config);
@@ -90,12 +87,7 @@ async function viewConfig(configManager: ConfigManager): Promise<void> {
     );
   }
 
-  console.log('\n' + separator);
-  console.log(
-    chalk.gray('\n💡 Tip: Use ') +
-      chalk.cyan('arena config set <key> <value>') +
-      chalk.gray(' to update; omit the value for secret keys\n')
-  );
+  console.log();
 }
 
 /**

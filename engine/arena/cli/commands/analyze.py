@@ -7,6 +7,7 @@ from arena.audio.transcriber import Transcriber
 from arena.audio.energy import AudioEnergyAnalyzer
 from arena.ai.hybrid import HybridAnalyzer
 from arena.editorial import FourLayerAdapter
+from arena.cli.protocol import progress, result
 
 
 def run_analyze(args):
@@ -36,10 +37,13 @@ def run_analyze(args):
         print(f"📖 Loading transcript: {transcript_path.name}")
         with open(transcript_path) as f:
             transcript_data = json.load(f)
+        progress("transcription", 100, "Loaded existing transcript")
     else:
         print("🎤 Transcribing video...")
         transcriber = Transcriber(api_key=api_key)
+        progress("transcription", 5, "Transcribing audio")
         transcript_data = transcriber.transcribe(video_path)
+        progress("transcription", 100, "Transcription complete")
 
     print(f"   ✓ Duration: {transcript_data.get('duration', 0):.1f}s\n")
 
@@ -56,6 +60,7 @@ def run_analyze(args):
 
         # Run analysis
         print("⚡ Running hybrid analysis...\n")
+        progress("analysis", 10, "Scoring candidate moments")
         results = hybrid.analyze_video(
             video_path=video_path,
             transcript_data=transcript_data,
@@ -75,6 +80,9 @@ def run_analyze(args):
         print(f"\n✅ Analysis complete!")
         print(f"   Saved to: {output_path}\n")
 
+        clips = results.get("clips", [])
+        progress("analysis", 100, "Analysis complete")
+        result({"success": True, "videoDuration": transcript_data.get("duration", 0), "wordCount": len(transcript_data.get("words", [])), "momentsFound": len(clips), "estimatedClips": len(clips), "outputFile": str(output_path)})
         return 0
 
     except Exception as e:

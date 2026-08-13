@@ -6,6 +6,7 @@
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { ConfigManager } from '../core/config.js';
+import { commandHeader, success } from '../ui/output.js';
 
 interface InitAnswers {
   workflow: 'content-creator' | 'podcast' | 'course' | 'custom';
@@ -15,8 +16,7 @@ interface InitAnswers {
 }
 
 export async function initCommand(): Promise<void> {
-  console.log(chalk.cyan('\n✨ Welcome to Arena!\n'));
-  console.log(chalk.white("Let's set up your video clip generation workspace.\n"));
+  commandHeader('Set up Arena', [['Purpose', 'Configure your default clip workflow']]);
 
   // Check if config already exists
   const configManager = new ConfigManager();
@@ -152,11 +152,10 @@ export async function initCommand(): Promise<void> {
   }
 
   // Display success
-  console.log(chalk.green('\n✓ Created ~/.arena/config.json'));
-  if (answers.apiKey) {
-    console.log(chalk.green('✓ Stored API key with owner-only permissions'));
-  }
-  console.log(chalk.green('✓ Workspace ready!\n'));
+  success('Arena is ready', [
+    ['Configuration', '~/.arena/config.json'],
+    ['Credentials', answers.apiKey ? 'Stored with owner-only permissions' : undefined],
+  ]);
 
   // Show next steps
   displayNextSteps(answers, hasApiKey || !!answers.apiKey);

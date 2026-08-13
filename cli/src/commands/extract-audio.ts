@@ -12,6 +12,7 @@ import { formatErrorWithHelp } from '../errors/formatter.js';
 import { isArenaError, PreflightError } from '../errors/index.js';
 import { formatFileSize, formatDuration } from '../ui/formatters.js';
 import { isUrl } from '../utils/url.js';
+import { commandHeader, success } from '../ui/output.js';
 
 interface ExtractAudioOptions {
   output?: string;
@@ -60,21 +61,12 @@ export async function extractAudioCommand(
     // Ensure output directory exists
     await fs.ensureDir(path.dirname(path.resolve(outputFile)));
 
-    console.log(chalk.cyan('\n🎵 Extracting audio from video...\n'));
-
-    // Show configuration
-    console.log(chalk.gray('  Configuration:'));
-    console.log(chalk.white(`    Format: ${format}`));
-    if (options.bitrate) {
-      console.log(chalk.white(`    Bitrate: ${options.bitrate}`));
-    }
-    if (options.sampleRate) {
-      console.log(chalk.white(`    Sample Rate: ${options.sampleRate} Hz`));
-    }
-    if (options.mono) {
-      console.log(chalk.white(`    Channels: Mono`));
-    }
-    console.log();
+    commandHeader('Extract audio', [
+      ['Input', isUrl(videoPath) ? videoPath : path.basename(absoluteVideoPath)],
+      ['Format', format.toUpperCase()],
+      ['Audio', options.mono ? 'mono' : 'stereo'],
+      ['Output', path.resolve(outputFile)],
+    ]);
 
     // Show progress
     progress.start(chalk.cyan(`Extracting audio as ${format.toUpperCase()}...`));
@@ -150,35 +142,11 @@ function displayExtractionSummary(data: {
   duration?: number;
   processingTime: number;
 }): void {
-  const separator = chalk.gray('━'.repeat(60));
-
-  console.log('\n' + separator);
-  console.log(chalk.green('✨ Audio extracted successfully!'));
-  console.log(separator);
-
-  console.log(chalk.cyan('\n🎵 Audio File:'));
-
-  const stats: string[] = [
-    `Video: ${data.videoPath}`,
-    `Format: ${data.format.toUpperCase()}`,
-    `File Size: ${formatFileSize(data.fileSize)}`,
-  ];
-
-  if (data.duration) {
-    stats.push(`Duration: ${formatDuration(data.duration)}`);
-  }
-
-  stats.push(`Processing Time: ${formatDuration(data.processingTime)}`);
-
-  stats.forEach((stat) => {
-    console.log(`  • ${stat}`);
-  });
-
-  console.log(chalk.cyan('\n📁 Output:'));
-  console.log(chalk.white(`  ${data.audioPath}`));
-
-  console.log(chalk.cyan('\n💡 Next step:'));
-  console.log(chalk.white(`  Play audio: open "${data.audioPath}"`));
-
-  console.log('\n' + separator + '\n');
+  success('Audio extracted', [
+    ['Format', data.format.toUpperCase()],
+    ['Size', formatFileSize(data.fileSize)],
+    ['Duration', data.duration ? formatDuration(data.duration) : undefined],
+    ['Elapsed', formatDuration(data.processingTime)],
+    ['Output', path.resolve(data.audioPath)],
+  ]);
 }

@@ -1,7 +1,9 @@
 """arena process - Run full pipeline"""
 
 import sys
+from contextlib import redirect_stdout
 from pathlib import Path
+from arena.cli.protocol import PipelineEventStream, result
 
 # Import the existing pipeline function
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
@@ -10,16 +12,10 @@ from arena_process import run_arena_pipeline
 
 def run_process(args):
     """Run the process command (supports URLs)"""
-    from arena.video.downloader import resolve_input
-
-    try:
-        video_path = resolve_input(args.video, mode='video', cookies_from_browser=getattr(args, 'cookies_from_browser', None))
-    except RuntimeError as e:
-        print(f"❌ Error: {e}")
-        return 1
-
-    return run_arena_pipeline(
-        video_path=str(video_path),
+    event_stream = PipelineEventStream()
+    with redirect_stdout(event_stream):
+        exit_code = run_arena_pipeline(
+        video_path=args.video,
         output_dir=args.output,
         num_clips=args.num_clips,
         min_duration=args.min_duration,
@@ -44,4 +40,7 @@ def run_process(args):
                 'position': getattr(args, 'caption_position', None),
             }.items() if v is not None
         } if getattr(args, 'captions', False) else None
-    )
+        )
+    if exit_code == 0:
+        result({"success": True, "outputDir": str(Path(args.output).resolve())})
+    return exit_code

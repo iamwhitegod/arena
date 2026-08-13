@@ -150,7 +150,7 @@ describe('PythonBridge', () => {
   });
 
   describe('stderr handling', () => {
-    it('should forward stderr to onError callback', async () => {
+    it('should suppress non-fatal engine warnings on successful commands', async () => {
       const mockProc = createMockProcess();
       mockSpawn.mockReturnValue(mockProc);
 
@@ -165,7 +165,24 @@ describe('PythonBridge', () => {
       mockProc.emit('close', 0);
 
       await promise;
-      expect(onError).toHaveBeenCalledWith('Python warning: something');
+      expect(onError).not.toHaveBeenCalled();
+    });
+
+    it('should forward captured stderr when a command fails', async () => {
+      const mockProc = createMockProcess();
+      mockSpawn.mockReturnValue(mockProc);
+      const onError = vi.fn();
+      const promise = bridge.runProcess(
+        { videoPath: '/test.mp4', outputDir: '/out' },
+        undefined,
+        onError
+      );
+
+      mockProc.stderr.emit('data', Buffer.from('RuntimeError: processing failed'));
+      mockProc.emit('close', 1);
+
+      await expect(promise).rejects.toThrow(ProcessingError);
+      expect(onError).toHaveBeenCalledWith('RuntimeError: processing failed');
     });
   });
 

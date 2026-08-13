@@ -136,12 +136,12 @@ export async function runPreflightChecksWithProgress(
   options: PreflightOptions
 ): Promise<PreflightResult> {
   const spinner = ora();
+  spinner.start('Running preflight checks...');
 
   // Video file check
-  spinner.start('Validating video file...');
+  spinner.text = 'Validating input...';
   try {
     await validateVideoFile(options.videoPath);
-    spinner.succeed(chalk.green('Video file validated'));
   } catch (error) {
     spinner.fail(chalk.red('Video file validation failed'));
     if (error instanceof PreflightError) {
@@ -154,10 +154,9 @@ export async function runPreflightChecksWithProgress(
   }
 
   // Output directory check
-  spinner.start('Checking output directory...');
+  spinner.text = 'Checking output directory...';
   try {
     await validateOutputDir(options.outputDir);
-    spinner.succeed(chalk.green('Output directory ready'));
   } catch (error) {
     spinner.fail(chalk.red('Output directory check failed'));
     if (error instanceof PreflightError) {
@@ -170,11 +169,10 @@ export async function runPreflightChecksWithProgress(
   }
 
   // Python check
-  spinner.start('Checking Python environment...');
+  spinner.text = 'Checking processing runtime...';
   let pythonVersion: string | undefined;
   try {
     pythonVersion = await validatePython();
-    spinner.succeed(chalk.green(`Python environment ready (${pythonVersion})`));
   } catch (error) {
     spinner.fail(chalk.red('Python check failed'));
     if (error instanceof PreflightError) {
@@ -188,10 +186,9 @@ export async function runPreflightChecksWithProgress(
 
   // Dependencies check
   if (options.enginePath) {
-    spinner.start('Checking Python dependencies...');
+    spinner.text = 'Checking engine dependencies...';
     try {
       await validateDependencies(options.enginePath);
-      spinner.succeed(chalk.green('Python dependencies installed'));
     } catch (error) {
       spinner.fail(chalk.red('Dependencies check failed'));
       if (error instanceof PreflightError) {
@@ -206,10 +203,9 @@ export async function runPreflightChecksWithProgress(
 
   // API key check (optional)
   if (!options.skipApiKeyCheck) {
-    spinner.start('Checking OpenAI API key...');
+    spinner.text = 'Checking OpenAI API key...';
     try {
       validateApiKey();
-      spinner.succeed(chalk.green('OpenAI API key found'));
     } catch (error) {
       spinner.fail(chalk.red('API key check failed'));
       if (error instanceof PreflightError) {
@@ -245,6 +241,7 @@ export async function runPreflightChecksWithProgress(
     };
   }
 
+  spinner.succeed(chalk.green('Preflight passed'));
   return {
     passed: true,
     errors: [],

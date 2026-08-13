@@ -12,6 +12,7 @@ import { formatErrorWithHelp } from '../errors/formatter.js';
 import { isArenaError } from '../errors/index.js';
 import { displayTranscriptionSummary } from '../ui/summary.js';
 import { isUrl } from '../utils/url.js';
+import { commandHeader } from '../ui/output.js';
 
 interface TranscribeOptions {
   output?: string;
@@ -43,8 +44,10 @@ export async function transcribeCommand(
       );
     }
 
-    // Run pre-flight checks
-    console.log(chalk.cyan('\n🔍 Running pre-flight checks...\n'));
+    commandHeader('Transcribe media', [
+      ['Input', isUrl(videoPath) ? videoPath : path.basename(absoluteVideoPath)],
+      ['Output', outputFile],
+    ]);
 
     const preflightResult = await runPreflightChecksWithProgress({
       videoPath: absoluteVideoPath,
@@ -58,12 +61,8 @@ export async function transcribeCommand(
       process.exit(1);
     }
 
-    console.log(chalk.green('✓ All pre-flight checks passed\n'));
-
     // Show progress
     progress.start(chalk.cyan('Transcribing audio with Whisper...'));
-
-    console.log(chalk.gray('\nThis may take a few minutes depending on video length...\n'));
 
     // Call Python bridge transcribe command
     const result = await bridge.runTranscribe(

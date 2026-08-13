@@ -2,6 +2,8 @@
 
 Complete reference for all Arena CLI commands and options.
 
+For terminal examples and the pending, running, cached, warning, partial-success, failed, and interrupted states, see [CLI output and states](./CLI_OUTPUT.md).
+
 ## Quick Command Overview
 
 | Command | Purpose | Example |
@@ -12,8 +14,11 @@ Complete reference for all Arena CLI commands and options.
 | `arena analyze` | Find moments (no video) | `arena analyze video.mp4` |
 | `arena generate` | Generate from analysis | `arena generate video.mp4 analysis.json` |
 | `arena format` | Format for social platforms | `arena format clips/ -p tiktok` |
+| `arena detect-scenes` | Detect visual scene boundaries | `arena detect-scenes video.mp4` |
 | `arena config` | Manage configuration | `arena config set openai_api_key "sk-..."` |
 | `arena extract-audio` | Extract audio | `arena extract-audio video.mp4` |
+| `arena setup` | Install or repair the runtime | `arena setup --check` |
+| `arena diagnose` | Run system diagnostics | `arena diagnose` |
 
 ---
 
@@ -459,12 +464,50 @@ arena extract-audio video.mp4 --format flac
 
 ---
 
+### `arena detect-scenes`
+
+Detect visual scene boundaries without using the OpenAI API.
+
+```bash
+arena detect-scenes <video> [options]
+```
+
+Options include `--threshold`, `--min-duration`, `--report`, and `-o, --output`. The terminal summary reports the scene count, average duration, JSON output, and optional report path.
+
+---
+
+### `arena setup`
+
+Install or repair Arena's private processing runtime.
+
+```bash
+arena setup [--check] [--force] [--yes]
+```
+
+Use `--check` for a read-only health report and `--force` to rebuild the managed runtime. A failed rebuild preserves the previous working runtime when possible.
+
+---
+
+### `arena diagnose`
+
+Check Node.js, the Arena runtime, FFmpeg, engine imports, network/API access, disk space, and configuration.
+
+```bash
+arena diagnose
+```
+
+The command writes `arena-diagnostics.txt` in the current directory for support requests.
+
+---
+
 ## Global Options
 
-These options work with all commands:
+Commander provides these general options:
 
-- `--debug` - Show detailed debug information
 - `--help` - Show help for specific command
+- `--version` - Show the Arena version
+
+Processing commands that declare `--debug` add CLI error context and stack information. Raw engine diagnostics are buffered and surfaced on failure rather than mixed into successful progress output.
 
 **Examples:**
 ```bash

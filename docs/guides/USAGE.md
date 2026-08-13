@@ -1,6 +1,6 @@
 # Arena Usage Guide
 
-Complete reference for using Arena CLI - all 8 commands and workflows.
+Complete guide to Arena CLI commands and workflows. For terminal presentation and state semantics, see [CLI output and states](./CLI_OUTPUT.md).
 
 ## Installation
 
@@ -17,7 +17,7 @@ arena init
 
 ## Available Commands
 
-Arena CLI provides 9 commands for flexible video clip generation workflows:
+Arena CLI provides 11 commands for flexible video clip generation workflows:
 
 | Command | Purpose | Best For |
 |---------|---------|----------|
@@ -29,6 +29,9 @@ Arena CLI provides 9 commands for flexible video clip generation workflows:
 | `arena format` | Format clips for social media platforms | Platform-specific aspect ratios, TikTok, Instagram, YouTube |
 | `arena config` | Manage configuration | API keys, preferences, debugging |
 | `arena extract-audio` | Extract audio from video | Audio-only workflows, preprocessing |
+| `arena detect-scenes` | Detect visual scene boundaries | Scene-aware clip planning |
+| `arena setup` | Install or repair the private runtime | Installation and recovery |
+| `arena diagnose` | Run system and API checks | Troubleshooting |
 
 ## Basic Commands
 
@@ -1158,7 +1161,7 @@ Typical results for a 30-minute video:
 
 ## What's Next?
 
-- Read [EDITORIAL_ARCHITECTURE.md](./engine/EDITORIAL_ARCHITECTURE.md) for 4-layer system details
-- Read [REFINEMENT_PLAN.md](./engine/REFINEMENT_PLAN.md) for architectural improvements
+- Read [EDITORIAL_ARCHITECTURE.md](../architecture/EDITORIAL_ARCHITECTURE.md) for 4-layer system details
+- Read [REFINEMENT_PLAN.md](../architecture/REFINEMENT_PLAN.md) for architectural improvements
 - Check [CLI_REFERENCE.md](./CLI_REFERENCE.md) for complete CLI documentation
-- See [ARENA_CLOUD_PLAN.md](./engine/ARENA_CLOUD_PLAN.md) for cloud features roadmap
+- See [ARENA_CLOUD_PLAN.md](../architecture/ARENA_CLOUD_PLAN.md) for cloud features roadmap

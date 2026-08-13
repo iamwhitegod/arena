@@ -11,6 +11,7 @@ import { runPreflightChecksWithProgress } from '../core/preflight.js';
 import { formatErrorWithHelp } from '../errors/formatter.js';
 import { isArenaError } from '../errors/index.js';
 import { displayAnalysisSummary } from '../ui/summary.js';
+import { commandHeader } from '../ui/output.js';
 
 interface AnalyzeOptions {
   output?: string;
@@ -37,8 +38,11 @@ export async function analyzeCommand(videoPath: string, options: AnalyzeOptions)
         `${path.basename(absoluteVideoPath, path.extname(absoluteVideoPath))}_analysis.json`
       );
 
-    // Run pre-flight checks
-    console.log(chalk.cyan('\n🔍 Running pre-flight checks...\n'));
+    commandHeader('Analyze video', [
+      ['Input', path.basename(absoluteVideoPath)],
+      ['Output', outputFile],
+      ['Model', options.editorialModel || 'gpt-4o'],
+    ]);
 
     const preflightResult = await runPreflightChecksWithProgress({
       videoPath: absoluteVideoPath,
@@ -55,8 +59,6 @@ export async function analyzeCommand(videoPath: string, options: AnalyzeOptions)
       process.exit(1);
     }
 
-    console.log(chalk.green('✓ All pre-flight checks passed\n'));
-
     // Initialize progress stages
     progress.initializeStages([
       { id: 'transcription', name: 'Transcription', icon: '📝' },
@@ -66,9 +68,6 @@ export async function analyzeCommand(videoPath: string, options: AnalyzeOptions)
         icon: '🧠',
       },
     ]);
-
-    console.log(chalk.cyan('\n🔎 Analyzing video...\n'));
-    console.log(chalk.gray('This will analyze the video without generating clips.\n'));
 
     // Call Python bridge analyze command
     const result = await bridge.runAnalyze(

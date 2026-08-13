@@ -4,6 +4,7 @@ import os
 import json
 from pathlib import Path
 from arena.audio.transcriber import Transcriber
+from arena.cli.protocol import progress, result
 
 
 def run_transcribe(args):
@@ -36,7 +37,10 @@ def run_transcribe(args):
 
     # Check cache
     if not args.no_cache and output_path.exists():
-        print(f"✓ Using cached transcript: {output_path}")
+        with open(output_path) as f:
+            transcript_data = json.load(f)
+        progress("transcription", 100, "Using cached transcript")
+        result({"success": True, "cached": True, "duration": transcript_data.get("duration", 0), "wordCount": len(transcript_data.get("words", [])), "language": transcript_data.get("language", "unknown"), "outputFile": str(output_path)})
         return 0
 
     print(f"\n🎤 Transcribing: {video_path.name}")
@@ -44,6 +48,7 @@ def run_transcribe(args):
     print(f"   Output: {output_path}\n")
 
     try:
+        progress("transcription", 5, "Preparing audio")
         transcriber = Transcriber(api_key=api_key, mode=args.mode)
 
         print("⏳ Transcribing (this may take a few minutes)...")
@@ -60,6 +65,8 @@ def run_transcribe(args):
         print(f"   Language: {transcript_data.get('language', 'unknown')}")
         print(f"   Saved to: {output_path}\n")
 
+        progress("transcription", 100, "Transcription complete")
+        result({"success": True, "cached": False, "duration": transcript_data.get("duration", 0), "wordCount": len(transcript_data.get("words", [])), "language": transcript_data.get("language", "unknown"), "outputFile": str(output_path)})
         return 0
 
     except Exception as e:

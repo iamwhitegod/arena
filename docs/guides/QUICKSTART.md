@@ -98,60 +98,24 @@ arena process video.mp4 --fast
 
 ## What Happens During Processing
 
-### Step 1: Transcription (2-5 min)
+Arena keeps one live progress area instead of mixing CLI, engine, and library logs:
 
-```
-🎤 Transcribing video with OpenAI Whisper...
-✓ Transcription complete
-  Duration: 520.3s
-  Words: 920
-```
+```text
+Arena
 
-The transcript is **cached** - subsequent runs are instant!
+Input   video.mp4
+Output  /path/to/output
+Target  8 clips · 30–90s
 
-### Step 2: AI Analysis (30-60 sec or 3-5 min with 4-layer)
-
-**Standard Mode:**
-```
-🧠 Analyzing transcript content with AI...
-✓ Found 17 interesting content segments
-
-⚡ Analyzing audio energy...
-✓ Found 20 high-energy segments
-
-🎯 Computing hybrid scores...
-✓ Selected top 5 clips by hybrid score
+✓ Preflight passed
+[1/4] ✓ Transcription — Transcription complete
+[2/4] ◐ Analysis
+      [████████████░░░░░░░░] 62% · Scoring candidate moments
+[3/4] ○ Clip Alignment
+[4/4] ○ Clip Generation
 ```
 
-**4-Layer Mode:**
-```
-🎯 4-Layer Editorial System
-
-[1/4] 🔍 Layer 1: Candidate Detection
-  ✓ Found 25 candidate moments
-
-[2/4] 📐 Layer 2: Boundary Refinement
-  ✓ Adjusted 25 boundaries
-
-[3/4] ✅ Layer 3: Quality Validation
-  ✓ Validated: 2 clips passed (8% pass rate)
-  ✗ Rejected: 23 clips (incomplete context, references missing info)
-
-[4/4] 📝 Layer 4: Content Packaging
-  ✓ Generated professional titles and descriptions
-```
-
-The 4-layer system applies strict quality gates - only 7-10% of candidates pass!
-
-### Step 3: Clip Generation (1-3 min)
-
-```
-🎬 Generating 2 clips...
-   [1/2] ✓ questions-to-ask-before-learning-tech-skills (46s)
-   [2/2] ✓ how-to-define-your-tech-goals-as-an-engineer (46s)
-
-✓ Clip generation complete
-```
+The transcript is cached, so later runs can show `Using cached transcript` and skip that work. When `--platform` is supplied, a fifth platform-formatting stage appears. See [CLI output and states](./CLI_OUTPUT.md) for cached, warning, partial-success, failure, and interruption examples for every command.
 
 ## Output Structure
 

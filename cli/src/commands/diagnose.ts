@@ -65,8 +65,7 @@ function runProcess(command: string, args: string[], timeoutMs = 15000): Promise
 }
 
 export async function diagnoseCommand(): Promise<void> {
-  console.log(chalk.cyan('\n🔍 ARENA DIAGNOSTICS\n'));
-  console.log(chalk.white('Running comprehensive system checks...\n'));
+  console.log(chalk.bold('\nArena diagnostics\n'));
 
   const results: DiagnosticResult[] = [];
 
@@ -89,8 +88,7 @@ export async function diagnoseCommand(): Promise<void> {
   results.push(await checkConfiguration());
 
   // Display results
-  console.log(chalk.cyan('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
-  console.log(chalk.bold('DIAGNOSTIC RESULTS\n'));
+  console.log(chalk.bold('\nResults\n'));
 
   let hasErrors = false;
   let hasWarnings = false;
@@ -121,8 +119,6 @@ export async function diagnoseCommand(): Promise<void> {
       if (check.status === 'warn') hasWarnings = true;
     }
   }
-
-  console.log(chalk.cyan('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
 
   // Summary
   if (!hasErrors && !hasWarnings) {

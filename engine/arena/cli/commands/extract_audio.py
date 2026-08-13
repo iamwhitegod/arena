@@ -2,6 +2,7 @@
 
 import subprocess
 from pathlib import Path
+from arena.cli.protocol import progress, result as emit_result
 
 
 def run_extract_audio(args):
@@ -86,7 +87,7 @@ def run_extract_audio(args):
         ])
 
         # Run FFmpeg
-        print("⏳ Extracting...")
+        progress("extraction", 10, "Extracting audio")
         result = subprocess.run(
             command,
             stdout=subprocess.PIPE,
@@ -101,6 +102,8 @@ def run_extract_audio(args):
         print(f"   Output: {output_path}")
         print(f"   Size: {size_mb:.2f} MB\n")
 
+        progress("extraction", 100, "Audio extracted")
+        emit_result({"success": True, "audioPath": str(output_path), "fileSize": output_path.stat().st_size})
         return 0
 
     except subprocess.CalledProcessError as e:

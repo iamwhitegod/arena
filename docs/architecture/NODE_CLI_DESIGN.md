@@ -84,54 +84,23 @@ arena process video.mp4 [options]
 ```
 $ arena process video.mp4
 
-✓ Video file found: video.mp4 (1.6 GB)
-✓ Python environment ready (3.12.0)
-✓ Dependencies installed
-✓ Workspace initialized
+Arena
 
-▶ Processing video with 4-layer editorial system...
+Input   video.mp4
+Output  /path/to/output
+Target  8 clips · 30–90s
 
-[1/4] 📝 Transcription
-  ⠋ Transcribing audio... 45%
-  ✓ Transcription complete (520s, 889 words)
+✓ Preflight passed
+[1/4] ✓ Transcription — Transcription complete
+[2/4] ◐ Analysis
+      [████████████░░░░░░░░] 62% · Scoring candidate moments
+[3/4] ○ Clip Alignment
+[4/4] ○ Clip Generation
 
-[2/4] 🧠 AI Analysis
-  ⠋ Layer 1: Detecting moments... 12/40
-  ✓ Found 40 candidate moments
-  ⠋ Layer 2: Analyzing boundaries... 15/40 (parallel)
-  ✓ Analyzed 40 complete thoughts
-  ⠋ Layer 3: Validating standalone context... 8/40
-  ✓ 3 clips passed quality gate (7.5% pass rate)
-  ⠋ Layer 4: Packaging clips...
-  ✓ Packaged 3 professional clips
+✓ Done — generated 3 clips in 6m 23s
 
-[3/4] ⚡ Hybrid Analysis
-  ✓ Audio energy analyzed (20 segments)
-  ✓ Hybrid scores computed
-
-[4/4] ✂️  Clip Generation
-  ⠋ Generating clip 2/3... 67%
-  ✓ Generated 3 clips
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✨ Success! Generated 3 professional clips
-
-📊 Summary:
-  • Duration: 8m 40s
-  • Cost: $0.19 (4-layer with gpt-4o-mini)
-  • Pass Rate: 7.5% (strict quality gate)
-  • Processing Time: 6m 23s
-
-📁 Output: ~/Desktop/arena/clips/
-  1. questions-to-ask-before-learning-tech-skills (46s)
-  2. what-i-learned-from-building-my-first-website (37s)
-  3. how-to-define-your-tech-goals-as-an-engineer (46s)
-
-💡 Next steps:
-  • Review clips: ls ~/Desktop/arena/clips/
-  • Try cost-optimized: --editorial-model gpt-4o-mini
-  • Debug layers: --export-layers
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Input   video.mp4
+Output  /path/to/output
 ```
 
 ---
@@ -313,45 +282,29 @@ Checks system info, dependencies (Python, FFmpeg, Deno), Python packages, API ke
 
 ### Communication Protocol
 
-**Method:** JSON-RPC over stdout/stderr
-
-**Request Format:**
-```json
-{
-  "command": "process",
-  "params": {
-    "video_path": "/path/to/video.mp4",
-    "output_dir": "/path/to/output",
-    "editorial_model": "gpt-4o-mini",
-    "num_clips": 5,
-    "min_duration": 20,
-    "max_duration": 90
-  }
-}
-```
+**Method:** newline-delimited JSON events over stdout. Stderr and unstructured output are buffered for failure diagnostics.
 
 **Progress Updates (streamed on stdout):**
 ```json
-{"type": "progress", "stage": "transcription", "percent": 45, "message": "Transcribing audio..."}
-{"type": "progress", "stage": "layer1", "percent": 30, "message": "Found 12/40 moments"}
-{"type": "progress", "stage": "layer2", "percent": 50, "message": "Analyzing 20/40 boundaries"}
-{"type": "progress", "stage": "layer3", "percent": 20, "message": "Validating 8/40 thoughts"}
-{"type": "progress", "stage": "clip_generation", "percent": 67, "message": "Generating clip 2/3"}
+{"type": "progress", "stage": "transcription", "progress": 45, "message": "Transcribing audio"}
+{"type": "progress", "stage": "analysis", "progress": 62, "message": "Scoring candidate moments"}
+{"type": "progress", "stage": "alignment", "progress": 100, "message": "Clip boundaries aligned"}
+{"type": "progress", "stage": "generation", "progress": 67, "message": "Generated clip 2 of 3"}
+{"type": "progress", "stage": "formatting", "progress": 100, "message": "Platform formatting complete"}
 ```
 
 **Final Result:**
 ```json
 {
   "type": "result",
-  "success": true,
   "data": {
-    "clips": [...],
-    "cost": 0.19,
-    "pass_rate": 0.075,
-    "processing_time": 383
+    "success": true,
+    "outputDir": "/path/to/output"
   }
 }
 ```
+
+The Node CLI is the only presentation owner. Python commands must not emit human-oriented banners on the protocol channel. See [CLI output and states](../guides/CLI_OUTPUT.md) for state semantics and supported stage IDs.
 
 **Error Format:**
 ```json

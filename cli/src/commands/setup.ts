@@ -708,7 +708,7 @@ async function buildRuntime(
 }
 
 async function printCheck(): Promise<boolean> {
-  console.log(chalk.cyan('\nARENA INSTALLATION CHECK\n'));
+  console.log(chalk.bold('\nArena installation check\n'));
 
   const enginePath = resolveEnginePath(__dirname);
   const integrity = enginePath
@@ -765,7 +765,7 @@ export async function setupCommand(options: SetupOptions = {}): Promise<void> {
     return;
   }
 
-  console.log(chalk.cyan('\nARENA SETUP\n'));
+  console.log(chalk.bold('\nSet up Arena\n'));
   console.log(chalk.gray(`Runtime location: ${getRuntimeDir()}\n`));
 
   const enginePath = resolveEnginePath(__dirname);

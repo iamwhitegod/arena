@@ -3,6 +3,7 @@ import argparse
 import json
 from pathlib import Path
 from arena.export.platform_formatter import PlatformFormatter
+from arena.cli.protocol import progress
 
 
 def _emit_result(data):
@@ -128,6 +129,15 @@ def run_format(args):
     print(f"Max Duration: {spec.max_duration}s" if spec.max_duration else "Max Duration: Unlimited")
     print(f"Bitrate: {spec.recommended_bitrate}")
 
+    caption_style = {}
+    if args.caption_font_size:
+        caption_style['font_size'] = args.caption_font_size
+    if args.caption_color:
+        caption_style['color'] = args.caption_color
+    if args.caption_position:
+        caption_style['position'] = args.caption_position
+    caption_style = caption_style or None
+
     # Process input
     if input_path.is_file():
         # Single file
@@ -154,20 +164,13 @@ def run_format(args):
         output_path = output_dir / output_filename
 
         # Build caption style if provided
-        caption_style = None
         subtitle_path = None
         if args.captions:
             subtitle_path = Path(args.captions)
             if not subtitle_path.exists():
                 subtitle_path = None
-            caption_style = {}
-            if args.caption_font_size:
-                caption_style['font_size'] = args.caption_font_size
-            if args.caption_color:
-                caption_style['color'] = args.caption_color
-            if args.caption_position:
-                caption_style['position'] = args.caption_position
 
+        progress("formatting", 5, "Formatting video")
         result = formatter.format_for_platform(
             input_path,
             output_path,
@@ -196,6 +199,7 @@ def run_format(args):
                 "outputDir": str(output_dir),
                 "warnings": result.get('warnings', [])
             })
+            progress("formatting", 100, "Formatting complete")
         else:
             print(f"\n❌ Failed: {result.get('error', 'Unknown error')}")
             _emit_result({"success": False, "error": result.get('error', 'Unknown error')})
@@ -218,6 +222,7 @@ def run_format(args):
         clips = [{'path': str(f)} for f in video_files]
 
         def progress_callback(current, total, result):
+            progress("formatting", current / total * 100, f"Formatted clip {current} of {total}")
             if result['success']:
                 print(f"  [{current}/{total}] ✅ {Path(result['output_path']).name}")
             else:

@@ -11,6 +11,7 @@ import { ProgressTracker } from '../ui/progress.js';
 import { formatErrorWithHelp } from '../errors/formatter.js';
 import { isArenaError, PreflightError } from '../errors/index.js';
 import { displayProcessingSummary } from '../ui/summary.js';
+import { commandHeader } from '../ui/output.js';
 
 interface GenerateOptions {
   output?: string;
@@ -71,20 +72,17 @@ export async function generateCommand(
           'Use comma-separated numbers: --select 1,3,5'
         );
       }
-
-      console.log(
-        chalk.cyan(
-          `\n✂️  Generating ${selectedIndices.length} selected clip${selectedIndices.length !== 1 ? 's' : ''}...\n`
-        )
-      );
-    } else {
-      console.log(chalk.cyan('\n✂️  Generating clips from analysis...\n'));
     }
+
+    commandHeader('Generate clips', [
+      ['Input', path.basename(absoluteVideoPath)],
+      ['Analysis', path.basename(absoluteAnalysisPath)],
+      ['Selection', selectedIndices ? selectedIndices.join(', ') : options.numClips || 'all'],
+      ['Output', path.resolve(outputDir)],
+    ]);
 
     // Show progress
     progress.start(chalk.cyan('Generating video clips...'));
-
-    console.log(chalk.gray('This may take a few minutes depending on clip count...\n'));
 
     // Call Python bridge generate command
     const result = await bridge.runGenerate(

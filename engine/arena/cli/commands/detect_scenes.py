@@ -8,6 +8,7 @@ from typing import Dict, List
 import logging
 
 from ...video.scene_detector import SceneDetector
+from arena.cli.protocol import progress
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ def run_detect_scenes(args):
 
         # Detect scenes
         min_duration = args.min_duration if hasattr(args, 'min_duration') and args.min_duration else 2.0
+        progress("detection", 5, "Scanning video frames")
         scenes = detector.detect_scenes(video_path, min_scene_duration=min_duration)
 
         # Calculate statistics
@@ -82,10 +84,14 @@ def run_detect_scenes(args):
             report_path = output_path.parent / f"{output_path.stem}_report.txt"
             generate_scene_report(scenes, video_path, report_path, threshold, min_duration)
             result['report_path'] = str(report_path)
+            result['reportPath'] = str(report_path)
             print(f"✓ Detailed report: {report_path}")
 
         # Emit the protocol envelope consumed by the TypeScript bridge. Python
         # CLI commands must return integer process codes, not result mappings.
+        result['sceneCount'] = scene_count
+        result['avgSceneDuration'] = avg_duration
+        progress("detection", 100, "Scene detection complete")
         print(json.dumps({'type': 'result', 'data': result}), flush=True)
         return 0
 

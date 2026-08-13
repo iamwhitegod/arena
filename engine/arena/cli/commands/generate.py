@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 from arena.clipping.generator import ClipGenerator
+from arena.cli.protocol import progress as emit_progress, result as emit_result
 
 
 def run_generate(args):
@@ -49,6 +50,7 @@ def run_generate(args):
 
         # Progress callback
         def progress(current, total, clip_info):
+            emit_progress("generation", current / total * 100, f"Generated clip {current} of {total}")
             if clip_info.get('success'):
                 print(f"   [{current}/{total}] ✓ {clip_info['clip_id']}")
                 print(f"           {clip_info['duration']:.1f}s, {clip_info['size_mb']}MB")
@@ -101,6 +103,8 @@ def run_generate(args):
         print(f"   Total size: {total_size:.1f} MB")
         print(f"   Output:     {output_dir}\n")
 
+        successful_clips = [r for r in results if r.get('success')]
+        emit_result({"success": successful > 0, "clips": successful_clips, "failed": failed, "totalSizeMb": total_size, "outputDir": str(output_dir)})
         return 0
 
     except Exception as e:

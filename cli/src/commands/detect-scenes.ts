@@ -10,6 +10,7 @@ import { ProgressTracker } from '../ui/progress.js';
 import { runPreflightChecksWithProgress } from '../core/preflight.js';
 import { formatErrorWithHelp } from '../errors/formatter.js';
 import { isArenaError } from '../errors/index.js';
+import { commandHeader, success } from '../ui/output.js';
 
 interface DetectScenesOptions {
   output?: string;
@@ -36,8 +37,11 @@ export async function detectScenesCommand(
         `${path.basename(absoluteVideoPath, path.extname(absoluteVideoPath))}_scenes.json`
       );
 
-    // Run pre-flight checks (minimal - just video validation)
-    console.log(chalk.cyan('\n🔍 Running pre-flight checks...\n'));
+    commandHeader('Detect scenes', [
+      ['Input', path.basename(absoluteVideoPath)],
+      ['Output', outputFile],
+      ['Threshold', options.threshold || '0.4'],
+    ]);
 
     const preflightResult = await runPreflightChecksWithProgress({
       videoPath: absoluteVideoPath,
@@ -51,13 +55,8 @@ export async function detectScenesCommand(
       process.exit(1);
     }
 
-    console.log(chalk.green('✓ All pre-flight checks passed\n'));
-
     // Initialize progress stages
     progress.initializeStages([{ id: 'detection', name: 'Scene Detection', icon: '🎬' }]);
-
-    console.log(chalk.cyan('\n🎬 Detecting scene changes...\n'));
-    console.log(chalk.gray('This analyzes visual transitions in your video.\n'));
 
     // Call Python bridge detect-scenes command
     const result = await bridge.runDetectScenes(
@@ -81,33 +80,13 @@ export async function detectScenesCommand(
 
     // Display summary
     progress.stop();
-    console.log(chalk.green('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
-    console.log(chalk.green('✨ Scene detection complete!\n'));
-
-    console.log(chalk.cyan('📊 Summary:'));
-    console.log(chalk.white(`  • Video: ${chalk.bold(path.basename(videoPath))}`));
-    console.log(chalk.white(`  • Scenes detected: ${chalk.bold(result?.sceneCount || 0)}`));
-    console.log(
-      chalk.white(
-        `  • Average scene duration: ${chalk.bold((result?.avgSceneDuration || 0).toFixed(1))}s`
-      )
-    );
-    console.log(chalk.white(`  • Detection threshold: ${chalk.bold(options.threshold || '0.4')}`));
-    console.log(chalk.white(`  • Processing time: ${chalk.bold(processingTime.toFixed(1))}s`));
-
-    console.log(chalk.cyan('\n📁 Output:'));
-    console.log(chalk.white(`  ${outputFile}`));
-
-    if (options.report && result?.reportPath) {
-      console.log(chalk.white(`  ${result.reportPath} (detailed report)`));
-    }
-
-    console.log(chalk.cyan('\n💡 Next steps:'));
-    console.log(chalk.white('  • Review scene boundaries in the JSON output'));
-    console.log(chalk.white('  • Use --scene-detection when processing to align clips to scenes'));
-    console.log(chalk.white('  • Example: arena process video.mp4 --scene-detection'));
-
-    console.log(chalk.green('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
+    success('Scene detection complete', [
+      ['Scenes', result?.sceneCount || result?.scene_count || 0],
+      ['Average', `${(result?.avgSceneDuration || result?.avg_scene_duration || 0).toFixed(1)}s`],
+      ['Elapsed', `${processingTime.toFixed(1)}s`],
+      ['Output', outputFile],
+      ['Report', result?.reportPath || result?.report_path],
+    ]);
   } catch (error) {
     progress.stop();
 

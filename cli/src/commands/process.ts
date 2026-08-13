@@ -8,6 +8,7 @@ import { runPreflightChecksWithProgress } from '../core/preflight.js';
 import { formatErrorWithHelp } from '../errors/formatter.js';
 import { isArenaError } from '../errors/index.js';
 import { isUrl } from '../utils/url.js';
+import { commandHeader } from '../ui/output.js';
 
 interface ProcessOptions {
   output?: string;
@@ -41,8 +42,14 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
     const absoluteVideoPath = isUrl(videoPath) ? videoPath : path.resolve(videoPath);
     const outputDir = options.output || '.arena/output';
 
-    // Run pre-flight checks
-    console.log(chalk.cyan('\n🔍 Running pre-flight checks...\n'));
+    commandHeader('Arena', [
+      ['Input', isUrl(videoPath) ? videoPath : path.basename(absoluteVideoPath)],
+      ['Output', path.resolve(outputDir)],
+      [
+        'Target',
+        `${options.numClips || '8'} clips · ${options.min || '30'}–${options.max || '90'}s${options.platform ? ` · ${options.platform}` : ''}`,
+      ],
+    ]);
 
     const preflightResult = await runPreflightChecksWithProgress({
       videoPath: absoluteVideoPath,
@@ -61,8 +68,6 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
       process.exit(1);
     }
 
-    console.log(chalk.green('✓ All pre-flight checks passed\n'));
-
     // Initialize workspace
     const workspace = new Workspace();
     await workspace.initialize();
@@ -74,19 +79,14 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
     await configManager.createProjectConfig(absoluteVideoPath);
 
     // Initialize processing stages for progress tracking
-    progress.initializeStages([
+    const stages = [
       { id: 'transcription', name: 'Transcription', icon: '📝' },
-      {
-        id: 'analysis',
-        name: 'AI Analysis',
-        icon: '🧠',
-      },
-      { id: 'hybrid', name: 'Hybrid Analysis', icon: '⚡' },
-      { id: 'generation', name: 'Clip Generation', icon: '✂️' },
-    ]);
-
-    console.log(chalk.cyan('\n🎬 Processing video...\n'));
-    console.log(chalk.gray('This may take several minutes depending on video length...\n'));
+      { id: 'analysis', name: 'Analysis' },
+      { id: 'alignment', name: 'Clip Alignment' },
+      { id: 'generation', name: 'Clip Generation' },
+    ];
+    if (options.platform) stages.push({ id: 'formatting', name: 'Platform Formatting' });
+    progress.initializeStages(stages);
 
     const _result = await bridge.runProcess(
       {

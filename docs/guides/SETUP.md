@@ -236,11 +236,20 @@ npm run dev process test_video.mp4
 
 Should see:
 ```
-✓ Checking Python environment...
-✓ Checking dependencies...
-✓ Initializing workspace...
-🎤 Transcribing video...
+Arena
+
+Input   test_video.mp4
+Output  /path/to/output
+Target  8 clips · 30–90s
+
+✓ Preflight passed
+[1/4] ◐ Transcription — Preparing audio
+[2/4] ○ Analysis
+[3/4] ○ Clip Alignment
+[4/4] ○ Clip Generation
 ```
+
+The Python engine emits structured events; the Node.js CLI renders them. Raw engine banners should not appear in a successful bridged run. See [CLI output and states](./CLI_OUTPUT.md).
 
 ## Project Structure
 
@@ -249,7 +258,7 @@ arena/
 ├── cli/                    # Node.js CLI (TypeScript)
 │   ├── src/
 │   │   ├── index.ts       # Entry point
-│   │   ├── commands/      # All 8 commands
+│   │   ├── commands/      # All 11 commands
 │   │   │   ├── init.ts
 │   │   │   ├── process.ts
 │   │   │   ├── analyze.ts

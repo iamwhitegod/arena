@@ -504,6 +504,8 @@ export class PythonBridge {
 
     let outputBuffer = '';
     let errorBuffer = '';
+    let diagnosticOutput = '';
+    let commandResult: any = { success: true };
 
     pythonProcess.stdout.on('data', (data: Buffer) => {
       const text = data.toString();
@@ -524,14 +526,15 @@ export class PythonBridge {
                 message: update.message,
               });
             } else if (update.type === 'result') {
-              resolve(update.data);
+              commandResult = update.data;
             }
           } catch {
-            // Not JSON, just regular output
-            console.log(chalk.gray(line));
+            // Human-readable engine output is intentionally hidden here. The
+            // Node CLI owns presentation; stderr is retained for failures.
+            diagnosticOutput += `${line}\n`;
           }
         } else if (line.trim()) {
-          console.log(chalk.gray(line));
+          diagnosticOutput += `${line}\n`;
         }
       }
     });
@@ -539,11 +542,6 @@ export class PythonBridge {
     pythonProcess.stderr.on('data', (data: Buffer) => {
       const text = data.toString();
       errorBuffer += text;
-      if (onError) {
-        onError(text);
-      } else {
-        console.error(chalk.red(text));
-      }
     });
 
     pythonProcess.on('close', (code: number) => {
@@ -551,7 +549,7 @@ export class PythonBridge {
       this.currentProcess = null;
 
       if (code === 0) {
-        resolve({ success: true });
+        resolve(commandResult);
       } else if (code === 130 || this.isShuttingDown) {
         // User interrupted (SIGINT)
         reject(
@@ -562,8 +560,12 @@ export class PythonBridge {
           )
         );
       } else {
+        const diagnostics = `${errorBuffer}\n${diagnosticOutput}`.trim();
+        if (onError && diagnostics) {
+          onError(diagnostics);
+        }
         // Parse error from Python output
-        const errorMessage = this.parseErrorFromOutput(errorBuffer);
+        const errorMessage = this.parseErrorFromOutput(diagnostics);
 
         reject(
           new ProcessingError(

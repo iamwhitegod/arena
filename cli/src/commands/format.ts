@@ -7,6 +7,8 @@ import path from 'path';
 import { PythonBridge } from '../bridge/python-bridge.js';
 import { displayErrorSummary } from '../ui/summary.js';
 import type { ProgressUpdate } from '../bridge/python-bridge.js';
+import { ProgressTracker } from '../ui/progress.js';
+import { commandHeader, success, warning as displayWarning } from '../ui/output.js';
 
 interface FormatOptions {
   output?: string;
@@ -15,12 +17,14 @@ interface FormatOptions {
   pad?: 'blur' | 'black' | 'white' | 'color';
   padColor?: string;
   quality?: boolean;
+  captions?: string;
+  captionFontSize?: string;
+  captionColor?: string;
+  captionPosition?: string;
 }
 
 export async function formatCommand(input: string, options: FormatOptions): Promise<void> {
   try {
-    console.log(chalk.cyan('\n📐 PLATFORM FORMATTING\n'));
-
     // Validate input
     const absoluteInputPath = path.resolve(input);
 
@@ -29,26 +33,21 @@ export async function formatCommand(input: string, options: FormatOptions): Prom
       ? path.resolve(options.output)
       : path.join(process.cwd(), 'output', 'formatted');
 
-    // Show configuration
-    console.log(chalk.white('Configuration:'));
-    console.log(chalk.gray(`  Input: ${absoluteInputPath}`));
-    console.log(chalk.gray(`  Platform: ${options.platform}`));
-    console.log(chalk.gray(`  Output: ${outputDir}`));
-    console.log(chalk.gray(`  Crop Strategy: ${options.crop || 'center'}`));
-    console.log(chalk.gray(`  Pad Strategy: ${options.pad || 'blur'}\n`));
+    commandHeader('Format media', [
+      ['Input', absoluteInputPath],
+      ['Platform', options.platform],
+      ['Layout', `${options.crop || 'center'} crop · ${options.pad || 'blur'} padding`],
+      ['Output', outputDir],
+    ]);
 
     // Initialize bridge
     const bridge = new PythonBridge();
 
     // Progress tracking
-    const onProgress = (update: ProgressUpdate) => {
-      if (update.stage) {
-        console.log(chalk.cyan(`  ${update.stage}`));
-      }
-      if (update.message) {
-        console.log(chalk.white(`    ${update.message}`));
-      }
-    };
+    const progress = new ProgressTracker();
+    progress.start('Formatting media...');
+    const onProgress = (update: ProgressUpdate) =>
+      progress.showDeterminate(update.progress, update.message);
 
     const onError = (error: string) => {
       console.error(chalk.red(`  ⚠️  ${error}`));
@@ -64,6 +63,10 @@ export async function formatCommand(input: string, options: FormatOptions): Prom
         padStrategy: options.pad || 'blur',
         padColor: options.padColor,
         maintainQuality: options.quality !== false,
+        captions: options.captions,
+        captionFontSize: options.captionFontSize ? parseInt(options.captionFontSize) : undefined,
+        captionColor: options.captionColor,
+        captionPosition: options.captionPosition,
       },
       onProgress,
       onError
@@ -71,17 +74,16 @@ export async function formatCommand(input: string, options: FormatOptions): Prom
 
     // Display results
     if (result.success) {
-      console.log(chalk.green('\n✓ Formatting complete!\n'));
-      console.log(chalk.white('Results:'));
-      console.log(chalk.gray(`  Formatted clips: ${result.clipCount || 0}`));
-      console.log(chalk.gray(`  Output directory: ${result.outputDir}\n`));
+      progress.stop();
+      success(
+        `Formatting complete — ${result.clipCount || 0} clip${result.clipCount === 1 ? '' : 's'}`,
+        [['Output', result.outputDir]]
+      );
 
       if (result.warnings && result.warnings.length > 0) {
-        console.log(chalk.yellow('⚠️  Warnings:'));
-        result.warnings.forEach((warning: string) => {
-          console.log(chalk.yellow(`  • ${warning}`));
+        result.warnings.forEach((message: string) => {
+          displayWarning(message);
         });
-        console.log();
       }
     } else {
       throw new Error(result.error || 'Formatting failed');

@@ -415,9 +415,11 @@ arena process video.mp4 --debug
 
 This will show:
 - Full error stack traces
-- Detailed processing steps
-- API request/response details
-- Python subprocess output
+- The failing command and stage
+- Buffered engine diagnostics when processing fails
+- Additional CLI error context
+
+Successful runs intentionally suppress raw Python library warnings and subsystem logs. Arena retains those diagnostics for failures so they do not overwrite the live progress display. See [CLI output and states](./guides/CLI_OUTPUT.md) for the output contract.
 
 ---
 
