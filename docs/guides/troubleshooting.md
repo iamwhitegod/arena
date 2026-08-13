@@ -437,7 +437,7 @@ If none of these solutions work:
    - Your OS and version
    - Debug output if possible
 
-3. **Community**: Join discussions in GitHub Discussions
+3. **Community**: Share feedback through [GitHub Issues](https://github.com/iamwhitegod/arena/issues)
 
 ---
 

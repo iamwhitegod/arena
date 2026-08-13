@@ -133,8 +133,8 @@ export default function RoadmapPage() {
           you use Arena and which product surface would remove the most friction.
         </p>
         <div className="mt-6 flex flex-wrap gap-4">
-          <a className="text-arena-600 font-semibold hover:underline" href={LINKS.discussions} target="_blank" rel="noopener noreferrer">
-            Join the discussion →
+          <a className="text-arena-600 font-semibold hover:underline" href={LINKS.feedback} target="_blank" rel="noopener noreferrer">
+            Share feedback →
           </a>
           <Link className="text-foreground font-semibold hover:underline" href="/docs">
             Use Arena Terminal →

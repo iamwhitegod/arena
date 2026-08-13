@@ -197,8 +197,8 @@ arena process video.mp4 --debug 2>&1 | tee debug.log`} />
           — Report bugs and request features
         </li>
         <li>
-          <a href="https://github.com/iamwhitegod/arena/discussions" target="_blank" rel="noopener noreferrer">
-            GitHub Discussions
+          <a href="https://github.com/iamwhitegod/arena/issues" target="_blank" rel="noopener noreferrer">
+            GitHub Issues
           </a>{" "}
           — Ask questions and share tips
         </li>

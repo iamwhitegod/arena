@@ -2,7 +2,9 @@ export const LINKS = {
   github: "https://github.com/iamwhitegod/arena",
   npm: "https://www.npmjs.com/package/@whitegodkingsley/arena-cli",
   issues: "https://github.com/iamwhitegod/arena/issues",
-  discussions: "https://github.com/iamwhitegod/arena/discussions",
+  feedback: "https://github.com/iamwhitegod/arena/issues",
+  cloudAccess:
+    "https://github.com/iamwhitegod/arena/issues/new?title=Reserve%20Arena%20Cloud%20access&body=Tell%20us%20about%20your%20video%20workflow%2C%20monthly%20source-video%20minutes%2C%20and%20the%20Cloud%20features%20you%20need.",
   docs: "https://getarena.vercel.app/docs",
 };
 
@@ -87,7 +89,7 @@ export const PRICING = {
       "Hosted project history",
     ],
     cta: "Reserve Access",
-    ctaHref: LINKS.discussions,
+    ctaHref: LINKS.cloudAccess,
     highlighted: false,
   },
   pro: {
@@ -105,7 +107,7 @@ export const PRICING = {
       "Priority queue and support",
     ],
     cta: "Reserve Access",
-    ctaHref: LINKS.discussions,
+    ctaHref: LINKS.cloudAccess,
     highlighted: false,
   },
   studio: {
@@ -123,7 +125,7 @@ export const PRICING = {
       "Higher API limits and priority support",
     ],
     cta: "Reserve Access",
-    ctaHref: LINKS.discussions,
+    ctaHref: LINKS.cloudAccess,
     highlighted: false,
   },
 } as const;

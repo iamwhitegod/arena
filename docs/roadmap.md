@@ -88,4 +88,4 @@ Arena Mobile should begin as a companion to Cloud and Desktop. Running the compl
 - Silent Cloud uploads or a Cloud account requirement for local processing.
 - Full on-device mobile transcription, editorial analysis, or encoding.
 
-Follow progress or propose priorities in [GitHub Discussions](https://github.com/iamwhitegod/arena/discussions).
+Follow progress or propose priorities in [GitHub Issues](https://github.com/iamwhitegod/arena/issues).

@@ -21,12 +21,12 @@ export function PricingTable() {
           and support.
         </p>
         <a
-          href={LINKS.discussions}
+          href={LINKS.cloudAccess}
           target="_blank"
           rel="noopener noreferrer"
           className="mt-4 inline-block text-sm font-semibold text-arena-600 hover:text-arena-700"
         >
-          Discuss the Cloud plan on GitHub →
+          Reserve Cloud access on GitHub →
         </a>
       </div>
     </div>

@@ -92,8 +92,8 @@ export default function PricingDocsPage() {
       <h2>Follow the plan</h2>
       <p>
         Arena Cloud is being designed in public. Share feedback in{" "}
-        <a href={LINKS.discussions} target="_blank" rel="noopener noreferrer">
-          GitHub Discussions
+        <a href={LINKS.cloudAccess} target="_blank" rel="noopener noreferrer">
+          reserve access on GitHub
         </a>
         .
       </p>

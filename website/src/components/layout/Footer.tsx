@@ -73,12 +73,12 @@ export function Footer() {
               </li>
               <li>
                 <a
-                  href={LINKS.discussions}
+                  href={LINKS.feedback}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm text-muted hover:text-foreground transition-colors"
                 >
-                  Discussions
+                  Feedback
                 </a>
               </li>
             </ul>
