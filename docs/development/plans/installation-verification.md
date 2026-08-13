@@ -1,6 +1,6 @@
 # Arena Cross-Platform Installation Verification Plan
 
-**Status:** In progress — automation implemented; native CI evidence pending
+**Status:** In progress — Docker release published; native CI evidence pending
 **Created:** August 13, 2026
 **Depends on:** OSS hardening checkpoint `e90873b`
 
@@ -25,6 +25,7 @@ The hardening checkpoint establishes a strong baseline:
 - The installer-code-equivalent artifact from `a9feb04`, SHA-256 `e371bef79a775ec64fec0e535bcfb44df89f77c7d705c3ca4e5da80441112123`, completed a 7.6-minute cold managed-runtime install on containerized Linux ARM64 with Node.js 22 and Python 3.11, idempotent rerun, live-lock rejection, stale-state cleanup, forced-timeout rollback preserving the healthy runtime, damaged-runtime detection and atomic repair, credential-free local processing, and uninstall.
 - Current checkpoint `6df3cd4` built for `linux/amd64` under emulation and passed non-root, read-only, network-disabled, capability-dropped runtime processing and Compose startup. This supplements but does not replace native evidence.
 - The final hardened AMD64 runtime image for `6df3cd4`, with local image ID `sha256:a95d37705d65986107c09ad318898df7b2977d0ba69501701f178470c03a7e49`, removed npm, npx, Corepack, and other build-only package-manager shims. It then passed an offline local-processing smoke test and a fixable-vulnerability scan with 0 critical, high, medium, or low findings across 657 detected packages.
+- Arena `0.4.2` from commit `7f7fd269d130b918be9940175864ef6158b1f2a1` is published at OCI index digest `sha256:b1bfbc0ca0696d550ba5520a7fbff196721af6cd8a0643ec8d08e13583495b1b`. Docker Hub exposes Linux AMD64 manifest `sha256:5ebd0354b18811650766b09bd03656bcba1831905f73e38173b264a6bca3583a` and Linux ARM64 manifest `sha256:104c90a724a05eaffa221d687e491f37beb2830084ba665b2f6fc7f5fe35a14a`, each with SBOM and provenance attestations. Both exact registry manifests ran with the hardened runtime contract and reported version `0.4.2`; the release candidates for both platforms passed deterministic local-processing checks and fixable-vulnerability scans with 0 critical, high, medium, or low findings.
 
 This evidence does not yet prove native installation on Windows, Linux AMD64, macOS Intel, macOS Apple Silicon, Node.js 24, or each supported Python boundary.
 
@@ -35,7 +36,7 @@ Execute these in order; workflow configuration alone is not verification:
 1. Push this checkpoint and run the source and packed-tarball pull-request matrices on Ubuntu, Windows, and macOS.
 2. Review the retained JSON evidence for artifact digest, package and engine versions, architecture, empty-cache installation, executable resolution, setup isolation, and sanitized output.
 3. Manually dispatch the managed-runtime matrix for the Node.js 22/Python 3.10 and Node.js 24/Python 3.12 boundary pairs.
-4. Run the Buildx AMD64/ARM64 workflow and per-platform vulnerability scans; the hardened AMD64 runtime, scan, and Compose paths are locally proven under emulation.
+4. Review the Buildx AMD64/ARM64 workflow on native CI runners and retain its per-platform scan and runtime evidence; the published `0.4.2` index and matching release candidates are manually verified.
 5. Provision native Linux ARM64 and Intel macOS runners for evidence that hosted or emulated jobs cannot provide.
 6. Extend the implemented lock, stale-state, timeout-rollback, and repair coverage with read-only-path, insufficient-disk, and post-dependency interruption cases.
 7. After all release-blocking evidence is green, publish an explicitly approved npm canary under a non-default tag and promote that exact artifact without rebuilding it.
@@ -192,13 +193,13 @@ AI-provider integration belongs in a separate opt-in workflow using test credent
 
 ## Phase 5: Docker Multi-Architecture Verification
 
-- [ ] Configure Buildx for `linux/amd64` and `linux/arm64`.
-- [ ] Build both platforms from the same commit and Dockerfile.
-- [ ] Load or publish architecture-specific test images to an ephemeral registry location.
-- [ ] Run the full hardened-runtime assertions on each architecture.
+- [x] Configure Buildx for `linux/amd64` and `linux/arm64`.
+- [x] Build both platforms from the same commit and Dockerfile.
+- [x] Publish both platform images as one attested OCI index under immutable and stable tags.
+- [x] Run the full hardened-runtime assertions on each architecture.
 - [ ] Run `docker compose config` and a Compose startup smoke test.
-- [ ] Process the local fixture through a mounted workspace and named Arena data volume.
-- [ ] Scan each platform image rather than only the multi-architecture index.
+- [x] Process the local fixture through a mounted workspace and named Arena data volume.
+- [x] Scan each platform release candidate rather than only the multi-architecture index.
 - [ ] Record image digest and compressed/uncompressed size per architecture.
 - [ ] Add a size regression budget; investigate growth above 10%.
 
@@ -264,7 +265,8 @@ The current worktree now includes:
 - `.github/workflows/install-smoke.yml` for the exact tarball on Ubuntu, Windows, and macOS with Node.js 22 and 24;
 - Windows in the normal Node/Python source-test matrix;
 - `.github/workflows/setup-smoke.yml` for scheduled Python 3.10/3.12 managed-runtime boundary tests plus Linux lock, stale-state, timeout-rollback, and damaged-runtime repair assertions; and
-- `.github/workflows/container-smoke.yml` for Buildx `linux/amd64` and `linux/arm64`, hardened startup, Compose startup on AMD64, per-platform scanning, and retained image evidence.
+- `.github/workflows/container-smoke.yml` for Buildx `linux/amd64` and `linux/arm64`, hardened startup, Compose startup on AMD64, per-platform scanning, and retained image evidence; and
+- `.github/workflows/publish-container.yml` for protected, version-matched Docker Hub publication, a single AMD64/ARM64 manifest, immutable version and commit tags, stable-only moving tags, SBOM/provenance attestations, and post-publish registry verification.
 
 Implementation does not count as platform verification. The associated checklist items remain unverified until these workflows run successfully on their target runners and their evidence artifacts are reviewed.
 

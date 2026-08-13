@@ -23,11 +23,51 @@ Installation verification is active but not yet complete across every supported 
 | --- | --- | --- |
 | npm | The exact 185-file tarball from current checkpoint `6df3cd4` (SHA-256 `06c1b6806a8e93ee1f7971b96285fb7c4f42e9eaea9f4e6de9a3620d0e4f77b1`) installed from an empty cache on containerized Linux ARM64 as a non-root Node.js 24 user, with Python/FFmpeg absent during postinstall, and passed CLI startup and uninstall. An artifact using the same installer implementation also completed managed setup on Node.js 22/Python 3.11, idempotency, lock/stale-state recovery, timed-out rebuild rollback, damaged-runtime repair, credential-free local processing, and uninstall. | Native Ubuntu, Windows, and macOS boundary jobs; Python 3.10/3.12; and published-registry canary runs |
 | Source | The TypeScript suite passed 144 tests with one intentional skip. The Python suite passed 106 tests with four intentional live-provider skips. | Clean source builds on the complete Windows, macOS, and Linux Node/Python boundary matrix |
-| Docker | ARM64 passed local hardened processing. Current checkpoint `6df3cd4` also built for AMD64 under emulation, ran non-root with a read-only root filesystem, no network, dropped capabilities, and `no-new-privileges`, processed a deterministic fixture, and passed Compose startup. The hardened image (local image ID `sha256:a95d37705d65…`) passed a fixable-vulnerability scan with 0 critical, high, medium, or low findings across 657 packages. | Native/matrix CI evidence, the ARM64 scan, and retained image evidence |
+| Docker | Arena `0.4.2` is published as one attested OCI index for Linux AMD64 and ARM64 at digest `sha256:b1bfbc0ca0696d550ba5520a7fbff196721af6cd8a0643ec8d08e13583495b1b`. Both exact registry manifests passed non-root, read-only, network-disabled, capability-dropped startup and reported `0.4.2`. The matching release candidates also passed deterministic local processing and fixable-vulnerability scans with 0 critical, high, medium, or low findings. | Native/matrix CI evidence, retained CI artifacts, and an image-size regression budget |
 
 These results mean Arena is hardened and verified on selected installation paths. Do not describe installation as universally flawless until the remaining release-blocking jobs in the [installation verification plan](../development/plans/installation-verification.md) are green.
 
 The production container intentionally excludes npm, npx, Corepack, and their package-manager shims. They are used in the builder stage only; the runtime executes the already-built `arena` CLI. This removes build-only tooling and its transitive advisories from the image without changing the user-facing container command.
+
+## Install from the official Docker image
+
+Docker users should not clone the repository or install Node.js, Python, or FFmpeg. Pull a released multi-architecture image and mount only the directory containing the media to process:
+
+```bash
+export ARENA_IMAGE=whitegodkingsley/arena:0.4.2
+docker pull "$ARENA_IMAGE"
+docker volume create arena-data
+
+docker run --rm \
+  --read-only \
+  --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --tmpfs /tmp:rw,noexec,nosuid,nodev,size=2g \
+  --mount "type=bind,source=$PWD,target=/workspace" \
+  --mount type=volume,source=arena-data,target=/home/node/.arena \
+  --env OPENAI_API_KEY \
+  "$ARENA_IMAGE" process /workspace/video.mp4 -n 5
+```
+
+Use an exact version in scripts and production workflows. `latest` tracks the newest stable release only; pre-releases cannot update it. Docker selects the AMD64 or ARM64 image matching the host.
+
+Arena `0.4.2` is published at `docker.io/whitegodkingsley/arena`. The `latest`, `0`, `0.4`, `0.4.2`, and immutable `sha-7f7fd269d130` tags currently resolve to OCI index digest `sha256:b1bfbc0ca0696d550ba5520a7fbff196721af6cd8a0643ec8d08e13583495b1b`. Each platform manifest includes SBOM and provenance attestations. Source builds remain available to contributors, but they are not the Docker installation path.
+
+In Windows PowerShell, use the native path from `$PWD.Path` for the bind mount:
+
+```powershell
+$env:ARENA_IMAGE = "whitegodkingsley/arena:0.4.2"
+docker pull $env:ARENA_IMAGE
+docker run --rm `
+  --read-only `
+  --cap-drop ALL `
+  --security-opt no-new-privileges `
+  --tmpfs /tmp:rw,noexec,nosuid,nodev,size=2g `
+  --mount "type=bind,source=$($PWD.Path),target=/workspace" `
+  --mount type=volume,source=arena-data,target=/home/node/.arena `
+  --env OPENAI_API_KEY `
+  $env:ARENA_IMAGE process /workspace/video.mp4 -n 5
+```
 
 ## Install from npm
 

@@ -38,6 +38,25 @@ arena --version
 arena setup --check
 ```
 
+### Option 3: Run the official Docker image
+
+Docker installation does not require a repository clone or host installations of Node.js, Python, and FFmpeg. The hardened `0.4.2` image is published for Linux AMD64 and ARM64:
+
+```bash
+docker pull whitegodkingsley/arena:0.4.2
+docker run --rm \
+  --read-only \
+  --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --tmpfs /tmp:rw,noexec,nosuid,nodev,size=2g \
+  --mount "type=bind,source=$PWD,target=/workspace" \
+  --mount type=volume,source=arena-data,target=/home/node/.arena \
+  --env OPENAI_API_KEY \
+  whitegodkingsley/arena:0.4.2 process /workspace/video.mp4 -n 5
+```
+
+`latest` currently resolves to `0.4.2`, but use an exact version or digest in automated deployments. See the [installation guide](./installation.md) for the published digest, security contract, and Windows PowerShell mount syntax.
+
 ## Setup
 
 ### Interactive Setup (Recommended)

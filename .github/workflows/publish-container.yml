@@ -1,0 +1,223 @@
+name: Publish container image
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: publish-container-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: docker.io/whitegodkingsley/arena
+
+jobs:
+  publish:
+    name: Publish AMD64 and ARM64 image
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: container
+
+    steps:
+      - name: Checkout released commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify release version
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          set -euo pipefail
+          package_version="$(node --print "require('./cli/package.json').version")"
+          if [ "$RELEASE_TAG" != "v$package_version" ]; then
+            echo "Release tag $RELEASE_TAG must exactly match CLI version v$package_version." >&2
+            exit 1
+          fi
+          version="$package_version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$RELEASE_PRERELEASE" >> "$GITHUB_OUTPUT"
+
+      - name: Scan release source for secrets
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Require successful container verification for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --method GET \
+            "/repos/$GITHUB_REPOSITORY/actions/workflows/container-smoke.yml/runs" \
+            -f "head_sha=$GITHUB_SHA" \
+            -f status=success \
+            -f per_page=100 > /tmp/arena-container-runs.json
+          node <<'NODE'
+          const runs = require('/tmp/arena-container-runs.json').workflow_runs ?? [];
+          const verified = runs.find((run) =>
+            ['push', 'workflow_dispatch'].includes(run.event) && run.conclusion === 'success'
+          );
+          if (!verified) {
+            throw new Error(
+              `No successful Container smoke push/dispatch run exists for ${process.env.GITHUB_SHA}`
+            );
+          }
+          console.log(`Using container verification: ${verified.html_url}`);
+          NODE
+
+      - name: Login to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DOCKERHUB_USERNAME" ] || [ -z "$DOCKERHUB_TOKEN" ]; then
+            echo "The protected container environment requires DOCKERHUB_USERNAME and DOCKERHUB_TOKEN." >&2
+            exit 1
+          fi
+          printf '%s' "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+
+      - name: Build and publish exact release image
+        id: build
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          PRERELEASE: ${{ steps.release.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          tags=(
+            --tag "$IMAGE_NAME:$VERSION"
+            --tag "$IMAGE_NAME:sha-${GITHUB_SHA::12}"
+          )
+          if [ "$PRERELEASE" != "true" ]; then
+            major="${VERSION%%.*}"
+            remainder="${VERSION#*.}"
+            minor="${remainder%%.*}"
+            tags+=(
+              --tag "$IMAGE_NAME:$major.$minor"
+              --tag "$IMAGE_NAME:$major"
+              --tag "$IMAGE_NAME:latest"
+            )
+          fi
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            "${tags[@]}" \
+            --label "org.opencontainers.image.created=${{ github.event.release.published_at }}" \
+            --label "org.opencontainers.image.description=Arena open-source local-first video clipping engine" \
+            --label "org.opencontainers.image.licenses=MIT" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+            --label "org.opencontainers.image.title=Arena" \
+            --label "org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}" \
+            --label "org.opencontainers.image.version=$VERSION" \
+            --metadata-file /tmp/arena-container-metadata.json \
+            --provenance=mode=max \
+            --sbom=true \
+            --push \
+            .
+          digest="$(node --print "require('/tmp/arena-container-metadata.json')['containerimage.digest']")"
+          case "$digest" in
+            sha256:*) ;;
+            *) echo "Buildx did not return a valid image digest: $digest" >&2; exit 1 ;;
+          esac
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Attest published image
+        uses: actions/attest-build-provenance@8beda2b7ed98355c0e97c0a63bec38ae472e66c4 # v4
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+
+      - name: Resolve published platform digests
+        id: platforms
+        env:
+          EXPECTED_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect "$IMAGE_NAME@$EXPECTED_DIGEST" \
+            --format '{{json .Manifest}}' > /tmp/arena-manifest.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const manifest = require('/tmp/arena-manifest.json');
+          const digests = new Map(
+            (manifest.manifests ?? [])
+              .filter((item) => item.platform?.os === 'linux')
+              .map((item) => [item.platform.architecture, item.digest])
+          );
+          for (const architecture of ['amd64', 'arm64']) {
+            const digest = digests.get(architecture);
+            if (!digest?.startsWith('sha256:')) {
+              throw new Error(`Published image is missing linux/${architecture}`);
+            }
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `${architecture}=${digest}\n`);
+          }
+          NODE
+
+      - name: Scan published AMD64 image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}@${{ steps.platforms.outputs.amd64 }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+
+      - name: Scan published ARM64 image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}@${{ steps.platforms.outputs.arm64 }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+
+      - name: Verify published manifest and runtime
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          AMD64_DIGEST: ${{ steps.platforms.outputs.amd64 }}
+          ARM64_DIGEST: ${{ steps.platforms.outputs.arm64 }}
+        run: |
+          set -euo pipefail
+          docker pull --platform linux/amd64 "$IMAGE_NAME@$AMD64_DIGEST"
+          docker pull --platform linux/arm64 "$IMAGE_NAME@$ARM64_DIGEST"
+          test "$(docker image inspect --format '{{.Config.User}}' "$IMAGE_NAME@$AMD64_DIGEST")" = "node"
+          test "$(docker image inspect --format '{{.Config.User}}' "$IMAGE_NAME@$ARM64_DIGEST")" = "node"
+          amd64_version="$(docker run --rm \
+            --platform linux/amd64 \
+            --network none \
+            --read-only \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,noexec,nosuid,nodev,size=256m \
+            --tmpfs /workspace:rw,nosuid,nodev,size=64m,uid=1000,gid=1000,mode=0755 \
+            --tmpfs /home/node/.arena:rw,nosuid,nodev,size=64m,uid=1000,gid=1000,mode=0700 \
+            "$IMAGE_NAME@$AMD64_DIGEST" --version)"
+          arm64_version="$(docker run --rm \
+            --platform linux/arm64 \
+            --network none \
+            --read-only \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,noexec,nosuid,nodev,size=256m \
+            --tmpfs /workspace:rw,nosuid,nodev,size=64m,uid=1000,gid=1000,mode=0755 \
+            --tmpfs /home/node/.arena:rw,nosuid,nodev,size=64m,uid=1000,gid=1000,mode=0700 \
+            "$IMAGE_NAME@$ARM64_DIGEST" --version)"
+          test "$amd64_version" = "$VERSION"
+          test "$arm64_version" = "$VERSION"

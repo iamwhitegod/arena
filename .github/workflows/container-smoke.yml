@@ -12,6 +12,7 @@ on:
       - cli/src/**
       - engine/**
       - .github/workflows/container-smoke.yml
+      - .github/workflows/publish-container.yml
   pull_request:
     branches: [main, develop]
     paths:
@@ -23,6 +24,7 @@ on:
       - cli/src/**
       - engine/**
       - .github/workflows/container-smoke.yml
+      - .github/workflows/publish-container.yml
   schedule:
     - cron: '41 5 * * 1'
   workflow_dispatch:

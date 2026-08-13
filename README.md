@@ -415,17 +415,22 @@ arena process lecture.mp4 \
 
 ## 🐳 Docker
 
+End users run the published image; cloning the repository is not part of Docker installation. Arena `0.4.2` is available from [Docker Hub](https://hub.docker.com/r/whitegodkingsley/arena) for Linux AMD64 and ARM64:
+
 ```bash
-# Build the image
-docker compose build
-
-# Run with Docker
-docker compose run arena process video.mp4 -n 5
-
-# Or pull from Docker Hub
-docker pull whitegodkingsley/arena:latest
-docker run -v $(pwd):/workspace -e OPENAI_API_KEY whitegodkingsley/arena process video.mp4
+docker pull whitegodkingsley/arena:0.4.2
+docker run --rm \
+  --read-only \
+  --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --tmpfs /tmp:rw,noexec,nosuid,nodev,size=2g \
+  --mount "type=bind,source=$PWD,target=/workspace" \
+  --mount type=volume,source=arena-data,target=/home/node/.arena \
+  --env OPENAI_API_KEY \
+  whitegodkingsley/arena:0.4.2 process /workspace/video.mp4 -n 5
 ```
+
+The `latest`, `0`, `0.4`, `0.4.2`, and immutable `sha-7f7fd269d130` tags resolve to OCI index digest `sha256:b1bfbc0ca0696d550ba5520a7fbff196721af6cd8a0643ec8d08e13583495b1b`. Pin `0.4.2` or the digest in automated deployments. Maintainers and contributors can build checked-out source with `docker compose build`; see the [installation guide](./docs/getting-started/installation.md) for the complete container security contract.
 
 ## 🛠️ Development
 
