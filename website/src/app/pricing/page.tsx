@@ -15,7 +15,7 @@ export default function PricingPage() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="animate-hero-1">
           <SectionHeader
-            title="Local Is Free. Cloud Is Optional."
+            title="Local is Free. Cloud is Optional."
             subtitle="Use the complete Arena engine on your own machine with no Arena quota. Proposed Cloud plans add managed compute, storage, collaboration, and automation."
           />
         </div>

@@ -76,7 +76,7 @@ program
   .option('--export-layers', 'export intermediate layer results for debugging')
   .option('--fast', 'fast mode - stream copy (10x faster)')
   .option('--no-cache', 'force re-transcription, ignore cached transcript')
-  .option('--padding <seconds>', 'seconds of padding before/after clips', '0.5')
+  .option('--padding <seconds>', 'seconds of padding before/after clips', '0.1')
   .option('--scene-detection', 'enable scene detection for better clip boundaries')
   .option(
     '-p, --platform <platform>',
