@@ -1,7 +1,7 @@
 # Arena Content Guide
 
-**Status:** Draft for review  
-**Purpose:** Define Arena's product language and proposed website copy before implementation.  
+**Status:** Draft for review<br />
+**Purpose:** Define Arena's product language and proposed website copy before implementation.<br />
 **Scope:** Website, documentation entry points, GitHub README, npm package page, and product announcements.
 
 ## 1. Product positioning
@@ -276,8 +276,8 @@ Error messages should answer three questions in this order:
 
 Example:
 
-> **YouTube could not complete the download.**  
-> Check your connection, update Arena's runtime with `arena setup --force`, then try again. If YouTube requires authentication, pass cookies from a supported browser.  
+> **YouTube could not complete the download.**<br />
+> Check your connection, update Arena's runtime with `arena setup --force`, then try again. If YouTube requires authentication, pass cookies from a supported browser.<br />
 > Run `arena diagnose` for environment details.
 
 Avoid blaming the user, printing raw stack traces before the explanation, or listing speculative fixes without prioritization.
