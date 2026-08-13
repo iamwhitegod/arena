@@ -1,4 +1,4 @@
-< Clip Generation
+# Clip generation
 
 Arena's clip generation system uses FFmpeg to extract high-quality video clips from analyzed segments with full metadata and thumbnails.
 

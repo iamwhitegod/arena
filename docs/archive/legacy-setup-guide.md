@@ -249,7 +249,7 @@ Target  8 clips · 30–90s
 [4/4] ○ Clip Generation
 ```
 
-The Python engine emits structured events; the Node.js CLI renders them. Raw engine banners should not appear in a successful bridged run. See [CLI output and states](./CLI_OUTPUT.md).
+The Python engine emits structured events; the Node.js CLI renders them. Raw engine banners should not appear in a successful bridged run. See [CLI output and states](../reference/cli-output.md).
 
 ## Project Structure
 
@@ -447,10 +447,10 @@ wsl --install
 
 Now that Arena is set up:
 
-1. **Generate your first clips**: [QUICKSTART.md](./QUICKSTART.md)
-2. **Learn all commands**: [CLI_REFERENCE.md](./CLI_REFERENCE.md)
-3. **Explore workflows**: [USAGE.md](./USAGE.md)
-4. **Understand 4-layer system**: [EDITORIAL_ARCHITECTURE.md](../architecture/EDITORIAL_ARCHITECTURE.md)
+1. **Generate your first clips**: [QUICKSTART.md](../getting-started/quickstart.md)
+2. **Learn all commands**: [CLI_REFERENCE.md](../reference/cli.md)
+3. **Explore workflows**: [workflows.md](../guides/workflows.md)
+4. **Understand 4-layer system**: [EDITORIAL_ARCHITECTURE.md](../architecture/editorial-system.md)
 
 ### Recommended First Steps
 
@@ -470,12 +470,12 @@ arena --help
 
 ## Getting Help
 
-- **Documentation**: Check [docs/guides/](.)
+- **Documentation**: Check [docs/guides/](../guides)
 - **Command help**: `arena <command> --help`
 - **Configuration**: `arena config`
 - **GitHub Issues**: Report bugs or request features
-- **Troubleshooting**: [TROUBLESHOOTING.md](../TROUBLESHOOTING.md)
+- **Troubleshooting**: [TROUBLESHOOTING.md](../guides/troubleshooting.md)
 
 ---
 
-**Need more help?** Check out the full [documentation](.) or open an issue on GitHub.
+**Need more help?** Check out the full [documentation](../guides) or open an issue on GitHub.

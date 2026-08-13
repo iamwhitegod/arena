@@ -127,7 +127,7 @@ Arena provides 11 commands for flexible video clip generation workflows:
 
 All commands that accept a video file also accept audio files and URLs.
 
-See [docs/guides/USAGE.md](./docs/guides/USAGE.md) for comprehensive documentation.
+See the [documentation index](./docs/README.md) for installation, workflows, reference material, architecture, and troubleshooting.
 
 ## 🎯 Workflows
 
@@ -290,7 +290,7 @@ arena setup --check
 
 ### Install Python Engine
 
-Do not install Arena's Python packages globally. `arena setup` creates and verifies an isolated runtime under `~/.arena/runtime/environments/`. See the [installation guide](docs/guides/INSTALLATION.md) for repair, CI, source-install, and publishing details.
+Do not install Arena's Python packages globally. `arena setup` creates and verifies an isolated runtime under `~/.arena/runtime/environments/`. See the [installation guide](./docs/getting-started/installation.md) for repair, CI, source-install, and publishing details.
 
 ### Set Up API Key
 
@@ -396,13 +396,13 @@ arena process lecture.mp4 \
 
 ## 📖 Documentation
 
-- [USAGE.md](./docs/guides/USAGE.md) - Comprehensive usage guide
-- [INSTALLATION.md](./docs/guides/INSTALLATION.md) - Supported local installation path
-- [SUPPORT.md](./SUPPORT.md) - Toolchain and platform support policy
-- [INSTALLATION_VERIFICATION_PLAN.md](./docs/INSTALLATION_VERIFICATION_PLAN.md) - Cross-platform release evidence plan
-- [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) - Common issues and solutions
-- [CONTRIBUTING.md](./docs/CONTRIBUTING.md) - Contribution guidelines
-- [EDITORIAL_ARCHITECTURE.md](./docs/architecture/EDITORIAL_ARCHITECTURE.md) - 4-layer system details
+- [Documentation index](./docs/README.md) — authoritative documentation map
+- [Quick start](./docs/getting-started/quickstart.md) — first installation and run
+- [CLI reference](./docs/reference/cli.md) — commands and options
+- [Workflow guide](./docs/guides/workflows.md) — common processing and publishing workflows
+- [Troubleshooting](./docs/guides/troubleshooting.md) — diagnosis and recovery
+- [Editorial architecture](./docs/architecture/editorial-system.md) — four-layer system design
+- [Contributing](./CONTRIBUTING.md) — development and review process
 
 ## 🐳 Docker
 
@@ -487,7 +487,7 @@ Your duration constraints may be too strict:
 arena process video.mp4 --min 20 --max 90
 ```
 
-See [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) for more solutions.
+See [Troubleshooting](./docs/guides/troubleshooting.md) for more solutions.
 
 ## 🚀 Roadmap
 
@@ -513,7 +513,7 @@ See [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) for more solutions.
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](./docs/CONTRIBUTING.md) for details.
+Contributions are welcome! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
 
 ## 📄 License
 

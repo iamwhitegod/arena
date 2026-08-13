@@ -115,7 +115,7 @@ Target  8 clips · 30–90s
 [4/4] ○ Clip Generation
 ```
 
-The transcript is cached, so later runs can show `Using cached transcript` and skip that work. When `--platform` is supplied, a fifth platform-formatting stage appears. See [CLI output and states](./CLI_OUTPUT.md) for cached, warning, partial-success, failure, and interruption examples for every command.
+The transcript is cached, so later runs can show `Using cached transcript` and skip that work. When `--platform` is supplied, a fifth platform-formatting stage appears. See [CLI output and states](../reference/cli-output.md) for cached, warning, partial-success, failure, and interruption examples for every command.
 
 ## Output Structure
 
@@ -353,10 +353,10 @@ arena format output/clips/ -p youtube -o youtube/
 
 ## Learn More
 
-- **Complete Usage Guide**: [USAGE.md](./USAGE.md)
-- **Command Reference**: [CLI_REFERENCE.md](./CLI_REFERENCE.md)
-- **Setup Guide**: [SETUP.md](./SETUP.md)
-- **Troubleshooting**: [TROUBLESHOOTING.md](../TROUBLESHOOTING.md)
+- **Complete workflow guide**: [workflows.md](../guides/workflows.md)
+- **Command Reference**: [CLI_REFERENCE.md](../reference/cli.md)
+- **Setup Guide**: [SETUP.md](../archive/legacy-setup-guide.md)
+- **Troubleshooting**: [TROUBLESHOOTING.md](../guides/troubleshooting.md)
 - **Main README**: [../../README.md](../../README.md)
 
 ---

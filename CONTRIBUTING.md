@@ -73,4 +73,4 @@ Do not hand-edit generated Python lockfiles. Regenerate them with the pinned res
 
 ## Review and releases
 
-Maintainers may request smaller commits, tests, migration notes, or security changes before merge. A maintainer review is required for release workflows, credentials, installation, downloader behavior, artifact schemas, and the OSS/Cloud boundary. Releases follow [docs/RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md).
+Maintainers may request smaller commits, tests, migration notes, or security changes before merge. A maintainer review is required for release workflows, credentials, installation, downloader behavior, artifact schemas, and the OSS/Cloud boundary. Releases follow the [release process](docs/development/release-process.md).

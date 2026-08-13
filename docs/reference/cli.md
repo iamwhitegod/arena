@@ -2,7 +2,7 @@
 
 Complete reference for all Arena CLI commands and options.
 
-For terminal examples and the pending, running, cached, warning, partial-success, failed, and interrupted states, see [CLI output and states](./CLI_OUTPUT.md).
+For terminal examples and the pending, running, cached, warning, partial-success, failed, and interrupted states, see [CLI output and states](./cli-output.md).
 
 ## Quick Command Overview
 
@@ -616,8 +616,8 @@ arena process video.mp4
 
 ## For More Information
 
-- **Usage Guide**: [USAGE.md](./USAGE.md)
-- **Quick Start**: [QUICKSTART.md](./QUICKSTART.md)
-- **Setup Guide**: [SETUP.md](./SETUP.md)
-- **Troubleshooting**: [TROUBLESHOOTING.md](../TROUBLESHOOTING.md)
+- **Workflow guide**: [workflows.md](../guides/workflows.md)
+- **Quick Start**: [QUICKSTART.md](../getting-started/quickstart.md)
+- **Setup Guide**: [SETUP.md](../archive/legacy-setup-guide.md)
+- **Troubleshooting**: [TROUBLESHOOTING.md](../guides/troubleshooting.md)
 - **Main README**: [../../README.md](../../README.md)

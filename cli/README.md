@@ -57,7 +57,7 @@ The `setup` command automatically:
 
 **Prerequisites:** Node.js 22–24, Python 3.10–3.12, FFmpeg and ffprobe. Deno is not required because Node.js is the yt-dlp JavaScript runtime.
 
-Do not install Arena packages with global `pip`. Install the system prerequisites, then run `arena setup`. For health checks, repair commands, CI usage, and source installs, see the [installation guide](https://github.com/iamwhitegod/arena/blob/main/docs/guides/INSTALLATION.md).
+Do not install Arena packages with global `pip`. Install the system prerequisites, then run `arena setup`. For health checks, repair commands, CI usage, and source installs, see the [installation guide](https://github.com/iamwhitegod/arena/blob/main/docs/getting-started/installation.md).
 
 ## Commands
 
@@ -272,13 +272,14 @@ Typical costs per 10-minute video:
 ## Documentation
 
 - [Full Documentation](https://github.com/iamwhitegod/arena#readme)
-- [Command Reference](https://github.com/iamwhitegod/arena/blob/main/docs/CLI_REFERENCE.md)
-- [Troubleshooting Guide](https://github.com/iamwhitegod/arena/blob/main/docs/TROUBLESHOOTING.md)
+- [Documentation Index](https://github.com/iamwhitegod/arena/blob/main/docs/README.md)
+- [Command Reference](https://github.com/iamwhitegod/arena/blob/main/docs/reference/cli.md)
+- [Troubleshooting Guide](https://github.com/iamwhitegod/arena/blob/main/docs/guides/troubleshooting.md)
 - [Examples](https://github.com/iamwhitegod/arena/tree/main/examples)
 
 ## Requirements
 
-- **Node.js** 18+
+- **Node.js** 22–24
 - **Python** 3.10–3.12
 - **FFmpeg** 4.0+
 - **OpenAI API Key** ([Get one](https://platform.openai.com/api-keys))

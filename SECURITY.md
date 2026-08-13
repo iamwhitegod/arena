@@ -41,4 +41,4 @@ The following are generally not vulnerabilities by themselves:
 - unsupported releases or modified third-party builds;
 - social engineering without a product defect.
 
-See [docs/security/THREAT_MODEL.md](docs/security/THREAT_MODEL.md) for trust boundaries and known risks.
+See the [Arena threat model](./docs/security/threat-model.md) for trust boundaries and known risks.

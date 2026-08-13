@@ -843,7 +843,7 @@ Week 8 is COMPLETE when:
 7. **`tests/integration/test_full_pipeline.py`** - Integration tests (HIGH)
 8. **`docs/API_REFERENCE.md`** - API documentation (MEDIUM)
 9. **`docs/CONTENT_TYPE_GUIDE.md`** - Calibration guide (MEDIUM)
-10. **`docs/TROUBLESHOOTING.md`** - Troubleshooting guide (MEDIUM)
+10. **`docs/guides/troubleshooting.md`** - Troubleshooting guide (MEDIUM)
 
 ### Files to Modify
 

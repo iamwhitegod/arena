@@ -304,7 +304,7 @@ Checks system info, dependencies (Python, FFmpeg, Deno), Python packages, API ke
 }
 ```
 
-The Node CLI is the only presentation owner. Python commands must not emit human-oriented banners on the protocol channel. See [CLI output and states](../guides/CLI_OUTPUT.md) for state semantics and supported stage IDs.
+The Node CLI is the only presentation owner. Python commands must not emit human-oriented banners on the protocol channel. See [CLI output and states](../reference/cli-output.md) for state semantics and supported stage IDs.
 
 **Error Format:**
 ```json

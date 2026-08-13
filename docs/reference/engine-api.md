@@ -10,8 +10,7 @@
 1. [FourLayerAdapter](#fourlayeradapter) - Main interface
 2. [CheckpointManager](#checkpointmanager) - Progress checkpointing
 3. [Retry Functions](#retry-functions) - API error handling
-4. [ThoughtUnit](#thoughtunit) - Core data structure
-5. [Error Handling](#error-handling) - Exception handling
+4. [Error Handling](#error-handling) - Exception handling
 
 ---
 

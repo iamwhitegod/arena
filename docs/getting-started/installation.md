@@ -25,7 +25,7 @@ Installation verification is active but not yet complete across every supported 
 | Source | The TypeScript suite passed 144 tests with one intentional skip. The Python suite passed 106 tests with four intentional live-provider skips. | Clean source builds on the complete Windows, macOS, and Linux Node/Python boundary matrix |
 | Docker | The ARM64 image built, started as non-root with a read-only root filesystem and dropped capabilities, processed a deterministic local fixture, and passed Compose startup. | AMD64, Buildx multi-architecture CI, per-platform vulnerability scans, and retained CI evidence |
 
-These results mean Arena is hardened and verified on selected installation paths. Do not describe installation as universally flawless until the remaining release-blocking jobs in the [installation verification plan](../INSTALLATION_VERIFICATION_PLAN.md) are green.
+These results mean Arena is hardened and verified on selected installation paths. Do not describe installation as universally flawless until the remaining release-blocking jobs in the [installation verification plan](../development/plans/installation-verification.md) are green.
 
 ## Install from npm
 

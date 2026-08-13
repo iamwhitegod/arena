@@ -107,7 +107,7 @@ For now, local enhancement is FREE and works great!
 
 ## Full Documentation
 
-See [AUDIO_ENHANCEMENT.md](./AUDIO_ENHANCEMENT.md) for complete details.
+See [AUDIO_ENHANCEMENT.md](../features/audio/enhancement.md) for complete details.
 
 ---
 
