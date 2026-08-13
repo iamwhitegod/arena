@@ -5,8 +5,12 @@ Arena is an AI-powered, open-source, local-first video clipping engine for the t
 ## Installation
 
 ```bash
-# Install globally via npm
-npm install -g @whitegodkingsley/arena-cli
+# Install the current stable npm release
+npm install --global @whitegodkingsley/arena-cli@0.4.2
+
+# Build and verify Arena's private processing runtime
+arena setup
+arena setup --check
 
 # Set up your environment
 export OPENAI_API_KEY="sk-..."
@@ -1069,10 +1073,11 @@ The CLI may not be in your PATH:
 
 ```bash
 # Reinstall globally
-npm install -g @whitegodkingsley/arena-cli
+npm install --global @whitegodkingsley/arena-cli@0.4.2
 
-# Or use npx
-npx @whitegodkingsley/arena-cli process video.mp4
+# Or use the exact package without a global install
+npx --yes @whitegodkingsley/arena-cli@0.4.2 setup
+npx --yes @whitegodkingsley/arena-cli@0.4.2 process video.mp4
 
 # Check installation
 which arena
@@ -1111,18 +1116,26 @@ arena generate video.mp4 moments.json --select 1,3,5
 
 ### Python or FFmpeg not found
 
-Arena CLI requires Python 3.10–3.12 and FFmpeg:
+Arena CLI requires Python 3.10–3.12 and FFmpeg. Let Arena build and verify its isolated runtime first:
 
 ```bash
-# Check versions
-python3 --version  # Should be 3.10–3.12
+arena setup
+arena setup --check
+arena diagnose
+```
+
+If setup cannot find the host prerequisites, install them and rerun it:
+
+```bash
+# Check host versions
+python3 --version
 ffmpeg -version
 
 # Install Python (macOS)
-brew install python3
+brew install python@3.12
 
-# Install Python (Ubuntu)
-sudo apt install python3
+# Install Python and venv support (Ubuntu)
+sudo apt install python3 python3-venv
 
 # Install FFmpeg (macOS)
 brew install ffmpeg
@@ -1130,6 +1143,8 @@ brew install ffmpeg
 # Install FFmpeg (Ubuntu)
 sudo apt install ffmpeg
 ```
+
+Do not install Arena's engine dependencies with global `pip`. To select a specific supported interpreter, set `ARENA_PYTHON` before `arena setup --force`. See the [installation guide](../getting-started/installation.md) for Windows commands and recovery details.
 
 ### Layer export files missing
 

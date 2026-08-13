@@ -12,8 +12,8 @@ export function InstallCTA() {
             Ready to clip smarter?
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Install Arena globally and process your first video in under 5
-            minutes. No credit card required.
+            Install Arena, create its private local runtime, and process on your
+            own machine. No Arena subscription required.
           </p>
 
           <div className="mt-10 max-w-xl mx-auto">

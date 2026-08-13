@@ -9,7 +9,7 @@ Arena starts processing from the terminal without requiring an upfront cloud upl
 ## Start here
 
 - [Quick start](./getting-started/quickstart.md) — install Arena and generate the first clips.
-- [Installation](./getting-started/installation.md) — supported environments, npm installation, source setup, and repair.
+- [Installation](./getting-started/installation.md) — supported environments, npm and Docker installation, source setup, and repair.
 - [Workflow guide](./guides/workflows.md) — common processing and publishing workflows.
 - [CLI reference](./reference/cli.md) — commands and options.
 - [Troubleshooting](./guides/troubleshooting.md) — diagnosis and recovery.

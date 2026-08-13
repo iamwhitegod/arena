@@ -19,29 +19,29 @@ Common issues and solutions for Arena CLI.
 
 **Symptoms**: Installation fails with permission errors
 
-**Solution 1**: Use sudo (not recommended)
-```bash
-sudo npm install -g @whitegodkingsley/arena-cli
-```
+Do not run the Arena npm install with `sudo`. Use a supported Node.js 22–24 installation owned by your user account, or configure a user-owned npm prefix:
 
-**Solution 2**: Configure npm to use a different directory (recommended)
 ```bash
-# Create directory for global packages
-mkdir ~/.npm-global
+# Confirm the supported Node range first
+node --version
 
-# Configure npm
-npm config set prefix '~/.npm-global'
+# Use a user-owned global package location
+npm config set prefix "$HOME/.local"
 
 # Add to PATH (add this to ~/.bashrc or ~/.zshrc)
-export PATH=~/.npm-global/bin:$PATH
+export PATH="$HOME/.local/bin:$PATH"
 
-# Install without sudo
-npm install -g @whitegodkingsley/arena-cli
+# Install the exact stable release
+npm install --global @whitegodkingsley/arena-cli@0.4.2
+arena setup
+arena setup --check
 ```
 
-**Solution 3**: Use npx (no installation)
+Alternatively, run the exact package through npx without creating a global command:
+
 ```bash
-npx @whitegodkingsley/arena-cli process video.mp4
+npx --yes @whitegodkingsley/arena-cli@0.4.2 setup
+npx --yes @whitegodkingsley/arena-cli@0.4.2 process video.mp4
 ```
 
 ### "arena: command not found"
@@ -55,12 +55,16 @@ npx @whitegodkingsley/arena-cli process video.mp4
 # Find where npm installs global packages
 npm config get prefix
 
-# Add to PATH (example for ~/.npm-global)
-export PATH="$HOME/.npm-global/bin:$PATH"
+# Add its bin directory to PATH (example for the recommended prefix)
+export PATH="$HOME/.local/bin:$PATH"
 
 # Add to shell config (~/.bashrc or ~/.zshrc)
-echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.zshrc
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
 source ~/.zshrc
+
+# Verify the executable and runtime
+arena --version
+arena setup --check
 ```
 
 ---
@@ -69,73 +73,62 @@ source ~/.zshrc
 
 ### "Python not found"
 
-**Symptoms**: `Python 3 is not installed or not in PATH`
+**Symptoms**: `Python 3 is not installed or not in PATH`, or Arena cannot find a supported interpreter.
 
 **Solution (macOS)**:
 ```bash
 # Using Homebrew
-brew install python3
+brew install python@3.12
 
 # Verify installation
-python3 --version
+python3.12 --version
 ```
 
 **Solution (Ubuntu/Debian)**:
 ```bash
 sudo apt update
-sudo apt install python3 python3-pip
+sudo apt install python3 python3-venv
 
 # Verify installation
 python3 --version
+```
+
+When more than one Python is installed, point Arena at the supported interpreter explicitly and rebuild only its private runtime:
+
+```bash
+export ARENA_PYTHON=/absolute/path/to/python3.12
+arena setup --force
+arena setup --check
 ```
 
 ### "Python version too old"
 
 **Symptoms**: `Python 3.10–3.12 is required, found Python 3.9`
 
-**Solution (macOS with Homebrew)**:
+Install a supported Python 3.10–3.12 interpreter. For example, on macOS:
+
 ```bash
-brew install python@3.11
-brew link python@3.11
+brew install python@3.12
+export ARENA_PYTHON="$(brew --prefix python@3.12)/bin/python3.12"
+arena setup --force
 ```
 
-**Solution (Ubuntu with deadsnakes PPA)**:
-```bash
-sudo add-apt-repository ppa:deadsnakes/ppa
-sudo apt update
-sudo apt install python3.11
-sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
-```
-
-**Solution (using pyenv - recommended)**:
-```bash
-# Install pyenv
-curl https://pyenv.run | bash
-
-# Install Python
-pyenv install 3.11.0
-pyenv global 3.11.0
-```
+Do not replace the operating system's `python3` symlink. Set `ARENA_PYTHON` instead. On Windows, install Python 3.12 with `winget install --id Python.Python.3.12 --exact`, then rerun `arena setup`.
 
 ### "Python dependencies missing"
 
 **Symptoms**: `Python dependencies are not installed`
 
-**Cause**: Arena's Python engine dependencies are not installed
+**Cause**: Arena's private runtime is missing, damaged, or belongs to a different CLI version.
 
 **Solution**:
 ```bash
-# Navigate to engine directory
-cd path/to/arena/engine
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Or use virtual environment (recommended)
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
+arena setup --force
+arena setup --check
+arena diagnose
 ```
+
+Do not repair an end-user installation with global `pip install`. Arena owns, verifies, and atomically replaces the Python environment under `~/.arena/runtime/environments/`.
 
 ---
 
@@ -144,6 +137,13 @@ pip install -r requirements.txt
 ### "FFmpeg not found"
 
 **Symptoms**: Video processing fails with FFmpeg-related errors
+
+First rerun Arena setup. In an interactive terminal it can offer a supported package-manager command; in a trusted automated environment, `arena setup --yes` may approve it automatically:
+
+```bash
+arena setup
+arena setup --check
+```
 
 **Solution (macOS)**:
 ```bash

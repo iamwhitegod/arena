@@ -21,8 +21,8 @@ Installation verification is active but not yet complete across every supported 
 
 | Path | Verified progress | Remaining release evidence |
 | --- | --- | --- |
-| npm | The exact 185-file tarball from current checkpoint `6df3cd4` (SHA-256 `06c1b6806a8e93ee1f7971b96285fb7c4f42e9eaea9f4e6de9a3620d0e4f77b1`) installed from an empty cache on containerized Linux ARM64 as a non-root Node.js 24 user, with Python/FFmpeg absent during postinstall, and passed CLI startup and uninstall. An artifact using the same installer implementation also completed managed setup on Node.js 22/Python 3.11, idempotency, lock/stale-state recovery, timed-out rebuild rollback, damaged-runtime repair, credential-free local processing, and uninstall. | Native Ubuntu, Windows, and macOS boundary jobs; Python 3.10/3.12; and published-registry canary runs |
-| Source | The TypeScript suite passed 144 tests with one intentional skip. The Python suite passed 106 tests with four intentional live-provider skips. | Clean source builds on the complete Windows, macOS, and Linux Node/Python boundary matrix |
+| npm | npm `latest` resolves to Arena `0.4.2`. On August 13, 2026, a clean isolated registry install of `@whitegodkingsley/arena-cli@0.4.2` completed on macOS ARM64 with Node.js 24, and the installed binary passed version (`0.4.2`) and help startup checks. The exact staged tarball from checkpoint `6df3cd4` also passed an empty-cache non-root Linux ARM64 install with Python/FFmpeg absent during postinstall, CLI startup, and uninstall. Installer-equivalent evidence covers managed setup on Node.js 22/Python 3.11, idempotency, lock/stale-state recovery, timeout rollback, damaged-runtime repair, credential-free local processing, and uninstall. | Clean registry installs on native Ubuntu and Windows; Python 3.10/3.12 setup boundaries; npm provenance review; and retained matrix evidence |
+| Source | The TypeScript suite passed 145 tests with one intentional skip. The Python suite passed 106 tests with four intentional live-provider skips. | Clean source builds on the complete Windows, macOS, and Linux Node/Python boundary matrix |
 | Docker | Arena `0.4.2` is published as one attested OCI index for Linux AMD64 and ARM64 at digest `sha256:b1bfbc0ca0696d550ba5520a7fbff196721af6cd8a0643ec8d08e13583495b1b`. Both exact registry manifests passed non-root, read-only, network-disabled, capability-dropped startup and reported `0.4.2`. The matching release candidates also passed deterministic local processing and fixable-vulnerability scans with 0 critical, high, medium, or low findings. | Native/matrix CI evidence, retained CI artifacts, and an image-size regression budget |
 
 These results mean Arena is hardened and verified on selected installation paths. Do not describe installation as universally flawless until the remaining release-blocking jobs in the [installation verification plan](../development/plans/installation-verification.md) are green.
@@ -72,11 +72,14 @@ docker run --rm `
 ## Install from npm
 
 ```bash
-npm install -g @whitegodkingsley/arena-cli
+npm install --global @whitegodkingsley/arena-cli@0.4.2
+arena --version
 arena setup
 arena setup --check
 arena init
 ```
+
+Arena `0.4.2` is the current npm `latest` release. Use the exact version above for reproducible installation; use `npm install --global @whitegodkingsley/arena-cli` only when you intentionally want the moving `latest` tag. The public package is available at [npmjs.com/package/@whitegodkingsley/arena-cli](https://www.npmjs.com/package/@whitegodkingsley/arena-cli).
 
 `npm install` is intentionally lightweight and does not download executables, run `pip`, or modify system packages. The explicit `arena setup` command:
 
@@ -175,11 +178,11 @@ Do not use global `pip install` as a repair step. Arena setup owns and verifies 
 
 ## Maintainer next steps
 
-1. Push the installation-hardening commit and require the source, packed-tarball, and container workflows on pull requests.
-2. Review retained evidence from native Ubuntu, Windows, macOS, Node.js 22/24, and Python 3.10/3.12 rather than treating workflow configuration or emulation as proof.
-3. Manually dispatch the managed-runtime workflow and confirm the locally proven setup, idempotency, timeout rollback, repair, stale-state recovery, and concurrency behavior on the full native matrix.
+1. Require the source, packed-tarball, managed-runtime, and container workflows on pull requests and release commits.
+2. Retain evidence from native Ubuntu, Windows, macOS, Node.js 22/24, and Python 3.10/3.12 rather than treating workflow configuration or emulation as proof.
+3. Confirm setup, idempotency, timeout rollback, repair, stale-state recovery, and concurrency behavior on the full native matrix.
 4. Add native Linux ARM64 and Intel macOS runners where hosted runners cannot supply the required architecture.
-5. Publish a release candidate under a non-default npm tag only after the native and Docker matrices pass; promote the exact tested artifact without rebuilding it.
+5. For the next npm release, publish a canary under a non-default tag and promote that exact tested artifact without rebuilding it.
 
 Publishing or changing npm distribution tags remains an explicit maintainer action.
 
@@ -195,3 +198,5 @@ npm publish .package --provenance --access public
 ```
 
 Direct publication from `cli/` is blocked. The staged package uses an explicit allowlist and excludes tests, caches, environment files, development scripts, and downloaded binaries.
+
+The npm package page renders `cli/README.md` from the published tarball. Updating that README in Git does not mutate an existing npm version; its changes appear on npm only when a new immutable package version is published.

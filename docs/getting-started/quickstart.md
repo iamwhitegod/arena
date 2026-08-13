@@ -1,44 +1,29 @@
 # Arena Quick Start Guide
 
-Arena is an AI-powered, open-source, local-first video clipping engine for the terminal that automatically finds the best moments in your videos and exports platform-ready clips for TikTok, Reels, and Shorts. This guide gets you from installation to your first clips in about five minutes.
+Arena is an AI-powered, open-source, local-first video clipping engine for the terminal that automatically finds the best moments in your videos and exports platform-ready clips for TikTok, Reels, and Shorts. This guide takes you from installation to your first processing command.
 
-## Prerequisites
+## Choose an installation path
 
-1. **Node.js 22–24** - Download from [nodejs.org](https://nodejs.org)
-2. **Python 3.10–3.12** - Check with `python3 --version`
-3. **FFmpeg** - Install with `brew install ffmpeg` (macOS) or `apt install ffmpeg` (Ubuntu)
-4. **OpenAI API Key** - Get from [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+- **npm:** requires Node.js 22–24, Python 3.10–3.12, and FFmpeg/ffprobe. `arena setup` creates the private Python runtime.
+- **Docker:** requires Docker only. The official image already includes Arena, Python, and FFmpeg.
+- **Source:** intended for contributors and uses the same host prerequisites as npm.
+
+AI-backed analysis also requires an [OpenAI API key](https://platform.openai.com/api-keys). Installation checks and local-only utilities such as audio extraction and scene detection do not require credentials.
 
 ## Installation
 
-### Option 1: Install from npm (when published)
+### Option 1: Install the current npm release
 
 ```bash
-npm install -g @whitegodkingsley/arena-cli
-arena setup
-arena setup --check
-```
-
-### Option 2: Install from source
-
-```bash
-git clone https://github.com/iamwhitegod/arena.git
-cd arena
-
-# Install CLI
-cd cli
-npm install
-npm link
-
-# Install the engine into Arena's private runtime
-arena setup
-
-# Verify installation
+npm install --global @whitegodkingsley/arena-cli@0.4.2
 arena --version
+arena setup
 arena setup --check
 ```
 
-### Option 3: Run the official Docker image
+`0.4.2` is the current npm `latest` release. Keep the explicit version for reproducible installs; omit `@0.4.2` only when you intentionally want the moving `latest` tag.
+
+### Option 2: Run the official Docker image
 
 Docker installation does not require a repository clone or host installations of Node.js, Python, and FFmpeg. The hardened `0.4.2` image is published for Linux AMD64 and ARM64:
 
@@ -56,6 +41,20 @@ docker run --rm \
 ```
 
 `latest` currently resolves to `0.4.2`, but use an exact version or digest in automated deployments. See the [installation guide](./installation.md) for the published digest, security contract, and Windows PowerShell mount syntax.
+
+### Option 3: Install from source
+
+```bash
+git clone https://github.com/iamwhitegod/arena.git
+cd arena/cli
+npm install
+npm link
+arena setup
+arena --version
+arena setup --check
+```
+
+Source installation is for contributors. npm and Docker are the supported end-user distribution paths.
 
 ## Setup
 
@@ -288,10 +287,11 @@ Typical costs per 10-minute video:
 
 ```bash
 # Reinstall
-npm install -g @whitegodkingsley/arena-cli
+npm install --global @whitegodkingsley/arena-cli@0.4.2
 
-# Or use npx
-npx @whitegodkingsley/arena-cli process video.mp4
+# Or use the exact package without a global install
+npx --yes @whitegodkingsley/arena-cli@0.4.2 setup
+npx --yes @whitegodkingsley/arena-cli@0.4.2 process video.mp4
 ```
 
 ### "OPENAI_API_KEY not set"

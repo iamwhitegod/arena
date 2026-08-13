@@ -8,7 +8,8 @@ export const LINKS = {
   docs: "https://getarena.vercel.app/docs",
 };
 
-export const INSTALL_COMMAND = "npm install -g @whitegodkingsley/arena-cli";
+export const INSTALL_COMMAND =
+  "npm install --global @whitegodkingsley/arena-cli@0.4.2";
 
 export const FEATURES = [
   {
@@ -41,17 +42,17 @@ export const STEPS = [
   {
     number: 1,
     title: "Install the CLI",
-    command: "npm install -g @whitegodkingsley/arena-cli",
+    command: "npm install --global @whitegodkingsley/arena-cli@0.4.2",
   },
   {
     number: 2,
-    title: "Point it at your video",
-    command: "arena process video.mp4 -n 5",
+    title: "Create the local runtime",
+    command: "arena setup",
   },
   {
     number: 3,
-    title: "Get platform-ready clips",
-    command: "arena format clips/ -p tiktok",
+    title: "Point it at your video",
+    command: "arena process video.mp4 -n 5",
   },
 ] as const;
 

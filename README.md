@@ -70,21 +70,18 @@ Burn subtitles into clips from the Whisper transcript:
 ### Installation
 
 ```bash
-# Install CLI globally via npm
-npm install -g @whitegodkingsley/arena-cli
+# Install the current stable CLI from npm
+npm install --global @whitegodkingsley/arena-cli@0.4.2
 
 # Create and verify Arena's private processing runtime
 arena setup
-
-# Or clone the repository
-git clone https://github.com/iamwhitegod/arena.git
-cd arena/cli
-npm install
-npm link
+arena setup --check
 
 # Set up your OpenAI API key
 export OPENAI_API_KEY="sk-..."
 ```
+
+This npm path requires Node.js 22–24, Python 3.10–3.12, and FFmpeg/ffprobe. Docker users can run the [published multi-architecture image](#-docker) without installing those host runtimes. Contributors should follow the [source installation guide](./docs/getting-started/installation.md#install-from-source).
 
 ### Run Interactive Setup
 
@@ -271,18 +268,26 @@ Arena uses a hybrid TypeScript + Python architecture:
 
 ### Prerequisites
 
-- **Node.js** 18 or higher
+- **Node.js** 22–24
 - **Python 3.10–3.12** (used only to create Arena's private processing runtime)
 - **FFmpeg** (for video encoding)
-- **OpenAI API Key** (for AI analysis)
+- **OpenAI API Key** (for AI-backed analysis; local-only utilities do not require one)
 
 Node.js supplies yt-dlp's JavaScript runtime; Deno is not required.
 
 ### Install Node CLI
 
 ```bash
-# Option 1: Install from npm
-npm install -g @whitegodkingsley/arena-cli
+# Option 1: Install the current stable npm release
+npm install --global @whitegodkingsley/arena-cli@0.4.2
+
+# To follow the npm latest tag instead
+npm install --global @whitegodkingsley/arena-cli
+
+# Verify the CLI, then build and verify its private runtime
+arena --version
+arena setup
+arena setup --check
 
 # Option 2: Install from source
 git clone https://github.com/iamwhitegod/arena.git
@@ -290,9 +295,6 @@ cd arena/cli
 npm install
 npm link
 
-# Verify installation
-arena --version
-arena --help
 arena setup
 arena setup --check
 ```
@@ -463,10 +465,11 @@ arena --version  # Test immediately
 
 ```bash
 # Reinstall globally
-npm install -g @whitegodkingsley/arena-cli
+npm install --global @whitegodkingsley/arena-cli@0.4.2
 
-# Or use npx
-npx @whitegodkingsley/arena-cli process video.mp4
+# Or use the exact package without a global install
+npx --yes @whitegodkingsley/arena-cli@0.4.2 setup
+npx --yes @whitegodkingsley/arena-cli@0.4.2 process video.mp4
 ```
 
 ### "Python not found"

@@ -411,14 +411,19 @@ Error: APIError: 401 Unauthorized
 
 ### NPM Package
 
-**Package name:** `@whitegodkingsley/arena-cli` or `@whitegodkingsley/arena-cli`
+**Package name:** `@whitegodkingsley/arena-cli`
+
+**Current stable version:** `0.4.2`
 
 **Install:**
 ```bash
-npm install -g @whitegodkingsley/arena-cli
+npm install --global @whitegodkingsley/arena-cli@0.4.2
+arena setup
+arena setup --check
 
 # Or run without installing:
-npx @whitegodkingsley/arena-cli process video.mp4
+npx --yes @whitegodkingsley/arena-cli@0.4.2 setup
+npx --yes @whitegodkingsley/arena-cli@0.4.2 process video.mp4
 ```
 
 ### Standalone Binary (Future)

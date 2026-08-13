@@ -14,15 +14,16 @@ export default async function TroubleshootingPage() {
       <h2>Installation issues</h2>
 
       <h3>npm install fails with permission errors</h3>
-      <p>Configure npm to use a directory you own:</p>
-      <DocCodeBlock lang="bash" filename="Terminal" code={`mkdir ~/.npm-global
-npm config set prefix '~/.npm-global'
+      <p>Do not use sudo. Configure npm to use a directory you own:</p>
+      <DocCodeBlock lang="bash" filename="Terminal" code={`npm config set prefix "$HOME/.local"
 
 # Add to ~/.bashrc or ~/.zshrc
-export PATH=~/.npm-global/bin:$PATH
+export PATH="$HOME/.local/bin:$PATH"
 
-# Install without sudo
-npm install -g @whitegodkingsley/arena-cli`} />
+# Install and verify the stable release
+npm install --global @whitegodkingsley/arena-cli@0.4.2
+arena setup
+arena setup --check`} />
 
       <h3>arena: command not found</h3>
       <p>The npm global bin directory is not in your PATH:</p>
@@ -32,26 +33,28 @@ npm config get prefix
 # Add to PATH
 export PATH="$(npm config get prefix)/bin:$PATH"
 
-# Or use npx instead
-npx @whitegodkingsley/arena-cli process video.mp4`} />
+# Or use the exact package through npx
+npx --yes @whitegodkingsley/arena-cli@0.4.2 setup
+npx --yes @whitegodkingsley/arena-cli@0.4.2 process video.mp4`} />
 
       <h2>Python issues</h2>
 
       <h3>Python not found</h3>
       <DocCodeBlock lang="bash" filename="Terminal" code={`# macOS
-brew install python3
+brew install python@3.12
 
 # Ubuntu/Debian
-sudo apt install python3 python3-pip
+sudo apt install python3 python3-venv
 
-# Verify
-python3 --version`} />
+# Build and verify Arena's isolated runtime
+arena setup
+arena setup --check`} />
 
       <h3>Python version too old</h3>
-      <p>Arena requires Python 3.10–3.12. Using pyenv is recommended:</p>
-      <DocCodeBlock lang="bash" filename="Terminal" code={`curl https://pyenv.run | bash
-pyenv install 3.11.0
-pyenv global 3.11.0`} />
+      <p>Arena requires Python 3.10–3.12. Select a supported interpreter without replacing the operating system&apos;s Python:</p>
+      <DocCodeBlock lang="bash" filename="Terminal" code={`export ARENA_PYTHON=/absolute/path/to/python3.12
+arena setup --force
+arena setup --check`} />
 
       <h3>Python dependencies missing</h3>
       <p>
@@ -64,7 +67,10 @@ arena setup --force`} />
       <h2>FFmpeg issues</h2>
 
       <h3>FFmpeg not found</h3>
-      <DocCodeBlock lang="bash" filename="Terminal" code={`# macOS
+      <DocCodeBlock lang="bash" filename="Terminal" code={`# Let Arena detect or offer a supported installation first
+arena setup
+
+# macOS
 brew install ffmpeg
 
 # Ubuntu/Debian

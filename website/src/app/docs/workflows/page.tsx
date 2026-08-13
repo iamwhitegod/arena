@@ -145,15 +145,18 @@ arena format clips/ -p youtube -o social/youtube/
 # Result: 1 webinar → 7 clips × 4 platforms = 28 social posts`} />
 
       <h2>Docker workflow</h2>
-      <p>Run Arena without installing dependencies locally.</p>
-      <DocCodeBlock lang="bash" filename="Terminal" code={`# Using Docker Compose
-docker compose run arena process video.mp4 -n 5
-docker compose run arena format output/clips/ -p tiktok
-
-# Using Docker directly
-docker run -v $(pwd):/workspace \\
-  -e OPENAI_API_KEY=$OPENAI_API_KEY \\
-  whitegodkingsley/arena process video.mp4 -n 5`} />
+      <p>Run the published image without cloning the repository or installing host dependencies.</p>
+      <DocCodeBlock lang="bash" filename="Terminal" code={`docker pull whitegodkingsley/arena:0.4.2
+docker volume create arena-data
+docker run --rm \\
+  --read-only \\
+  --cap-drop ALL \\
+  --security-opt no-new-privileges \\
+  --tmpfs /tmp:rw,noexec,nosuid,nodev,size=2g \\
+  --mount "type=bind,source=$PWD,target=/workspace" \\
+  --mount type=volume,source=arena-data,target=/home/node/.arena \\
+  --env OPENAI_API_KEY \\
+  whitegodkingsley/arena:0.4.2 process /workspace/video.mp4 -n 5`} />
     </>
   );
 }

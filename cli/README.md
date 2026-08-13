@@ -11,11 +11,12 @@ Arena is an AI-powered, open-source, local-first video clipping engine for the t
 ## Quick Start
 
 ```bash
-# Install
-npm install -g @whitegodkingsley/arena-cli
+# Install the current stable release
+npm install --global @whitegodkingsley/arena-cli@0.4.2
 
-# Set up dependencies (Python, FFmpeg, packages)
+# Build Arena's private Python runtime and verify FFmpeg
 arena setup
+arena setup --check
 
 # Set API key
 export OPENAI_API_KEY="sk-..."
@@ -35,16 +36,20 @@ Your clips are ready in `output/formatted/`
 - **Hybrid Detection** - Combines transcript analysis with audio energy
 - **Cost-Optimized** - ~$0.20/video with gpt-4o-mini
 - **Flexible Workflow** - Analyze, review, and generate separately
-- **Universal Install** - Works on Windows, macOS, Linux with auto-setup
+- **Cross-Platform Design** - Supports current Windows, macOS, and Linux releases under the documented runtime contract
 
 ## Installation
 
 ### Automated Setup
 
 ```bash
-npm install -g @whitegodkingsley/arena-cli
+npm install --global @whitegodkingsley/arena-cli@0.4.2
+arena --version
 arena setup
+arena setup --check
 ```
+
+`0.4.2` is the current npm `latest` release. Use the exact version in reproducible environments; omit `@0.4.2` if you intentionally want npm's moving `latest` tag. The npm lifecycle is lightweight: installation does not download executables, invoke `pip`, or modify system packages. Runtime creation happens only when you run `arena setup`.
 
 The `setup` command automatically:
 - Verifies the bundled engine against its SHA-256 manifest
@@ -58,6 +63,17 @@ The `setup` command automatically:
 **Prerequisites:** Node.js 22–24, Python 3.10–3.12, FFmpeg and ffprobe. Deno is not required because Node.js is the yt-dlp JavaScript runtime.
 
 Do not install Arena packages with global `pip`. Install the system prerequisites, then run `arena setup`. For health checks, repair commands, CI usage, and source installs, see the [installation guide](https://github.com/iamwhitegod/arena/blob/main/docs/getting-started/installation.md).
+
+### Run without a global npm install
+
+```bash
+npx --yes @whitegodkingsley/arena-cli@0.4.2 setup
+npx --yes @whitegodkingsley/arena-cli@0.4.2 process video.mp4 -n 5
+```
+
+### Docker alternative
+
+The official `whitegodkingsley/arena:0.4.2` image includes the CLI, Python runtime, and FFmpeg for Linux AMD64 and ARM64. See the [Docker installation instructions](https://github.com/iamwhitegod/arena/blob/main/docs/getting-started/installation.md#install-from-the-official-docker-image) for hardened mounts and runtime flags.
 
 ## Commands
 
@@ -287,6 +303,8 @@ Typical costs per 10-minute video:
 **Supported OS:** macOS, Linux, Windows
 
 Arena's Python packages are isolated under `~/.arena/runtime/environments/`. The current runtime uses approximately 650 MB on macOS arm64.
+
+Run `arena diagnose` if `arena setup --check` fails. Installation support and native-platform verification status are maintained in the repository's [installation guide](https://github.com/iamwhitegod/arena/blob/main/docs/getting-started/installation.md) and [support policy](https://github.com/iamwhitegod/arena/blob/main/SUPPORT.md).
 
 ## Contributing
 
