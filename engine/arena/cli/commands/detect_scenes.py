@@ -84,8 +84,10 @@ def run_detect_scenes(args):
             result['report_path'] = str(report_path)
             print(f"✓ Detailed report: {report_path}")
 
-        # Return result for Node CLI
-        return result
+        # Emit the protocol envelope consumed by the TypeScript bridge. Python
+        # CLI commands must return integer process codes, not result mappings.
+        print(json.dumps({'type': 'result', 'data': result}), flush=True)
+        return 0
 
     except Exception as e:
         logger.error(f"Scene detection failed: {str(e)}")

@@ -48,7 +48,7 @@ sudo apt install python3 python3-pip
 python3 --version`} />
 
       <h3>Python version too old</h3>
-      <p>Arena requires Python 3.9+. Using pyenv is recommended:</p>
+      <p>Arena requires Python 3.10–3.12. Using pyenv is recommended:</p>
       <DocCodeBlock lang="bash" filename="Terminal" code={`curl https://pyenv.run | bash
 pyenv install 3.11.0
 pyenv global 3.11.0`} />

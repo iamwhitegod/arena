@@ -146,6 +146,7 @@ async function verifyArtifact() {
 
   for (const required of [
     'package.json',
+    'dist/launcher.js',
     'dist/index.js',
     'scripts/postinstall.cjs',
     'scripts/verify-package.cjs',
@@ -173,8 +174,11 @@ async function verifyArtifact() {
 }
 
 async function main() {
-  if (!(await fs.pathExists(path.join(cliRoot, 'dist', 'index.js')))) {
-    throw new Error('dist/index.js is missing; run npm run build first');
+  if (
+    !(await fs.pathExists(path.join(cliRoot, 'dist', 'index.js'))) ||
+    !(await fs.pathExists(path.join(cliRoot, 'dist', 'launcher.js')))
+  ) {
+    throw new Error('dist/index.js or dist/launcher.js is missing; run npm run build first');
   }
   await copyArtifact();
   await writeEngineManifest();

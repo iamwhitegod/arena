@@ -397,6 +397,9 @@ arena process lecture.mp4 \
 ## 📖 Documentation
 
 - [USAGE.md](./docs/guides/USAGE.md) - Comprehensive usage guide
+- [INSTALLATION.md](./docs/guides/INSTALLATION.md) - Supported local installation path
+- [SUPPORT.md](./SUPPORT.md) - Toolchain and platform support policy
+- [INSTALLATION_VERIFICATION_PLAN.md](./docs/INSTALLATION_VERIFICATION_PLAN.md) - Cross-platform release evidence plan
 - [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) - Common issues and solutions
 - [CONTRIBUTING.md](./docs/CONTRIBUTING.md) - Contribution guidelines
 - [EDITORIAL_ARCHITECTURE.md](./docs/architecture/EDITORIAL_ARCHITECTURE.md) - 4-layer system details

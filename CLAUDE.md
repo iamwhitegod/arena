@@ -114,7 +114,7 @@ The `CheckpointManager` (`checkpoint.py`) saves intermediate results between lay
 
 ## Python Conventions
 
-- Python >= 3.9
+- Python 3.10–3.12
 - Entry point: `arena-engine=arena.main:main` (via setup.py)
 - Direct invocation: `python3 engine/arena_process.py --video-path input.mp4`
 - Concurrency via `ThreadPoolExecutor` for batch API calls (default 5 workers)

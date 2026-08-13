@@ -30,7 +30,7 @@ export default async function DocsPage() {
           code="npx @whitegodkingsley/arena-cli process video.mp4 -n 5"
         />
         <p className="text-xs text-muted mt-2">
-          Requires Node.js 18+, Python 3.9+, and FFmpeg. Set{" "}
+          Requires Node.js 22–24, Python 3.10–3.12, and FFmpeg. Set{" "}
           <code className="text-xs bg-arena-600/10 px-1 rounded">OPENAI_API_KEY</code>{" "}
           first.
         </p>
@@ -42,7 +42,7 @@ export default async function DocsPage() {
         {/* npm tab */}
         <div>
           <p className="text-sm text-muted mb-4">
-            The quickest way to get started. Requires Node.js 18+.
+            The quickest way to get started. Requires Node.js 22–24.
           </p>
 
           <p className="text-sm font-medium mb-2">1. Install globally</p>

@@ -6,12 +6,26 @@ Arena is local-first software. The npm package installs the TypeScript CLI; `are
 
 | Dependency | Supported | Purpose |
 | --- | --- | --- |
-| Node.js | 18 or newer | Arena CLI and the JavaScript runtime used by yt-dlp |
+| Node.js | 22–24 | Arena CLI and the JavaScript runtime used by yt-dlp |
 | Python | 3.10–3.12 | Creates Arena's private processing environment |
 | FFmpeg and ffprobe | Available on `PATH` | Local video and audio processing |
 | macOS, Linux, Windows | Current supported releases | Host operating system |
 
 Python 3.13 is not supported yet because Arena's current scientific-processing dependency set targets Python 3.10–3.12. Deno is not required; Arena already runs on Node.js.
+
+When multiple supported Python installations exist, set `ARENA_PYTHON` to the exact interpreter path before running `arena setup`. Arena validates that interpreter before creating its private runtime.
+
+## Verification status
+
+Installation verification is active but not yet complete across every supported target.
+
+| Path | Verified progress | Remaining release evidence |
+| --- | --- | --- |
+| npm | The exact 180-file tarball installed from an empty cache on macOS ARM64 with Node.js 22. It passed package identity, engine manifest, missing-prerequisite postinstall, Unicode-path, CLI startup, and uninstall checks. | Ubuntu and Windows, Node.js 24, full managed-runtime setup, and published-registry canary runs |
+| Source | The TypeScript suite passed 144 tests with one intentional skip. The Python suite passed 106 tests with four intentional live-provider skips. | Clean source builds on the complete Windows, macOS, and Linux Node/Python boundary matrix |
+| Docker | The ARM64 image built, started as non-root with a read-only root filesystem and dropped capabilities, processed a deterministic local fixture, and passed Compose startup. | AMD64, Buildx multi-architecture CI, per-platform vulnerability scans, and retained CI evidence |
+
+These results mean Arena is hardened and verified on selected installation paths. Do not describe installation as universally flawless until the remaining release-blocking jobs in the [installation verification plan](../INSTALLATION_VERIFICATION_PLAN.md) are green.
 
 ## Install from npm
 
@@ -116,6 +130,16 @@ arena diagnose
 ```
 
 Do not use global `pip install` as a repair step. Arena setup owns and verifies its Python environment.
+
+## Maintainer next steps
+
+1. Push the installation-hardening commit and require the source, packed-tarball, and container workflows on pull requests.
+2. Review retained evidence from Ubuntu, Windows, macOS, Node.js 22/24, and Python 3.10/3.12 rather than treating workflow configuration as proof.
+3. Manually dispatch the managed-runtime workflow and close setup, idempotency, repair, interruption, concurrency, and failure-injection gaps.
+4. Add native Linux ARM64 and Intel macOS runners where hosted runners cannot supply the required architecture.
+5. Publish a release candidate under a non-default npm tag only after the native and Docker matrices pass; promote the exact tested artifact without rebuilding it.
+
+Publishing or changing npm distribution tags remains an explicit maintainer action.
 
 ## Publishing contract
 

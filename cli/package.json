@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "arena": "dist/index.js"
+    "arena": "dist/launcher.js"
   },
   "files": [
     "dist/",
@@ -17,10 +17,11 @@
     "LICENSE"
   ],
   "scripts": {
-    "clean": "rm -rf dist",
-    "prebuild": "npm run clean",
+    "check:node": "node scripts/check-node-version.cjs",
+    "clean": "node scripts/clean.cjs",
+    "prebuild": "npm run check:node && npm run clean",
     "build": "tsc",
-    "postbuild": "chmod +x dist/index.js",
+    "postbuild": "node scripts/postbuild.cjs",
     "dev": "tsx src/index.ts",
     "watch": "tsc --watch",
     "start": "node dist/index.js",
@@ -35,9 +36,11 @@
     "format:check": "prettier --check \"src/**/*.ts\"",
     "prepare": "npm run build && husky",
     "postinstall": "node scripts/postinstall.cjs",
+    "smoke:consumer": "node scripts/consumer-install-smoke.cjs",
     "prepack": "node scripts/require-staged-publish.cjs",
     "prepublishOnly": "node scripts/require-staged-publish.cjs",
     "package:stage": "npm run build && node scripts/stage-package.cjs",
+    "package:artifact": "npm run package:stage && node scripts/pack-install-artifact.cjs",
     "package:inspect": "npm run package:stage && npm pack .package --dry-run",
     "publish:package": "npm run package:stage && npm publish .package --provenance --access public"
   },

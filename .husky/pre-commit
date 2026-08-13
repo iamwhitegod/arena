@@ -1,6 +1,8 @@
 #!/bin/sh
 . "$(dirname "$0")/_/husky.sh"
 
+node cli/scripts/check-node-version.cjs
+
 cd cli
 npx lint-staged
 npm test

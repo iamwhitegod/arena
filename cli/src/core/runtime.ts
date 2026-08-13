@@ -148,12 +148,16 @@ export function isSupportedPythonVersion(version: string): boolean {
   return atLeastMinimum && belowMaximum;
 }
 
-function pythonCandidates(platform: NodeJS.Platform = process.platform): Array<{
+export function pythonCandidates(platform: NodeJS.Platform = process.platform): Array<{
   command: string;
   args: string[];
 }> {
+  const configuredPython = process.env.ARENA_PYTHON?.trim();
+  const configured = configuredPython ? [{ command: configuredPython, args: [] }] : [];
+
   if (platform === 'win32') {
     return [
+      ...configured,
       { command: 'py', args: ['-3.12'] },
       { command: 'py', args: ['-3.11'] },
       { command: 'py', args: ['-3.10'] },
@@ -166,6 +170,7 @@ function pythonCandidates(platform: NodeJS.Platform = process.platform): Array<{
   }
 
   return [
+    ...configured,
     { command: 'python3.12', args: [] },
     { command: 'python3.11', args: [] },
     { command: 'python3.10', args: [] },

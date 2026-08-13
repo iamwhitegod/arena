@@ -47,6 +47,7 @@ function verifyEngineManifest(root) {
       throw new Error(`Engine checksum failed: ${relativePath}`);
     }
   }
+  return lines.length;
 }
 
 function verifyArtifact(root = path.resolve(__dirname, '..')) {
@@ -81,6 +82,7 @@ function verifyArtifact(root = path.resolve(__dirname, '..')) {
 
   for (const required of [
     'package.json',
+    'dist/launcher.js',
     'dist/index.js',
     'scripts/postinstall.cjs',
     'scripts/verify-package.cjs',
@@ -108,12 +110,17 @@ function verifyArtifact(root = path.resolve(__dirname, '..')) {
 
 if (require.main === module) {
   try {
-    const fileCount = verifyArtifact();
-    console.log(`Verified ${fileCount} allowlisted package files`);
+    if (process.argv.includes('--engine-only')) {
+      const fileCount = verifyEngineManifest(path.resolve(__dirname, '..'));
+      console.log(`Verified ${fileCount} engine manifest entries`);
+    } else {
+      const fileCount = verifyArtifact();
+      console.log(`Verified ${fileCount} allowlisted package files`);
+    }
   } catch (error) {
     console.error(`Package verification failed: ${error.message}`);
     process.exitCode = 1;
   }
 }
 
-module.exports = { verifyArtifact };
+module.exports = { verifyArtifact, verifyEngineManifest };

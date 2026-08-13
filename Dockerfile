@@ -24,8 +24,6 @@ WORKDIR /build
 
 COPY engine/build-requirements.txt engine/build-requirements.lock ./engine/
 COPY engine/requirements.txt engine/requirements.lock ./engine/
-COPY engine/setup.py engine/arena-cli ./engine/
-COPY engine/arena ./engine/arena
 
 RUN python3 -m venv /opt/arena-venv \
     && /opt/arena-venv/bin/python -m pip install \
@@ -37,8 +35,12 @@ RUN python3 -m venv /opt/arena-venv \
         --no-cache-dir \
         --no-build-isolation \
         --require-hashes \
-        --requirement engine/requirements.lock \
-    && /opt/arena-venv/bin/python -m pip install \
+        --requirement engine/requirements.lock
+
+COPY engine/setup.py engine/arena-cli ./engine/
+COPY engine/arena ./engine/arena
+
+RUN /opt/arena-venv/bin/python -m pip install \
         --no-cache-dir \
         --no-build-isolation \
         --no-deps \
@@ -49,6 +51,7 @@ COPY cli/package.json cli/package-lock.json ./cli/
 RUN npm ci --prefix cli --ignore-scripts
 
 COPY cli/tsconfig.json ./cli/tsconfig.json
+COPY cli/scripts/check-node-version.cjs cli/scripts/clean.cjs cli/scripts/postbuild.cjs ./cli/scripts/
 COPY cli/src ./cli/src
 RUN npm run build --prefix cli \
     && npm prune --prefix cli --omit=dev --ignore-scripts
@@ -85,7 +88,7 @@ COPY --from=builder --chown=node:node /build/engine /opt/arena-cli/engine
 
 RUN mkdir -p /home/node/.arena /workspace \
     && chown -R node:node /home/node/.arena /workspace \
-    && ln -s /opt/arena-cli/dist/index.js /usr/local/bin/arena
+    && ln -s /opt/arena-cli/dist/launcher.js /usr/local/bin/arena
 
 WORKDIR /workspace
 USER node

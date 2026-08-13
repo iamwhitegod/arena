@@ -12,6 +12,7 @@ import {
   isSupportedPythonVersion,
   parsePythonVersion,
   prependPath,
+  pythonCandidates,
   readRuntimeManifest,
   resolveEnginePath,
   RUNTIME_SCHEMA_VERSION,
@@ -19,6 +20,7 @@ import {
 } from '../../src/core/runtime.js';
 
 const originalArenaHome = process.env.ARENA_HOME;
+const originalArenaPython = process.env.ARENA_PYTHON;
 
 afterEach(async () => {
   if (originalArenaHome === undefined) {
@@ -26,21 +28,32 @@ afterEach(async () => {
   } else {
     process.env.ARENA_HOME = originalArenaHome;
   }
+  if (originalArenaPython === undefined) {
+    delete process.env.ARENA_PYTHON;
+  } else {
+    process.env.ARENA_PYTHON = originalArenaPython;
+  }
 });
 
 describe('managed runtime paths', () => {
   it('uses ARENA_HOME when supplied', () => {
-    process.env.ARENA_HOME = '/tmp/arena-custom-home';
-    expect(getArenaHome()).toBe('/tmp/arena-custom-home');
-    expect(getRuntimeManifestPath()).toBe('/tmp/arena-custom-home/runtime/install.json');
+    const arenaHome = path.join(os.tmpdir(), 'arena-custom-home');
+    process.env.ARENA_HOME = arenaHome;
+    expect(getArenaHome()).toBe(path.resolve(arenaHome));
+    expect(getRuntimeManifestPath()).toBe(
+      path.join(path.resolve(arenaHome), 'runtime', 'install.json')
+    );
   });
 
   it('builds platform-specific virtual environment paths', () => {
-    process.env.ARENA_HOME = '/tmp/arena-home';
-    expect(getManagedBinDir('darwin')).toBe('/tmp/arena-home/runtime/python/bin');
-    expect(getManagedPythonPath('linux')).toBe('/tmp/arena-home/runtime/python/bin/python');
+    const arenaHome = path.join(os.tmpdir(), 'arena-home');
+    process.env.ARENA_HOME = arenaHome;
+    expect(getManagedBinDir('darwin')).toBe(path.join(arenaHome, 'runtime', 'python', 'bin'));
+    expect(getManagedPythonPath('linux')).toBe(
+      path.join(arenaHome, 'runtime', 'python', 'bin', 'python')
+    );
     expect(getManagedPythonPath('win32')).toBe(
-      path.join('/tmp/arena-home/runtime/python', 'Scripts', 'python.exe')
+      path.join(arenaHome, 'runtime', 'python', 'Scripts', 'python.exe')
     );
   });
 
@@ -51,6 +64,18 @@ describe('managed runtime paths', () => {
 });
 
 describe('Python compatibility', () => {
+  it('prefers an explicitly selected Python executable', () => {
+    process.env.ARENA_PYTHON = path.join(os.tmpdir(), 'selected python');
+    expect(pythonCandidates('win32')[0]).toEqual({
+      command: process.env.ARENA_PYTHON,
+      args: [],
+    });
+    expect(pythonCandidates('linux')[0]).toEqual({
+      command: process.env.ARENA_PYTHON,
+      args: [],
+    });
+  });
+
   it('parses versions from stdout or stderr text', () => {
     expect(parsePythonVersion('Python 3.12.4')).toBe('3.12.4');
     expect(parsePythonVersion('launcher\nPython 3.9')).toBe('3.9');

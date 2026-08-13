@@ -15,6 +15,7 @@ import {
   formatBytes,
 } from '../utils/resilience.js';
 import { getArenaHome, readRuntimeManifest } from '../core/runtime.js';
+import { isSupportedNodeVersion, SUPPORTED_NODE_RANGE } from '../core/node-version.js';
 
 interface DiagnosticResult {
   category: string;
@@ -163,13 +164,11 @@ async function checkSystemInfo(): Promise<DiagnosticResult> {
   // Node.js version
   checks.push({
     name: 'Node.js Version',
-    status:
-      Number(process.versions.node.split('.')[0]) >= 18 ? ('pass' as const) : ('fail' as const),
+    status: isSupportedNodeVersion() ? ('pass' as const) : ('fail' as const),
     message: `v${process.versions.node}`,
-    solution:
-      Number(process.versions.node.split('.')[0]) < 18
-        ? 'Upgrade to Node.js 18.0.0 or later: https://nodejs.org'
-        : undefined,
+    solution: isSupportedNodeVersion()
+      ? undefined
+      : `Install Node.js ${SUPPORTED_NODE_RANGE}: https://nodejs.org/`,
   });
 
   // Memory

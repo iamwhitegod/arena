@@ -16,6 +16,13 @@ import { formatCommand } from './commands/format.js';
 import { detectScenesCommand } from './commands/detect-scenes.js';
 import { diagnoseCommand } from './commands/diagnose.js';
 import { ConfigManager } from './core/config.js';
+import { unsupportedNodeVersionMessage } from './core/node-version.js';
+
+const nodeVersionError = unsupportedNodeVersionMessage();
+if (nodeVersionError) {
+  console.error(nodeVersionError);
+  process.exit(1);
+}
 
 // Get package.json version (ES module compatible)
 const __filename = fileURLToPath(import.meta.url);
