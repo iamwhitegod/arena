@@ -13,6 +13,7 @@ with a shared global overview and a final reranking step.
 
 import json
 import math
+import re
 from typing import Dict, List, Optional, Tuple
 
 from .retry import call_api_with_smart_retry
@@ -43,9 +44,33 @@ CHUNK_OVERLAP_SEGMENTS = 8  # segments of boundary overlap between chunks
 DEDUP_TIME_THRESHOLD = 10.0
 DEDUP_TEXT_THRESHOLD = 0.7
 
+_SEGMENT_ID_RE = re.compile(r"S(0|[1-9][0-9]*)")
+
 VALID_RHETORICAL_TYPES = {
     "argument", "teaching", "story", "advice", "qa", "comparison", "insight",
 }
+
+
+def _safe_float(value, default: float, lo: float = 0.0, hi: float = 1.0) -> float:
+    """Coerce a value to a clamped float or return a default. Never raises.
+
+    Rejects booleans. Accepts numeric strings like "0.9". Clamps to [lo, hi].
+    """
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, (int, float)):
+        f = float(value)
+        if math.isfinite(f):
+            return max(lo, min(hi, f))
+        return default
+    if isinstance(value, str):
+        try:
+            f = float(value)
+            if math.isfinite(f):
+                return max(lo, min(hi, f))
+        except (ValueError, OverflowError):
+            pass
+    return default
 
 
 class ThoughtSeedDetector:
@@ -359,11 +384,11 @@ Return the merged JSON."""
         try:
             merged = self._call_model(client, system, prompt, model=self.overview_model)
             self.metrics["overview_calls"] += 1
-            return merged
+            return self._validate_overview(merged)
         except Exception:
-            # Fallback: concatenate the local maps
+            # Fallback: concatenate the already-validated local maps
             combined: Dict = {
-                "summary": " ".join(o.get("summary", "") for o in overviews),
+                "summary": " ".join(str(o.get("summary", "")) for o in overviews),
                 "main_themes": [],
                 "sections": [],
                 "high_interest_regions": [],
@@ -556,9 +581,9 @@ RULES:
                 selected_ids.add(idx)
 
                 seed = dict(candidates[idx])
-                if isinstance(entry.get("interest_score"), (int, float)):
+                if isinstance(entry.get("interest_score"), (int, float)) and not isinstance(entry.get("interest_score"), bool):
                     seed["interest_score"] = max(0.0, min(1.0, float(entry["interest_score"])))
-                if entry.get("reasoning"):
+                if isinstance(entry.get("reasoning"), str) and entry["reasoning"]:
                     seed["reasoning"] = entry["reasoning"]
                 reranked.append(seed)
 
@@ -637,9 +662,13 @@ RULES:
         if not isinstance(raw, dict):
             return None
 
-        # Resolve segment
-        seg_id = raw.get("segment_id", "")
-        seg_idx = self._parse_segment_id(seg_id)
+        # Resolve segment ID. A present but malformed ID is a rejection.
+        seg_id = raw.get("segment_id")
+        has_seg_id = seg_id is not None and seg_id != ""
+        seg_idx = self._parse_seg_id(seg_id) if has_seg_id else None
+        if has_seg_id and seg_idx is None:
+            # ID was supplied but doesn't match S<number> format — reject.
+            return None
         raw_text = raw.get("text")
         if not isinstance(raw_text, str):
             return None
@@ -660,9 +689,9 @@ RULES:
         if rtype not in VALID_RHETORICAL_TYPES:
             return None
 
-        # Validate interest score — reject non-numeric or out-of-range
+        # Validate interest score — reject bools, non-numeric, or out-of-range
         score = raw.get("interest_score")
-        if not isinstance(score, (int, float)) or not math.isfinite(score):
+        if isinstance(score, bool) or not isinstance(score, (int, float)) or not math.isfinite(score):
             return None
         score = float(score)
         if score < 0.0 or score > 1.0:
@@ -683,7 +712,7 @@ RULES:
             "rhetorical_type": rtype,
             "interest_score": score,
             "seed_id": "",
-            "reasoning": raw.get("reasoning", ""),
+            "reasoning": str(raw.get("reasoning", "")),
             "likely_has_premise": premise_val,
             "likely_has_resolution": resolution_val,
             "context_before": ctx_before,
@@ -705,38 +734,44 @@ RULES:
         """
         normalized = self._normalize_text(text)
 
-        # 1. Check the identified segment first, then its immediate neighbors.
+        # 1. When a segment ID was supplied, match only against that segment
+        #    and its immediate neighbors. Do not fall through to a global scan
+        #    — an unknown or wrong ID must be rejected.
         if hint_idx is not None:
-            # Resolve hint_idx: it may be an original _idx value rather than
-            # a list position. Find the list position whose _idx matches.
             list_pos = self._resolve_hint(hint_idx, segments)
-            if list_pos is not None:
-                # Exact match in the identified segment itself
-                if normalized in self._normalize_text(segments[list_pos].get("text", "")):
+            if list_pos is None:
+                # The supplied segment ID does not exist in the transcript.
+                return None
+
+            # Exact match in the identified segment itself
+            if normalized in self._normalize_text(segments[list_pos].get("text", "")):
+                return list_pos
+
+            # Spanning: identified segment + next
+            if list_pos + 1 < len(segments):
+                combined = (
+                    self._normalize_text(segments[list_pos].get("text", ""))
+                    + " "
+                    + self._normalize_text(segments[list_pos + 1].get("text", ""))
+                )
+                if normalized in combined:
                     return list_pos
 
-                # Spanning: identified segment + next
-                if list_pos + 1 < len(segments):
-                    combined = (
-                        self._normalize_text(segments[list_pos].get("text", ""))
-                        + " "
-                        + self._normalize_text(segments[list_pos + 1].get("text", ""))
-                    )
-                    if normalized in combined:
-                        return list_pos
+            # Spanning: previous + identified segment — return the earlier
+            # segment so the timestamp reflects where the phrase begins.
+            if list_pos > 0:
+                combined = (
+                    self._normalize_text(segments[list_pos - 1].get("text", ""))
+                    + " "
+                    + self._normalize_text(segments[list_pos].get("text", ""))
+                )
+                if normalized in combined:
+                    return list_pos - 1
 
-                # Spanning: previous + identified segment — return the earlier
-                # segment so the timestamp reflects where the phrase begins.
-                if list_pos > 0:
-                    combined = (
-                        self._normalize_text(segments[list_pos - 1].get("text", ""))
-                        + " "
-                        + self._normalize_text(segments[list_pos].get("text", ""))
-                    )
-                    if normalized in combined:
-                        return list_pos - 1
+            # Text not found in or near the identified segment.
+            return None
 
-        # 2. Global single-segment scan — accept only if exactly one match.
+        # 2. No segment ID supplied — accept only if exactly one match.
         matches = []
         for i, seg in enumerate(segments):
             if normalized in self._normalize_text(seg.get("text", "")):
@@ -788,40 +823,76 @@ RULES:
 
     MIN_CHUNK_BUDGET = 2_000  # absolute floor for a usable chunk
 
+    NEWLINE_TOKEN_COST = 1  # conservative cost for the \n between lines
+
+    def _seg_line_tokens(self, seg: Dict) -> int:
+        """Token cost of one formatted segment line plus its newline separator."""
+        line = f"[S{seg.get('_idx', 0)}|{seg['start']:.1f}] {seg.get('text', '')}"
+        return self._estimate_tokens(line) + self.NEWLINE_TOKEN_COST
+
     def _chunk_formatted_transcript(
         self,
         segments: List[Dict],
         token_budget: int,
     ) -> List[List[Dict]]:
-        """Split segments into token-bounded chunks with boundary overlap."""
+        """Split segments into token-bounded chunks with boundary overlap.
+
+        Guarantees:
+        - The formatted text of every emitted chunk fits within token_budget.
+        - Overlap segments reserve room for the triggering segment so the
+          combined chunk never exceeds the budget.
+
+        Raises ValueError if any single segment exceeds the budget. The
+        transcript must be resegmented upstream before chunking.
+        """
         if token_budget < self.MIN_CHUNK_BUDGET:
             raise ValueError(
                 f"Chunk budget is too small ({token_budget} tokens). "
                 f"The overview may be too large for the configured context capacity."
             )
 
+        # Pre-compute per-segment token costs (including newline).
+        # Reject any segment that alone exceeds the budget — the chunker
+        # cannot split a single segment and must never emit an over-budget
+        # chunk. The transcript must be resegmented upstream.
+        seg_costs = []
+        for s in segments:
+            cost = self._seg_line_tokens(s)
+            if cost > token_budget:
+                raise ValueError(
+                    f"Segment S{s.get('_idx', '?')} ({cost} tokens) exceeds the "
+                    f"chunk budget ({token_budget} tokens). The transcript must "
+                    f"be resegmented into smaller pieces."
+                )
+            seg_costs.append(cost)
+
         chunks: List[List[Dict]] = []
         current: List[Dict] = []
         current_tokens = 0
 
-        for seg in segments:
-            line = f"[S{seg.get('_idx', 0)}|{seg['start']:.1f}] {seg.get('text', '')}"
-            line_tokens = self._estimate_tokens(line)
+        for i, seg in enumerate(segments):
+            cost = seg_costs[i]
 
-            if current and current_tokens + line_tokens > token_budget:
+            if current and current_tokens + cost > token_budget:
                 chunks.append(current)
-                # Overlap: carry last N segments into next chunk
-                overlap = current[-CHUNK_OVERLAP_SEGMENTS:]
+
+                # Build overlap: fit the most recent segments alongside the
+                # incoming segment. Reserve cost for the new segment first.
+                available = token_budget - cost
+                overlap: List[Dict] = []
+                overlap_tokens = 0
+                for j in range(len(current) - 1, max(len(current) - CHUNK_OVERLAP_SEGMENTS - 1, -1), -1):
+                    prev_cost = self._seg_line_tokens(current[j])
+                    if overlap_tokens + prev_cost > available:
+                        break
+                    overlap.insert(0, current[j])
+                    overlap_tokens += prev_cost
+
                 current = list(overlap)
-                current_tokens = sum(
-                    self._estimate_tokens(
-                        f"[S{s.get('_idx', 0)}|{s['start']:.1f}] {s.get('text', '')}"
-                    )
-                    for s in current
-                )
+                current_tokens = overlap_tokens
 
             current.append(seg)
-            current_tokens += line_tokens
+            current_tokens += cost
 
         if current:
             chunks.append(current)
@@ -832,16 +903,31 @@ RULES:
     # Helpers
     # ------------------------------------------------------------------
 
-    def _normalize_segments(self, segments: List[Dict]) -> List[Dict]:
-        """Validate segments and add stable indices."""
+    def _normalize_segments(self, segments) -> List[Dict]:
+        """Validate segments and add stable indices.
+
+        Silently skips non-dict entries, segments with non-string text,
+        None text, numeric text, or invalid time ranges.
+        """
+        if not isinstance(segments, list):
+            return []
         valid = []
         for i, seg in enumerate(segments):
+            if not isinstance(seg, dict):
+                continue
             start = seg.get("start")
             end = seg.get("end")
-            text = seg.get("text", "").strip()
+            raw_text = seg.get("text")
+            if not isinstance(raw_text, str):
+                continue
+            text = raw_text.strip()
             if (
                 isinstance(start, (int, float))
+                and not isinstance(start, bool)
                 and isinstance(end, (int, float))
+                and not isinstance(end, bool)
+                and math.isfinite(start)
+                and math.isfinite(end)
                 and end > start
                 and text
             ):
@@ -851,36 +937,52 @@ RULES:
     def _estimate_tokens(self, text: str) -> int:
         """Estimate token count using tiktoken or a safe upper-bound fallback.
 
-        The fallback uses len // 2 because CJK, Arabic, and dense Unicode text
-        can tokenize at close to 1 token per character. This deliberately
-        overestimates so budget decisions never exceed the context window.
+        The fallback uses UTF-8 byte length because a single Unicode character
+        can encode into multiple tokens (e.g. emoji, rare scripts). Every token
+        represents at least one input byte, so byte length is a true upper
+        bound. This overestimates for ASCII but never underestimates for any
+        input.
         """
         try:
             import tiktoken
             encoding = tiktoken.encoding_for_model(self.model)
             return len(encoding.encode(text))
         except Exception:
-            return max(1, len(text) // 2)
+            return max(1, len(text.encode("utf-8")))
 
-    def _parse_segment_id(self, seg_id: str) -> Optional[int]:
-        """Parse 'S123' into integer index."""
-        if isinstance(seg_id, str) and seg_id.startswith("S"):
-            try:
-                return int(seg_id[1:])
-            except ValueError:
-                pass
-        return None
+    @staticmethod
+    def _parse_seg_id(seg_id) -> Optional[int]:
+        """Parse a segment ID matching the exact S<n> grammar.
+
+        Accepts: S0, S1, S999
+        Rejects: non-string, S+1, S 1, S١, S01, S-1, S1\\n, BAD, empty
+        """
+        if not isinstance(seg_id, str):
+            return None
+        m = _SEGMENT_ID_RE.fullmatch(seg_id)
+        return int(m.group(1)) if m else None
 
     @staticmethod
     def _normalize_text(text: str) -> str:
         return " ".join(text.lower().split())
 
+    @classmethod
+    def _valid_segment_range(cls, entry: Dict) -> bool:
+        """Check that start/end segment IDs are present, well-formed, and ordered."""
+        start = cls._parse_seg_id(entry.get("start_segment"))
+        end = cls._parse_seg_id(entry.get("end_segment"))
+        if start is None or end is None:
+            return False
+        return end >= start
+
     @staticmethod
     def _validate_overview(raw: Dict) -> Dict:
         """Ensure the overview has the expected structure and safe value types.
 
-        Malformed entries are dropped; missing top-level keys are defaulted to
-        empty lists so downstream code never crashes on a bad model response.
+        Malformed entries are dropped. Numeric fields are coerced to float
+        where possible or defaulted. Segment ranges require valid S<n> IDs
+        with end >= start. Missing top-level keys default to empty lists so
+        downstream code never crashes on a bad model response.
         """
         validated: Dict = {
             "summary": str(raw.get("summary", "")),
@@ -890,24 +992,42 @@ RULES:
             "low_interest_regions": [],
         }
 
+        vr = ThoughtSeedDetector._valid_segment_range
+
         for theme in raw.get("main_themes") or []:
-            if isinstance(theme, dict) and isinstance(theme.get("name"), str):
+            if (
+                isinstance(theme, dict)
+                and isinstance(theme.get("name"), str)
+                and vr(theme)
+            ):
+                theme = dict(theme)
+                theme["importance"] = _safe_float(theme.get("importance"), 0.5)
                 validated["main_themes"].append(theme)
 
         for section in raw.get("sections") or []:
-            if isinstance(section, dict) and isinstance(section.get("summary"), str):
+            if (
+                isinstance(section, dict)
+                and isinstance(section.get("summary"), str)
+                and vr(section)
+            ):
                 validated["sections"].append(section)
 
         for region in raw.get("high_interest_regions") or []:
             if (
                 isinstance(region, dict)
-                and isinstance(region.get("start_segment"), str)
                 and isinstance(region.get("reason"), str)
+                and vr(region)
             ):
+                region = dict(region)
+                region["priority"] = _safe_float(region.get("priority"), 0.5)
                 validated["high_interest_regions"].append(region)
 
         for region in raw.get("low_interest_regions") or []:
-            if isinstance(region, dict) and isinstance(region.get("reason"), str):
+            if (
+                isinstance(region, dict)
+                and isinstance(region.get("reason"), str)
+                and vr(region)
+            ):
                 validated["low_interest_regions"].append(region)
 
         return validated

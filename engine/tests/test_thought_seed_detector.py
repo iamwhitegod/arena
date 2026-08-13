@@ -234,6 +234,98 @@ class TestThoughtSeedDetector(unittest.TestCase):
         self.assertEqual(detector.metrics['api_calls'], 0)
 
 
+class TestSegmentIdParser(unittest.TestCase):
+    """Test the canonical S<n> segment ID parser."""
+
+    VALID_IDS = [
+        ("S0", 0),
+        ("S1", 1),
+        ("S999", 999),
+        ("S10", 10),
+    ]
+
+    INVALID_IDS = [
+        "S+1",       # sign
+        "S 1",       # space
+        "S\u0661",   # Arabic-Indic digit ١
+        "S01",       # leading zero
+        "S-1",       # negative
+        "S1\n",      # trailing newline
+        "BAD",       # no prefix
+        "",          # empty
+        "S",         # prefix only
+        123,         # non-string
+        None,        # None
+        "s1",        # lowercase
+    ]
+
+    def test_valid_ids(self):
+        d = ThoughtSeedDetector(api_key='test-key')
+        for seg_id, expected in self.VALID_IDS:
+            with self.subTest(seg_id=seg_id):
+                self.assertEqual(d._parse_seg_id(seg_id), expected)
+
+    def test_invalid_ids(self):
+        d = ThoughtSeedDetector(api_key='test-key')
+        for seg_id in self.INVALID_IDS:
+            with self.subTest(seg_id=repr(seg_id)):
+                self.assertIsNone(d._parse_seg_id(seg_id))
+
+    def test_invalid_ids_rejected_by_ground_seed(self):
+        """Malformed segment IDs cause seed rejection in _ground_seed."""
+        d = ThoughtSeedDetector(api_key='test-key')
+        segs = d._normalize_segments([
+            {'start': 0.0, 'end': 5.0, 'text': 'Unique phrase here'},
+        ])
+        base = {
+            'text': 'Unique phrase here',
+            'rhetorical_type': 'teaching',
+            'interest_score': 0.8,
+            'reasoning': 'r',
+            'likely_has_premise': True,
+            'likely_has_resolution': True,
+        }
+        for bad_id in self.INVALID_IDS:
+            if bad_id is None or bad_id == "":
+                continue  # absent/empty IDs intentionally allow global scan
+            with self.subTest(seg_id=repr(bad_id)):
+                raw = {**base, 'segment_id': bad_id}
+                self.assertIsNone(d._ground_seed(raw, segs))
+
+    def test_invalid_ids_rejected_in_all_overview_collections(self):
+        """Malformed segment ranges are rejected across all four collections."""
+        d = ThoughtSeedDetector(api_key='test-key')
+        bad_range = {'start_segment': 'S+1', 'end_segment': 'S10'}
+        reversed_range = {'start_segment': 'S10', 'end_segment': 'S2'}
+        missing_end = {'start_segment': 'S2'}
+
+        overview = d._validate_overview({
+            'summary': 'test',
+            'main_themes': [
+                {**bad_range, 'name': 'T1', 'importance': 0.5},
+                {**reversed_range, 'name': 'T2', 'importance': 0.5},
+                {**missing_end, 'name': 'T3', 'importance': 0.5},
+                {'name': 'T4', 'start_segment': 'S0', 'end_segment': 'S10', 'importance': 0.9},
+            ],
+            'sections': [
+                {**bad_range, 'summary': 'bad'},
+                {'summary': 'good', 'start_segment': 'S0', 'end_segment': 'S50'},
+            ],
+            'high_interest_regions': [
+                {**bad_range, 'reason': 'bad'},
+                {'start_segment': 'S0', 'end_segment': 'S10', 'reason': 'good'},
+            ],
+            'low_interest_regions': [
+                {**bad_range, 'reason': 'bad'},
+                {'start_segment': 'S0', 'end_segment': 'S5', 'reason': 'good'},
+            ],
+        })
+        self.assertEqual(len(overview['main_themes']), 1)
+        self.assertEqual(len(overview['sections']), 1)
+        self.assertEqual(len(overview['high_interest_regions']), 1)
+        self.assertEqual(len(overview['low_interest_regions']), 1)
+
+
 class TestRhetoricalTypeMapping(unittest.TestCase):
     """Test that seed rhetorical types map to ThoughtUnit RhetoricalType enum"""
 
