@@ -68,6 +68,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     XDG_CACHE_HOME=/tmp/cache
 
+# The production image executes prebuilt JavaScript and never installs
+# packages. Remove npm/Corepack and their shims so build-only tooling and its
+# transitive vulnerability surface are not shipped to users.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -78,7 +81,16 @@ RUN apt-get update \
         libsndfile1 \
         python3 \
         tini \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    && rm -f \
+        /usr/local/bin/corepack \
+        /usr/local/bin/npm \
+        /usr/local/bin/npx \
+        /usr/local/bin/pnpm \
+        /usr/local/bin/pnpx \
+        /usr/local/bin/yarn \
+        /usr/local/bin/yarnpkg
 
 COPY --from=builder /opt/arena-venv /opt/arena-venv
 COPY --from=builder --chown=node:node /build/cli/dist /opt/arena-cli/dist

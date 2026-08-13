@@ -82,6 +82,7 @@ jobs:
           test "$(docker image inspect --format '{{.Config.User}}' "${{ matrix.tag }}")" = "node"
           docker run --rm \
             --platform "${{ matrix.platform }}" \
+            --network none \
             --read-only \
             --cap-drop ALL \
             --security-opt no-new-privileges \

@@ -135,3 +135,56 @@ jobs:
           path: ${{ runner.temp }}/arena-setup-evidence.json
           if-no-files-found: error
           retention-days: 14
+
+  recovery:
+    name: Failure rollback and repair / Linux
+    needs: artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout smoke harness
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22.x
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
+
+      - name: Download exact npm artifact
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: arena-setup-artifact
+          path: ${{ runner.temp }}/arena-install-artifact
+
+      - name: Verify setup rollback, recovery, and repair
+        env:
+          ARENA_PYTHON: python
+        run: >-
+          node cli/scripts/consumer-install-smoke.cjs
+          --tarball "${{ runner.temp }}/arena-install-artifact"
+          --setup-recovery
+          --expected-python "3.12"
+          --timeout-ms 1800000
+          --evidence "${{ runner.temp }}/arena-setup-recovery-evidence.json"
+
+      - name: Retain setup recovery evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: setup-recovery-evidence-linux
+          path: ${{ runner.temp }}/arena-setup-recovery-evidence.json
+          if-no-files-found: error
+          retention-days: 14

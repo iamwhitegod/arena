@@ -21,11 +21,13 @@ Installation verification is active but not yet complete across every supported 
 
 | Path | Verified progress | Remaining release evidence |
 | --- | --- | --- |
-| npm | The exact 180-file tarball installed from an empty cache on macOS ARM64 with Node.js 22. It passed package identity, engine manifest, missing-prerequisite postinstall, Unicode-path, CLI startup, and uninstall checks. | Ubuntu and Windows, Node.js 24, full managed-runtime setup, and published-registry canary runs |
+| npm | The exact 185-file tarball from current checkpoint `6df3cd4` (SHA-256 `06c1b6806a8e93ee1f7971b96285fb7c4f42e9eaea9f4e6de9a3620d0e4f77b1`) installed from an empty cache on containerized Linux ARM64 as a non-root Node.js 24 user, with Python/FFmpeg absent during postinstall, and passed CLI startup and uninstall. An artifact using the same installer implementation also completed managed setup on Node.js 22/Python 3.11, idempotency, lock/stale-state recovery, timed-out rebuild rollback, damaged-runtime repair, credential-free local processing, and uninstall. | Native Ubuntu, Windows, and macOS boundary jobs; Python 3.10/3.12; and published-registry canary runs |
 | Source | The TypeScript suite passed 144 tests with one intentional skip. The Python suite passed 106 tests with four intentional live-provider skips. | Clean source builds on the complete Windows, macOS, and Linux Node/Python boundary matrix |
-| Docker | The ARM64 image built, started as non-root with a read-only root filesystem and dropped capabilities, processed a deterministic local fixture, and passed Compose startup. | AMD64, Buildx multi-architecture CI, per-platform vulnerability scans, and retained CI evidence |
+| Docker | ARM64 passed local hardened processing. Current checkpoint `6df3cd4` also built for AMD64 under emulation, ran non-root with a read-only root filesystem, no network, dropped capabilities, and `no-new-privileges`, processed a deterministic fixture, and passed Compose startup. The hardened image (local image ID `sha256:a95d37705d65…`) passed a fixable-vulnerability scan with 0 critical, high, medium, or low findings across 657 packages. | Native/matrix CI evidence, the ARM64 scan, and retained image evidence |
 
 These results mean Arena is hardened and verified on selected installation paths. Do not describe installation as universally flawless until the remaining release-blocking jobs in the [installation verification plan](../development/plans/installation-verification.md) are green.
+
+The production container intentionally excludes npm, npx, Corepack, and their package-manager shims. They are used in the builder stage only; the runtime executes the already-built `arena` CLI. This removes build-only tooling and its transitive advisories from the image without changing the user-facing container command.
 
 ## Install from npm
 
@@ -63,7 +65,7 @@ arena setup --yes
 
 Setup is idempotent. If the current CLI version, runtime imports, FFmpeg, and ffprobe are healthy, rerunning it exits without reinstalling anything. Interrupted installs are removed on the next setup run, and an existing working runtime is preserved until its replacement passes verification.
 
-Python package installation has a 15-minute overall timeout. On unusually slow networks, set a larger positive number of minutes before running setup:
+Each Python package-installation subprocess has a 15-minute timeout. On unusually slow networks, set a larger positive number of minutes before running setup:
 
 ```bash
 export ARENA_SETUP_TIMEOUT_MINUTES=30
@@ -134,8 +136,8 @@ Do not use global `pip install` as a repair step. Arena setup owns and verifies 
 ## Maintainer next steps
 
 1. Push the installation-hardening commit and require the source, packed-tarball, and container workflows on pull requests.
-2. Review retained evidence from Ubuntu, Windows, macOS, Node.js 22/24, and Python 3.10/3.12 rather than treating workflow configuration as proof.
-3. Manually dispatch the managed-runtime workflow and close setup, idempotency, repair, interruption, concurrency, and failure-injection gaps.
+2. Review retained evidence from native Ubuntu, Windows, macOS, Node.js 22/24, and Python 3.10/3.12 rather than treating workflow configuration or emulation as proof.
+3. Manually dispatch the managed-runtime workflow and confirm the locally proven setup, idempotency, timeout rollback, repair, stale-state recovery, and concurrency behavior on the full native matrix.
 4. Add native Linux ARM64 and Intel macOS runners where hosted runners cannot supply the required architecture.
 5. Publish a release candidate under a non-default npm tag only after the native and Docker matrices pass; promote the exact tested artifact without rebuilding it.
 

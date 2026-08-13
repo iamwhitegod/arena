@@ -21,6 +21,10 @@ The hardening checkpoint establishes a strong baseline:
 - The exact tarball, SHA-256 `1e324ce2e64fe643a1175d524823918e9d7adaccba7a1f30bef2c7974ac9e9ee`, installed from an empty cache and passed startup, manifest, Unicode-path, and uninstall checks on macOS ARM64 with Node.js 22.
 - The Linux ARM64 container built and processed a deterministic local video as a non-root user with a read-only root filesystem and dropped capabilities.
 - The runtime and development Python locks passed vulnerability auditing.
+- The exact 185-file tarball from current checkpoint `6df3cd4`, SHA-256 `06c1b6806a8e93ee1f7971b96285fb7c4f42e9eaea9f4e6de9a3620d0e4f77b1`, passed a non-root Linux ARM64 consumer install with Node.js 24, an empty npm cache, Python/FFmpeg absent during postinstall, Unicode paths, CLI startup, and uninstall.
+- The installer-code-equivalent artifact from `a9feb04`, SHA-256 `e371bef79a775ec64fec0e535bcfb44df89f77c7d705c3ca4e5da80441112123`, completed a 7.6-minute cold managed-runtime install on containerized Linux ARM64 with Node.js 22 and Python 3.11, idempotent rerun, live-lock rejection, stale-state cleanup, forced-timeout rollback preserving the healthy runtime, damaged-runtime detection and atomic repair, credential-free local processing, and uninstall.
+- Current checkpoint `6df3cd4` built for `linux/amd64` under emulation and passed non-root, read-only, network-disabled, capability-dropped runtime processing and Compose startup. This supplements but does not replace native evidence.
+- The final hardened AMD64 runtime image for `6df3cd4`, with local image ID `sha256:a95d37705d65986107c09ad318898df7b2977d0ba69501701f178470c03a7e49`, removed npm, npx, Corepack, and other build-only package-manager shims. It then passed an offline local-processing smoke test and a fixable-vulnerability scan with 0 critical, high, medium, or low findings across 657 detected packages.
 
 This evidence does not yet prove native installation on Windows, Linux AMD64, macOS Intel, macOS Apple Silicon, Node.js 24, or each supported Python boundary.
 
@@ -31,9 +35,9 @@ Execute these in order; workflow configuration alone is not verification:
 1. Push this checkpoint and run the source and packed-tarball pull-request matrices on Ubuntu, Windows, and macOS.
 2. Review the retained JSON evidence for artifact digest, package and engine versions, architecture, empty-cache installation, executable resolution, setup isolation, and sanitized output.
 3. Manually dispatch the managed-runtime matrix for the Node.js 22/Python 3.10 and Node.js 24/Python 3.12 boundary pairs.
-4. Run the Buildx AMD64/ARM64 workflow, hardened runtime assertions, Compose smoke test, and per-platform vulnerability scans.
+4. Run the Buildx AMD64/ARM64 workflow and per-platform vulnerability scans; the hardened AMD64 runtime, scan, and Compose paths are locally proven under emulation.
 5. Provision native Linux ARM64 and Intel macOS runners for evidence that hosted or emulated jobs cannot provide.
-6. Add setup failure-injection coverage for interrupted downloads, locks, repair, read-only paths, insufficient disk, and preservation of the last healthy runtime.
+6. Extend the implemented lock, stale-state, timeout-rollback, and repair coverage with read-only-path, insufficient-disk, and post-dependency interruption cases.
 7. After all release-blocking evidence is green, publish an explicitly approved npm canary under a non-default tag and promote that exact artifact without rebuilding it.
 
 Do not check off a platform or release gate until its retained evidence has been reviewed.
@@ -78,7 +82,7 @@ At minimum, test the lower and upper supported Node/Python boundaries on each ta
 | Host | Architecture | Boundary pair A | Boundary pair B | Status |
 | --- | --- | --- | --- | --- |
 | Ubuntu LTS | x86_64 | Node 22 + Python 3.10 | Node 24 + Python 3.12 | Unverified |
-| Ubuntu LTS | ARM64 | Node 22 + Python 3.10 | Node 24 + Python 3.12 | Unverified natively |
+| Ubuntu LTS | ARM64 | Node 22 + Python 3.10 | Node 24 + Python 3.12 | Containerized Node 24 consumer and Node 22/Python 3.11 recovery verified; native boundaries pending |
 | Windows | x86_64 | Node 22 + Python 3.10 | Node 24 + Python 3.12 | Unverified |
 | macOS | Apple Silicon | Node 22 + Python 3.10 | Node 24 + Python 3.12 | Local Node 22 consumer startup verified; setup matrix pending |
 | macOS | Intel | Node 22 + Python 3.10 | Node 24 + Python 3.12 | Unverified |
@@ -94,7 +98,7 @@ If a required architecture is unavailable on hosted CI, use an ephemeral self-ho
 
 | Target | Build | Runtime smoke test | Compose smoke test | Status |
 | --- | --- | --- | --- | --- |
-| `linux/amd64` | Required | Required | Required | Unverified |
+| `linux/amd64` | Required | Required | Required | Local emulated build/runtime/Compose and fixable-vulnerability scan verified; CI evidence pending |
 | `linux/arm64` | Required | Required | Required | Local build/start/media/Compose verified; CI scan pending |
 
 Each target must prove:
@@ -108,6 +112,8 @@ Each target must prove:
 - [ ] Node, Python, FFmpeg, ffprobe, Pillow, Arena, and yt-dlp import or execute successfully.
 - [ ] A local fixture can be processed through a bind-mounted workspace.
 - [ ] The image passes the configured high/critical vulnerability scan.
+
+The local AMD64 image passed Docker Scout's fixable-vulnerability gate with no findings. The checklist remains open until the configured Trivy scan passes for both exact platform images in CI.
 
 ## Phase 1: Consumer Artifact Harness
 
@@ -140,10 +146,10 @@ The harness uses Node process APIs rather than Bash-specific syntax so the same 
 - [x] Add a separate installation workflow because consumer installation is slower and has different failure evidence from unit tests.
 - [ ] Install the packed tarball on every hosted release-blocking matrix target. The workflow is implemented; target evidence is pending.
 - [ ] Verify global executable resolution on POSIX and Windows `PATHEXT` behavior. POSIX is locally verified; Windows is pending.
-- [ ] Verify paths containing spaces and Unicode on Windows, macOS, and Linux. macOS ARM64 is locally verified; Windows and Linux are pending.
-- [ ] Confirm npm postinstall remains read-only and never makes installation fail because FFmpeg or Python is absent on every OS family. macOS ARM64 is locally verified.
+- [ ] Verify paths containing spaces and Unicode on Windows, macOS, and Linux. macOS ARM64 and containerized Linux ARM64 are locally verified; Windows is pending.
+- [ ] Confirm npm postinstall remains read-only and never makes installation fail because FFmpeg or Python is absent on every OS family. macOS ARM64 and containerized Linux ARM64 are locally verified; Windows is pending.
 - [ ] Confirm a missing prerequisite produces one clear actionable message.
-- [ ] Test non-administrator Windows installation and a standard non-root POSIX account.
+- [ ] Test non-administrator Windows installation and a standard non-root POSIX account. Non-root Linux ARM64 is locally verified; Windows is pending.
 - [x] Test installation with an empty npm cache.
 - [ ] Test installation behind a deliberately slow or interrupted dependency connection.
 
@@ -168,16 +174,18 @@ For each native target:
 
 Exit criterion: every supported Python boundary builds a healthy, isolated Arena runtime on each required OS family.
 
+Local Linux ARM64 evidence now proves the Python 3.11 path for hash-locked setup, idempotency, live-lock rejection, stale-state recovery, configured timeout behavior, preservation of the last healthy runtime, damaged-runtime repair, and cleanup of all staging state. The Python 3.10/3.12 and native OS matrix remains release-blocking.
+
 ## Phase 4: Functional Local Processing Smoke Test
 
 Use a tiny, repository-owned fixture that requires no network or paid provider:
 
-- [ ] Validate local media probing with ffprobe.
-- [ ] Extract audio with FFmpeg.
-- [ ] Detect scenes or perform another deterministic engine operation.
-- [ ] Write output beneath the isolated workspace.
-- [ ] Verify output is non-empty and media metadata is valid.
-- [ ] Confirm no Arena Cloud endpoint is contacted.
+- [x] Validate local media probing with ffprobe.
+- [x] Extract audio with FFmpeg.
+- [x] Detect scenes or perform another deterministic engine operation.
+- [x] Write output beneath the isolated workspace.
+- [x] Verify output is non-empty and media metadata is valid.
+- [x] Confirm local processing succeeds without credentials; the hardened container smoke additionally runs with networking disabled.
 - [ ] Record execution time and peak disk usage to detect packaging regressions.
 
 AI-provider integration belongs in a separate opt-in workflow using test credentials. It must not block proof that local installation works.
@@ -225,8 +233,8 @@ The following cases need automated assertions, not only happy-path testing:
 - [ ] Arena home or workspace is read-only.
 - [ ] Arena home, workspace, or config contains a symlink escape.
 - [ ] Setup is interrupted after dependency installation but before promotion.
-- [ ] Setup is invoked concurrently.
-- [ ] A previous Arena runtime exists and the replacement fails verification.
+- [x] Setup is invoked concurrently on the local Linux recovery path.
+- [x] A previous Arena runtime remains healthy when a forced rebuild times out on the local Linux recovery path.
 
 Every failure must leave the system either unchanged or with the previous verified runtime still active.
 
@@ -255,7 +263,7 @@ The current worktree now includes:
 - cross-platform clean, artifact packing, digest inventory, consumer installation, uninstall, setup-idempotency, and deterministic local-processing assertions;
 - `.github/workflows/install-smoke.yml` for the exact tarball on Ubuntu, Windows, and macOS with Node.js 22 and 24;
 - Windows in the normal Node/Python source-test matrix;
-- `.github/workflows/setup-smoke.yml` for scheduled Python 3.10/3.12 managed-runtime boundary tests; and
+- `.github/workflows/setup-smoke.yml` for scheduled Python 3.10/3.12 managed-runtime boundary tests plus Linux lock, stale-state, timeout-rollback, and damaged-runtime repair assertions; and
 - `.github/workflows/container-smoke.yml` for Buildx `linux/amd64` and `linux/arm64`, hardened startup, Compose startup on AMD64, per-platform scanning, and retained image evidence.
 
 Implementation does not count as platform verification. The associated checklist items remain unverified until these workflows run successfully on their target runners and their evidence artifacts are reviewed.
@@ -282,12 +290,12 @@ Arena installation may be described as cross-platform verified only when:
 - [x] The support contract is consistent and enforced.
 - [ ] All required native matrix jobs are green from clean environments.
 - [ ] Both Docker architectures build and pass hardened runtime checks.
-- [ ] The exact npm tarball passes consumer installation tests.
+- [x] An exact generated npm tarball passes consumer installation tests; native matrix and registry delivery remain separate gates.
 - [ ] The registry-delivered canary matches and passes the same tests.
 - [ ] Setup, idempotency, repair, interruption recovery, and concurrency are verified.
 - [x] A local media fixture succeeds without Arena Cloud or external AI credentials.
 - [ ] Failure cases are actionable and preserve the last healthy state.
 - [ ] Installation evidence is retained for the release.
-- [ ] Installation and troubleshooting documentation matches observed behavior.
+- [x] Installation and troubleshooting documentation matches the currently observed local behavior and clearly labels native evidence still pending.
 
 Until every item above is complete, the accurate claim is: **Arena is hardened and verified on selected paths, with cross-platform installation validation still in progress.**

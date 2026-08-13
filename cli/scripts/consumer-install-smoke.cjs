@@ -22,7 +22,8 @@ const REDACTED_PATHS = new Set([os.homedir()]);
 function usage() {
   return [
     'Usage: node scripts/consumer-install-smoke.cjs --tarball <file-or-directory>',
-    '       [--evidence <json-file>] [--setup] [--expected-python <major.minor>]',
+    '       [--evidence <json-file>] [--setup] [--setup-recovery]',
+    '       [--expected-python <major.minor>]',
     '       [--keep] [--timeout-ms <milliseconds>]',
   ].join('\n');
 }
@@ -31,6 +32,7 @@ function parseArgs(argv) {
   const options = {
     evidence: path.resolve('consumer-install-evidence.json'),
     keep: false,
+    setupRecovery: false,
     setup: false,
     timeoutMs: DEFAULT_TIMEOUT_MS,
   };
@@ -39,6 +41,9 @@ function parseArgs(argv) {
     const argument = argv[index];
     if (argument === '--keep') {
       options.keep = true;
+    } else if (argument === '--setup-recovery') {
+      options.setup = true;
+      options.setupRecovery = true;
     } else if (argument === '--setup') {
       options.setup = true;
     } else if (
@@ -135,12 +140,172 @@ function runCommand(evidence, name, command, args, options = {}) {
   if (result.error) {
     throw new Error(`${name} could not start: ${result.error.message}`);
   }
-  if (result.status !== 0) {
+  if (options.expectFailure && result.status === 0) {
+    throw new Error(`${name} unexpectedly succeeded`);
+  }
+  if (!options.expectFailure && result.status !== 0) {
     throw new Error(
       `${name} failed with exit code ${String(result.status)}\n${record.stderr || record.stdout}`
     );
   }
   return record;
+}
+
+function commandOutput(record) {
+  return `${record.stdout}\n${record.stderr}`;
+}
+
+function runtimeScratchEntries(runtimeDir) {
+  return fs
+    .readdirSync(runtimeDir, { withFileTypes: true })
+    .filter(
+      (entry) =>
+        entry.name === 'install.lock' ||
+        /^python\.(?:installing|previous)-\d+$/.test(entry.name) ||
+        /^engine-source-\d+$/.test(entry.name)
+    )
+    .map((entry) => entry.name)
+    .sort();
+}
+
+function managedArenaPackage(pythonPath) {
+  const environment = path.dirname(path.dirname(pythonPath));
+  const candidates =
+    process.platform === 'win32'
+      ? [path.join(environment, 'Lib', 'site-packages', 'arena')]
+      : fs
+          .readdirSync(path.join(environment, 'lib'), { withFileTypes: true })
+          .filter((entry) => entry.isDirectory() && entry.name.startsWith('python'))
+          .map((entry) => path.join(environment, 'lib', entry.name, 'site-packages', 'arena'));
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
+}
+
+function runSetupRecoverySmoke(
+  evidence,
+  arenaCommand,
+  arenaHome,
+  workspace,
+  childEnv,
+  timeoutMs,
+  shell
+) {
+  const runtimeDir = path.join(arenaHome, 'runtime');
+  const manifestPath = path.join(runtimeDir, 'install.json');
+  const originalManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const originalEnvironment = path.dirname(path.dirname(originalManifest.pythonPath));
+  const lockPath = path.join(runtimeDir, 'install.lock');
+
+  fs.writeFileSync(
+    lockPath,
+    `${JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() })}\n`,
+    { mode: 0o600 }
+  );
+  try {
+    const locked = runCommand(
+      evidence,
+      'reject concurrent managed setup',
+      arenaCommand,
+      ['setup', '--yes'],
+      { cwd: workspace, env: childEnv, shell, timeoutMs: 60_000, expectFailure: true }
+    );
+    if (!commandOutput(locked).includes('Another Arena setup is already running')) {
+      throw new Error('Concurrent setup failed without the expected lock-owner diagnostic');
+    }
+  } finally {
+    fs.rmSync(lockPath, { force: true });
+  }
+  evidence.assertions.concurrentSetupIsRejected = true;
+
+  const interruptedVenv = path.join(runtimeDir, 'python.installing-999999');
+  const interruptedEngine = path.join(runtimeDir, 'engine-source-999999');
+  fs.mkdirSync(interruptedVenv, { recursive: true });
+  fs.mkdirSync(interruptedEngine, { recursive: true });
+  fs.writeFileSync(lockPath, '{}\n', { mode: 0o600 });
+  runCommand(evidence, 'recover stale managed setup state', arenaCommand, ['setup', '--yes'], {
+    cwd: workspace,
+    env: childEnv,
+    shell,
+    timeoutMs: 60_000,
+  });
+  if (runtimeScratchEntries(runtimeDir).length !== 0) {
+    throw new Error('Stale setup recovery left lock or staging files behind');
+  }
+  evidence.assertions.staleSetupStateIsRecovered = true;
+
+  const timeoutEnv = {
+    ...childEnv,
+    ARENA_SETUP_TIMEOUT_MINUTES: '0.001',
+  };
+  const timedOut = runCommand(
+    evidence,
+    'preserve runtime after timed-out rebuild',
+    arenaCommand,
+    ['setup', '--yes', '--force'],
+    { cwd: workspace, env: timeoutEnv, shell, timeoutMs, expectFailure: true }
+  );
+  if (!commandOutput(timedOut).includes('Timed out after')) {
+    throw new Error('Forced setup failed without exercising the configured timeout');
+  }
+  const preservedManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  if (
+    preservedManifest.pythonPath !== originalManifest.pythonPath ||
+    preservedManifest.installedAt !== originalManifest.installedAt ||
+    !fs.existsSync(originalManifest.pythonPath) ||
+    runtimeScratchEntries(runtimeDir).length !== 0
+  ) {
+    throw new Error('Timed-out setup did not preserve the previous managed runtime cleanly');
+  }
+  runCommand(evidence, 'check preserved runtime after setup failure', arenaCommand, ['setup', '--check'], {
+    cwd: workspace,
+    env: childEnv,
+    shell,
+    timeoutMs: 60_000,
+  });
+  evidence.assertions.failedSetupPreservesWorkingRuntime = true;
+
+  const arenaPackage = managedArenaPackage(originalManifest.pythonPath);
+  if (!arenaPackage) {
+    throw new Error('Could not locate the managed engine package for repair testing');
+  }
+  const damagedPackage = `${arenaPackage}.arena-smoke-damaged`;
+  fs.renameSync(arenaPackage, damagedPackage);
+
+  const damagedCheck = runCommand(
+    evidence,
+    'detect damaged managed runtime',
+    arenaCommand,
+    ['setup', '--check'],
+    { cwd: workspace, env: childEnv, shell, timeoutMs: 60_000, expectFailure: true }
+  );
+  if (!commandOutput(damagedCheck).includes('No module named')) {
+    throw new Error('Damaged runtime was not reported as an engine import failure');
+  }
+  evidence.assertions.damagedRuntimeIsDetected = true;
+
+  runCommand(evidence, 'repair damaged managed runtime', arenaCommand, ['setup', '--yes'], {
+    cwd: workspace,
+    env: childEnv,
+    shell,
+    timeoutMs,
+  });
+  runCommand(evidence, 'check repaired managed runtime', arenaCommand, ['setup', '--check'], {
+    cwd: workspace,
+    env: childEnv,
+    shell,
+    timeoutMs: 60_000,
+  });
+  const repairedManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  if (
+    repairedManifest.pythonPath === originalManifest.pythonPath ||
+    !fs.existsSync(repairedManifest.pythonPath) ||
+    fs.existsSync(originalEnvironment) ||
+    runtimeScratchEntries(runtimeDir).length !== 0
+  ) {
+    throw new Error('Managed runtime repair was not promoted and cleaned up atomically');
+  }
+  evidence.managedRuntime.repairedPythonPathChanged = true;
+  evidence.assertions.damagedRuntimeIsRepaired = true;
+  evidence.assertions.setupRecoveryLeavesNoScratchState = true;
 }
 
 function probeVersion(evidence, name, command, args, env, shell = false) {
@@ -547,6 +712,17 @@ function main() {
         timeoutMs: 60_000,
       });
       evidence.assertions.setupIsIdempotent = true;
+      if (options.setupRecovery) {
+        runSetupRecoverySmoke(
+          evidence,
+          arenaCommand,
+          arenaHome,
+          workspace,
+          childEnv,
+          options.timeoutMs,
+          windowsShell
+        );
+      }
       runLocalProcessingSmoke(
         evidence,
         arenaCommand,
