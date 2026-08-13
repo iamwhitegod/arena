@@ -46,7 +46,7 @@ class FourLayerAdapter:
         score_weights: Optional[Dict[str, float]] = None,
         enable_checkpoints: bool = True,
         checkpoint_dir: str = ".checkpoint",
-        max_workers: int = 2
+        max_workers: int = 1
     ):
         """
         Initialize editorial adapter
@@ -58,8 +58,8 @@ class FourLayerAdapter:
             score_weights: Custom scoring weights (default: {'completeness': 0.75, 'standalone': 0.25})
             enable_checkpoints: Enable progress checkpointing (default: True)
             checkpoint_dir: Directory for checkpoints (default: .checkpoint)
-            max_workers: Max parallel API calls for scoring/validation (default: 2)
-                        Higher = faster but more API pressure. Keep low for strict rate limits.
+            max_workers: Max parallel API calls for scoring/validation (default: 1)
+                        Sequential avoids 429 rate limits on most OpenAI tiers.
         """
         self.api_key = api_key
         self.model = model
@@ -137,7 +137,7 @@ class FourLayerAdapter:
             checkpoint_dir=self.checkpoint_dir,
             enabled=self.enable_checkpoints
         )
-        job_id = CheckpointManager.generate_job_id(transcript_data)
+        job_id = f"{CheckpointManager.generate_job_id(transcript_data)}_two_pass_v1"
 
         if self.enable_checkpoints:
             existing_checkpoints = checkpoint_mgr.list_checkpoints(job_id)

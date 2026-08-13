@@ -30,18 +30,21 @@ def _check_ytdlp() -> str:
 
 
 def _get_js_runtimes() -> str:
-    """Detect available JS runtimes for yt-dlp to solve YouTube challenges."""
+    """Detect available JS runtimes for yt-dlp to solve YouTube challenges.
+
+    Node.js is the preferred runtime because Arena already requires it.
+    """
     runtimes = []
-    if shutil.which('deno'):
-        runtimes.append('deno')
     if shutil.which('node'):
         runtimes.append('node')
     if shutil.which('bun'):
         runtimes.append('bun')
+    if shutil.which('deno'):
+        runtimes.append('deno')
     if not runtimes:
-        print("  ⚠️  No JavaScript runtime found (deno, node, or bun).")
-        print("  YouTube downloads require one. Install with: brew install deno")
-        return 'deno'
+        print("  ⚠️  No JavaScript runtime found.")
+        print("  YouTube downloads require Node.js (already an Arena prerequisite).")
+        return 'node'
     return ','.join(runtimes)
 
 
@@ -53,8 +56,7 @@ def _format_download_error(error_msg: str, url: str, command: str) -> str:
             f"URL: {url}\n\n"
             f"Fixes to try:\n"
             f"  1. Update yt-dlp:  pip install -U yt-dlp\n"
-            f"  2. Install deno:   brew install deno\n"
-            f"  3. Use cookies:    arena {command} \"{url}\" --cookies-from-browser chrome"
+            f"  2. Use cookies:    arena {command} \"{url}\" --cookies-from-browser chrome"
         )
     if 'Sign in to confirm' in error_msg or 'HTTP Error 429' in error_msg:
         return (
@@ -115,7 +117,6 @@ def download_video(
         '-o', output_template,
         '--newline',
         '--js-runtimes', _get_js_runtimes(),
-        '--remote-components', 'ejs:github',
         url,
     ]
 
@@ -183,7 +184,6 @@ def download_audio(
         '-o', output_template,
         '--newline',
         '--js-runtimes', _get_js_runtimes(),
-        '--remote-components', 'ejs:github',
         url,
     ]
 

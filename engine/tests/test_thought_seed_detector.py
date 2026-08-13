@@ -1,7 +1,7 @@
 """
 Tests for ThoughtSeedDetector
 
-Validates sliding window seed detection approach
+Validates two-pass, full-context seed detection.
 """
 
 import sys
@@ -30,53 +30,61 @@ class TestThoughtSeedDetector(unittest.TestCase):
             'duration': 35.0
         }
 
-    def test_window_creation(self):
-        """Test sliding window creation"""
+    def test_segment_normalization(self):
+        """Test that segments are validated and indexed"""
         detector = ThoughtSeedDetector(api_key='test-key')
 
-        # Create windows from sample transcript
-        windows = detector._create_windows(self.sample_transcript['segments'])
+        segments = [
+            {'start': 0.0, 'end': 5.0, 'text': 'Hello'},
+            {'start': 5.0, 'end': 5.0, 'text': 'Bad end'},     # end == start
+            {'start': 10.0, 'end': 15.0, 'text': ''},           # empty text
+            {'start': 15.0, 'end': 20.0, 'text': 'Good'},
+        ]
 
-        # Should create at least 1 window
-        self.assertGreater(len(windows), 0)
+        valid = detector._normalize_segments(segments)
+        self.assertEqual(len(valid), 2)
+        self.assertEqual(valid[0]['_idx'], 0)
+        self.assertEqual(valid[1]['_idx'], 3)
 
-        # First window should start at 0
-        self.assertEqual(windows[0]['start'], 0.0)
-
-        # Windows should have text
-        for window in windows:
-            self.assertIn('text', window)
-            self.assertIn('segments', window)
-            self.assertIsInstance(window['text'], str)
-            self.assertIsInstance(window['segments'], list)
-
-    def test_window_overlap(self):
-        """Test that windows have proper overlap"""
-        # Create longer transcript for multiple windows
-        segments = []
-        for i in range(100):  # 200 seconds total
-            segments.append({
-                'start': i * 2.0,
-                'end': (i + 1) * 2.0,
-                'text': f'Segment {i}.'
-            })
-
-        long_transcript = {'segments': segments, 'duration': 200.0}
-
+    def test_compact_transcript_format(self):
+        """Test compact segment ID format"""
         detector = ThoughtSeedDetector(api_key='test-key')
-        windows = detector._create_windows(segments)
+        segs = detector._normalize_segments(self.sample_transcript['segments'])
 
-        # Should have multiple windows
-        self.assertGreater(len(windows), 1)
+        formatted = detector._format_compact_transcript(segs)
+        self.assertIn('[S0|0.0]', formatted)
+        self.assertIn('[S1|5.0]', formatted)
+        self.assertIn('Welcome everyone', formatted)
 
-        # Check overlap between consecutive windows
-        for i in range(len(windows) - 1):
-            window1 = windows[i]
-            window2 = windows[i + 1]
+    def test_text_grounding(self):
+        """Test that seeds are grounded in real transcript segments"""
+        detector = ThoughtSeedDetector(api_key='test-key')
+        segs = detector._normalize_segments(self.sample_transcript['segments'])
 
-            # Window 2 should start before window 1 ends (overlap)
-            expected_start = window1['start'] + (detector.WINDOW_SIZE - detector.WINDOW_OVERLAP)
-            self.assertAlmostEqual(window2['start'], expected_start, delta=1.0)
+        # Exact match with hint
+        idx = detector._find_text_in_segments(
+            'I believe that God can tell you who to marry', segs, 2
+        )
+        self.assertEqual(idx, 2)
+
+        # Full scan without hint — unique text
+        idx2 = detector._find_text_in_segments(
+            'There is not one place where God picked a wife for someone', segs, None
+        )
+        self.assertIsNotNone(idx2)
+
+        # Hallucinated text returns None
+        idx3 = detector._find_text_in_segments('This was never said', segs, None)
+        self.assertIsNone(idx3)
+
+    def test_context_extraction(self):
+        """Test context_before and context_after from neighboring segments"""
+        detector = ThoughtSeedDetector(api_key='test-key')
+        segs = detector._normalize_segments(self.sample_transcript['segments'])
+
+        before, after = detector._extract_context(2, segs)
+        self.assertIn('Welcome everyone', before)
+        self.assertIn('Bible', after)
 
     def test_text_similarity(self):
         """Test text similarity calculation"""
@@ -207,8 +215,9 @@ class TestThoughtSeedDetector(unittest.TestCase):
         self.assertEqual(detector.metrics['api_calls'], 0)
         self.assertEqual(detector.metrics['tokens_used'], 0)
         self.assertEqual(detector.metrics['cost_usd'], 0.0)
-        self.assertEqual(detector.metrics['windows_analyzed'], 0)
         self.assertEqual(detector.metrics['seeds_detected'], 0)
+        self.assertEqual(detector.metrics['overview_calls'], 0)
+        self.assertEqual(detector.metrics['detection_calls'], 0)
 
         # Metrics should be dict
         self.assertIsInstance(detector.metrics, dict)
@@ -219,9 +228,10 @@ class TestThoughtSeedDetector(unittest.TestCase):
 
         empty_transcript = {'segments': [], 'duration': 0}
 
-        # Should handle gracefully without crashing
-        windows = detector._create_windows([])
-        self.assertEqual(len(windows), 0)
+        # Should return empty list without API calls
+        seeds = detector.detect_seeds(empty_transcript)
+        self.assertEqual(len(seeds), 0)
+        self.assertEqual(detector.metrics['api_calls'], 0)
 
 
 class TestRhetoricalTypeMapping(unittest.TestCase):

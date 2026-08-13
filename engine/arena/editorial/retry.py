@@ -116,6 +116,19 @@ def with_retry(
     return decorator
 
 
+def _extract_retry_after(error: Exception) -> Optional[float]:
+    """Extract Retry-After seconds from an OpenAI RateLimitError, if present."""
+    response = getattr(error, 'response', None)
+    if response is not None:
+        header = getattr(response, 'headers', {}).get('retry-after')
+        if header is not None:
+            try:
+                return float(header)
+            except (ValueError, TypeError):
+                pass
+    return None
+
+
 def is_retryable_error(error: Exception) -> bool:
     """
     Determine if an error should trigger a retry.
@@ -229,12 +242,15 @@ def call_api_with_smart_retry(
                     f"API call failed after {max_retries + 1} attempts: {str(e)}"
                 ) from e
 
-            # Retry with exponential backoff
+            # Prefer the server's Retry-After header over the local backoff
+            retry_after = _extract_retry_after(e)
+            wait = retry_after if retry_after is not None else delay
+
             if verbose:
                 print(f"      ⚠️  Retryable error (attempt {attempt + 1}/{max_retries + 1}): {str(e)[:80]}")
-                print(f"      ⏳ Retrying in {delay:.1f}s...")
+                print(f"      ⏳ Retrying in {wait:.1f}s...")
 
-            time.sleep(delay)
+            time.sleep(wait)
             delay *= backoff_factor
 
     # Should never reach here
