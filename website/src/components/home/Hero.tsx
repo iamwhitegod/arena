@@ -10,8 +10,8 @@ export function Hero() {
         <div className="max-w-3xl mx-auto text-center">
           <div className="animate-hero-1 flex flex-wrap items-center justify-center gap-2 sm:gap-3 mb-8">
             <Badge>Open Source</Badge>
+            <Badge variant="outline">Local First</Badge>
             <Badge variant="outline">MIT Licensed</Badge>
-            <Badge variant="outline">From $0.20/video</Badge>
           </div>
 
           <h1 className="animate-hero-2 text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1]">
@@ -20,9 +20,10 @@ export function Hero() {
           </h1>
 
           <p className="animate-hero-3 mt-4 sm:mt-6 text-base sm:text-xl text-muted max-w-2xl mx-auto leading-relaxed">
-            An AI-powered clipping engine that automatically finds the best
-            moments in your videos and exports platform-ready clips for TikTok,
-            Reels, and Shorts.
+            Arena is an AI-powered, open-source, local-first video clipping
+            engine for the terminal that automatically finds the best moments in
+            your videos and exports platform-ready clips for TikTok, Reels, and
+            Shorts.
           </p>
 
           <div className="animate-hero-4 mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 w-full sm:w-auto">

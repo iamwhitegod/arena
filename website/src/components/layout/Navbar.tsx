@@ -13,6 +13,7 @@ const navLinks = [
   { href: "/#features", label: "Features", anchor: true },
   { href: "/docs", label: "Docs" },
   { href: "/pricing", label: "Pricing" },
+  { href: "/roadmap", label: "Roadmap" },
   { href: LINKS.github, label: "GitHub", external: true },
 ];
 

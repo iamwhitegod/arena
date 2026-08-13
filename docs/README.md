@@ -1,6 +1,10 @@
 # Arena documentation
 
-This directory contains the maintained documentation for Arena. Start with the section that matches what you are trying to do; documents under [`archive/`](./archive) are historical records and are not the current product contract.
+Arena is an AI-powered, open-source, local-first video clipping engine for the terminal that automatically finds the best moments in your videos and exports platform-ready clips for TikTok, Reels, and Shorts. This directory contains its maintained documentation; documents under [`archive/`](./archive) are historical records and are not the current product contract.
+
+## Why local-first?
+
+Arena starts processing from the terminal without requiring an upfront cloud upload, saving time and bandwidth—especially on unreliable connections. Source videos, transcripts, analysis results, and generated clips remain on the user's machine unless they explicitly use an external provider or Arena Cloud. This architecture also supports a future path for optional local AI models while keeping Arena useful to both creators and developers.
 
 ## Start here
 
@@ -9,6 +13,7 @@ This directory contains the maintained documentation for Arena. Start with the s
 - [Workflow guide](./guides/workflows.md) — common processing and publishing workflows.
 - [CLI reference](./reference/cli.md) — commands and options.
 - [Troubleshooting](./guides/troubleshooting.md) — diagnosis and recovery.
+- [Product roadmap](./roadmap.md) — direction for Terminal, Cloud, Desktop, and Mobile.
 
 ## Guides
 

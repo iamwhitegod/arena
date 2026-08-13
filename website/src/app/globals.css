@@ -84,10 +84,11 @@ html.dark .prose code:not(pre code) {
 /* Shiki code blocks */
 .shiki-wrapper pre {
   margin: 0 !important;
-  padding: 1rem !important;
+  padding: 1.15rem 1.25rem !important;
   overflow-x: auto;
   font-size: 0.875rem;
   line-height: 1.7;
+  tab-size: 2;
 }
 
 .shiki-wrapper pre code {
@@ -100,8 +101,9 @@ html.dark .prose code:not(pre code) {
 
 /* prose pre fallback */
 .prose pre {
-  background: #0d1117;
-  color: #e6edf3;
+  background: #191919;
+  color: #fcfcfa;
+  border: 1px solid #403e41;
 }
 
 .prose pre code {

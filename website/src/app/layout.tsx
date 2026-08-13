@@ -19,9 +19,9 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://getarena.vercel.app"),
-  title: "Arena — AI-Powered Video Clip Generation",
+  title: "Arena — Local-First Video Clipping for the Terminal",
   description:
-    "Turn long-form video into viral, platform-optimized social media clips. Powered by a 4-layer editorial system and hybrid AI analysis.",
+    "Arena is an AI-powered, open-source, local-first video clipping engine for the terminal that automatically finds the best moments in your videos and exports platform-ready clips for TikTok, Reels, and Shorts.",
   keywords: [
     "video clipping",
     "AI video editor",
@@ -32,16 +32,16 @@ export const metadata: Metadata = {
   ],
   openGraph: {
     type: "website",
-    title: "Arena — AI-Powered Video Clip Generation",
+    title: "Arena — Local-First Video Clipping for the Terminal",
     description:
-      "Turn long-form video into viral, platform-optimized social media clips.",
+      "Automatically find the best moments in your videos and export platform-ready clips for TikTok, Reels, and Shorts.",
     images: ["/og-preview.png"],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Arena — AI-Powered Video Clip Generation",
+    title: "Arena — Local-First Video Clipping for the Terminal",
     description:
-      "Turn long-form video into viral, platform-optimized social media clips.",
+      "Automatically find the best moments in your videos and export platform-ready clips for TikTok, Reels, and Shorts.",
   },
 };
 
@@ -52,7 +52,7 @@ const jsonLd = {
   applicationCategory: "MultimediaApplication",
   operatingSystem: "macOS, Linux, Windows",
   description:
-    "AI-powered video clip generation tool. Turn long-form content into viral clips for TikTok, Instagram Reels, and YouTube Shorts.",
+    "Arena is an AI-powered, open-source, local-first video clipping engine for the terminal that automatically finds the best moments in your videos and exports platform-ready clips for TikTok, Reels, and Shorts.",
   offers: {
     "@type": "Offer",
     price: "0",

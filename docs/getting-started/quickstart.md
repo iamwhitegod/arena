@@ -1,6 +1,6 @@
 # Arena Quick Start Guide
 
-Get started with Arena in 5 minutes! Generate professional video clips from long-form content.
+Arena is an AI-powered, open-source, local-first video clipping engine for the terminal that automatically finds the best moments in your videos and exports platform-ready clips for TikTok, Reels, and Shorts. This guide gets you from installation to your first clips in about five minutes.
 
 ## Prerequisites
 

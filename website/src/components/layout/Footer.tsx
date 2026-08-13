@@ -16,8 +16,7 @@ export function Footer() {
               </span>
             </Link>
             <p className="mt-3 text-sm text-muted">
-              AI-powered video clip generation. Turn long-form content into
-              viral clips.
+              Open-source, local-first video clipping engine for the terminal.
             </p>
           </div>
 
@@ -38,6 +37,14 @@ export function Footer() {
                   className="text-sm text-muted hover:text-foreground transition-colors"
                 >
                   Pricing
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/roadmap"
+                  className="text-sm text-muted hover:text-foreground transition-colors"
+                >
+                  Roadmap
                 </Link>
               </li>
             </ul>

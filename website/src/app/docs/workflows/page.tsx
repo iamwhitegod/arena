@@ -104,7 +104,7 @@ arena process video.mp4 --min 45 --max 90`} />
       <h2>Debug quality issues</h2>
       <p>Export editorial layer data to understand why clips were rejected.</p>
       <DocCodeBlock lang="bash" filename="Terminal" code={`# Export layer data
-arena process video.mp4 --export-editorial-layers
+arena process video.mp4 --export-layers
 
 # Check rejection reasons
 cat output/editorial_layers/layer3_validated.json | \\

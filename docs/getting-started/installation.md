@@ -1,6 +1,6 @@
 # Installing Arena OSS
 
-Arena is local-first software. The npm package installs the TypeScript CLI; `arena setup` creates a private Python processing runtime on the same machine. Videos remain local unless a user explicitly calls an external service such as the OpenAI API or, in the future, Arena Cloud.
+Arena is an AI-powered, open-source, local-first video clipping engine for the terminal that automatically finds the best moments in your videos and exports platform-ready clips for TikTok, Reels, and Shorts. The npm package installs the TypeScript CLI; `arena setup` creates a private Python processing runtime on the same machine. Videos remain local unless a user explicitly calls an external service such as the OpenAI API or, in the future, Arena Cloud.
 
 ## Supported environment
 

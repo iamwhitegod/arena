@@ -17,8 +17,9 @@ export default async function DocsPage() {
     <>
       <h1>Installation</h1>
       <p>
-        Arena is an AI-powered video clip generation tool. It runs locally on
-        your machine and uses OpenAI for AI analysis.
+        Arena is an AI-powered, open-source, local-first video clipping engine
+        for the terminal that automatically finds the best moments in your videos
+        and exports platform-ready clips for TikTok, Reels, and Shorts.
       </p>
 
       <div className="not-prose rounded-xl border border-arena-600/20 bg-arena-600/5 p-6 my-8">
@@ -91,9 +92,8 @@ npm run build
 # Link globally for development
 npm link
 
-# Install Python engine dependencies
-cd ../engine
-pip install -r requirements.txt`} />
+# Build Arena's managed Python runtime
+arena setup`} />
 
           <p className="text-sm font-medium mb-2 mt-4">Verify</p>
           <DocCodeBlock lang="bash" filename="Terminal" code="arena --version" />
@@ -156,7 +156,7 @@ docker run -v $(pwd):/workspace \\
                 </tr>
                 <tr>
                   <td className="px-4 py-2 border-b border-border font-medium text-foreground">Node.js</td>
-                  <td className="px-4 py-2 border-b border-border">20</td>
+                  <td className="px-4 py-2 border-b border-border">22</td>
                   <td className="px-4 py-2 border-b border-border">CLI runtime</td>
                 </tr>
                 <tr>
@@ -164,19 +164,13 @@ docker run -v $(pwd):/workspace \\
                   <td className="px-4 py-2 border-b border-border">System</td>
                   <td className="px-4 py-2 border-b border-border">Video encoding, clip extraction</td>
                 </tr>
-                <tr>
-                  <td className="px-4 py-2 font-medium text-foreground">Deno</td>
-                  <td className="px-4 py-2">Latest</td>
-                  <td className="px-4 py-2">YouTube URL downloads</td>
-                </tr>
               </tbody>
             </table>
           </div>
           <p className="text-xs text-muted mt-2">
-            <strong className="text-foreground">Note:</strong> yt-dlp is not
-            pre-installed in the Docker image. URL support uses Deno. To add
-            yt-dlp, extend the Dockerfile with{" "}
-            <code className="text-xs bg-surface-alt px-1 rounded">RUN pip install yt-dlp</code>.
+            <strong className="text-foreground">Note:</strong> yt-dlp is installed
+            from Arena&apos;s Python requirements. yt-dlp uses the included Node.js
+            runtime for YouTube&apos;s JavaScript challenge solving; Deno is not required.
           </p>
         </div>
       </Tabs>
@@ -204,26 +198,13 @@ brew install python3
 # Ubuntu/Debian
 sudo apt install python3 python3-pip
 
-# Install Arena engine dependencies
-cd engine && pip install -r requirements.txt
-
 # Verify
 python3 --version`} />
 
-      <h3>yt-dlp (optional, for URL support)</h3>
-      <DocCodeBlock lang="bash" filename="Terminal" code="pip install yt-dlp" />
-
-      <h3>Deno (optional, for YouTube downloads)</h3>
-      <DocCodeBlock lang="bash" filename="Terminal" code={`# macOS
-brew install deno
-
-# Other platforms
-curl -fsSL https://deno.land/install.sh | sh`} />
-
       <p>
-        Or skip manual dependency setup entirely — run{" "}
-        <code>arena setup</code> to auto-detect and install missing
-        dependencies:
+        Run <code>arena setup</code> to create Arena&apos;s isolated Python runtime,
+        install yt-dlp and the engine dependencies, and verify FFmpeg. You do not
+        need to install Arena packages into global Python:
       </p>
       <DocCodeBlock lang="bash" filename="Terminal" code="arena setup" />
 
@@ -231,8 +212,8 @@ curl -fsSL https://deno.land/install.sh | sh`} />
       <DocCodeBlock lang="bash" filename="Terminal" code={`# Option 1: Environment variable (add to ~/.bashrc or ~/.zshrc)
 export OPENAI_API_KEY="sk-..."
 
-# Option 2: Via Arena config
-arena config set openai_api_key "sk-..."
+# Option 2: Owner-only Arena credential store (interactive prompt)
+arena config set openai_api_key
 
 # Verify
 arena config get openai_api_key`} />

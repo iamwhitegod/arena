@@ -1,59 +1,33 @@
-"use client";
-
-import { useState } from "react";
 import { PricingTier } from "./PricingTier";
 import { PRICING, LINKS } from "@/lib/constants";
 
 export function PricingTable() {
-  const [email, setEmail] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-
-  const handleWaitlist = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitted(true);
-  };
-
   return (
     <div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
-        <PricingTier {...PRICING.free} ctaHref="/docs" />
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+        <PricingTier {...PRICING.oss} />
+        <PricingTier {...PRICING.creator} />
         <PricingTier {...PRICING.pro} />
+        <PricingTier {...PRICING.studio} />
       </div>
 
-      <div className="mt-16 max-w-md mx-auto text-center">
-        <h3 className="text-lg font-semibold mb-2">
-          Get notified when Pro launches
-        </h3>
-        <p className="text-sm text-muted mb-6">
-          Join the waitlist to be first in line for unlimited clips, captions,
-          and priority support.
+      <div className="mt-12 rounded-2xl border border-border bg-surface p-6 text-center sm:p-8">
+        <h3 className="text-lg font-semibold mb-2">Cloud pricing is a proposal</h3>
+        <p className="mx-auto max-w-3xl text-sm text-muted">
+          Arena Cloud is not generally available yet. Proposed plans are billed by
+          source-video minutes so usage remains predictable. Arena OSS stays free,
+          complete, local-first, and independent of a Cloud subscription. Enterprise
+          plans are expected to start at $499/month with custom capacity, security,
+          and support.
         </p>
-
-        {submitted ? (
-          <div className="rounded-lg bg-arena-600/10 border border-arena-600/20 p-4">
-            <p className="text-sm text-arena-600 font-medium">
-              You&apos;re on the list! We&apos;ll let you know when Pro is
-              ready.
-            </p>
-          </div>
-        ) : (
-          <form onSubmit={handleWaitlist} className="flex flex-col sm:flex-row gap-2">
-            <input
-              type="email"
-              required
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="flex-1 rounded-lg border border-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-arena-600 focus:border-transparent"
-            />
-            <button
-              type="submit"
-              className="rounded-lg bg-arena-600 text-white px-6 py-2.5 text-sm font-medium hover:bg-arena-700 transition-colors cursor-pointer whitespace-nowrap"
-            >
-              Join Waitlist
-            </button>
-          </form>
-        )}
+        <a
+          href={LINKS.discussions}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 inline-block text-sm font-semibold text-arena-600 hover:text-arena-700"
+        >
+          Discuss the Cloud plan on GitHub →
+        </a>
       </div>
     </div>
   );

@@ -11,7 +11,10 @@ export default async function CommandsPage() {
       <h1>Command Reference</h1>
       <p>
         Arena provides 11 commands for flexible video clip generation workflows.
-        All commands that accept a video file also accept audio files and URLs.
+        <code>process</code>, <code>transcribe</code>, and <code>extract-audio</code>{" "}
+        accept supported URLs. <code>process</code> and <code>transcribe</code> also
+        accept audio files. Commands that generate or inspect video artifacts use
+        local files.
       </p>
 
       <table>
@@ -31,10 +34,17 @@ export default async function CommandsPage() {
           <tr><td><code>arena detect-scenes</code></td><td>Detect visual scene changes</td></tr>
           <tr><td><code>arena config</code></td><td>Manage configuration</td></tr>
           <tr><td><code>arena extract-audio</code></td><td>Extract audio from video</td></tr>
-          <tr><td><code>arena setup</code></td><td>Install dependencies automatically</td></tr>
+          <tr><td><code>arena setup</code></td><td>Create, check, or repair the managed runtime</td></tr>
           <tr><td><code>arena diagnose</code></td><td>System diagnostics</td></tr>
         </tbody>
       </table>
+
+      <h2>arena init</h2>
+      <p>
+        Run the interactive setup wizard to configure Arena for the first time or
+        update your preferences.
+      </p>
+      <DocCodeBlock lang="bash" filename="Terminal" code="arena init" />
 
       <h2>arena process</h2>
       <p>The all-in-one command. Transcribes, analyzes, and generates clips in a single pipeline.</p>
@@ -46,18 +56,26 @@ export default async function CommandsPage() {
           <tr><th>Option</th><th>Description</th><th>Default</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>-o, --output &lt;dir&gt;</code></td><td>Output directory</td><td><code>.arena/output</code></td></tr>
-          <tr><td><code>-n, --num-clips &lt;number&gt;</code></td><td>Target number of clips</td><td><code>5</code></td></tr>
+          <tr><td><code>-o, --output &lt;dir&gt;</code></td><td>Output directory</td><td><code>output</code></td></tr>
+          <tr><td><code>-n, --num-clips &lt;number&gt;</code></td><td>Target number of clips</td><td><code>8</code></td></tr>
           <tr><td><code>--min &lt;seconds&gt;</code></td><td>Minimum clip duration</td><td><code>30</code></td></tr>
           <tr><td><code>--max &lt;seconds&gt;</code></td><td>Maximum clip duration</td><td><code>90</code></td></tr>
           <tr><td><code>--fast</code></td><td>Stream copy mode (10x faster, no re-encoding)</td><td><code>false</code></td></tr>
           <tr><td><code>--captions</code></td><td>Burn subtitles into clips</td><td><code>false</code></td></tr>
-          <tr><td><code>-p, --platform</code></td><td>Target platform for formatting</td><td>-</td></tr>
-          <tr><td><code>--editorial-model</code></td><td><code>gpt-4o</code> or <code>gpt-4o-mini</code></td><td><code>gpt-4o</code></td></tr>
+          <tr><td><code>-p, --platform &lt;platform&gt;</code></td><td>Format generated clips for a supported platform</td><td>Not set</td></tr>
+          <tr><td><code>--editorial-model &lt;model&gt;</code></td><td><code>gpt-4o</code> or <code>gpt-4o-mini</code></td><td><code>gpt-4o</code></td></tr>
           <tr><td><code>--no-cache</code></td><td>Ignore cached transcript</td><td><code>false</code></td></tr>
-          <tr><td><code>--padding &lt;seconds&gt;</code></td><td>Padding before/after clips</td><td><code>0.5</code></td></tr>
-          <tr><td><code>--export-editorial-layers</code></td><td>Export intermediate layer results</td><td><code>false</code></td></tr>
-          <tr><td><code>--cookies-from-browser</code></td><td>Browser cookies for YouTube</td><td>-</td></tr>
+          <tr><td><code>--padding &lt;seconds&gt;</code></td><td>Padding before/after clips</td><td><code>0.1</code></td></tr>
+          <tr><td><code>--export-layers</code></td><td>Export intermediate layer results</td><td><code>false</code></td></tr>
+          <tr><td><code>--scene-detection</code></td><td>Use scene changes to improve clip boundaries</td><td><code>false</code></td></tr>
+          <tr><td><code>--crop &lt;strategy&gt;</code></td><td><code>center</code>, <code>smart</code>, <code>top</code>, or <code>bottom</code></td><td><code>center</code></td></tr>
+          <tr><td><code>--pad &lt;strategy&gt;</code></td><td><code>blur</code>, <code>black</code>, <code>white</code>, or <code>color</code></td><td><code>blur</code></td></tr>
+          <tr><td><code>--pad-color &lt;color&gt;</code></td><td>Hex padding color used with <code>--pad color</code></td><td><code>#000000</code></td></tr>
+          <tr><td><code>--cookies-from-browser &lt;browser&gt;</code></td><td>Use Chrome, Firefox, Safari, or Edge cookies for URL downloads</td><td>Not set</td></tr>
+          <tr><td><code>--caption-font-size &lt;size&gt;</code></td><td>Caption font size</td><td>Engine default</td></tr>
+          <tr><td><code>--caption-color &lt;color&gt;</code></td><td>Caption color</td><td>Engine default</td></tr>
+          <tr><td><code>--caption-position &lt;position&gt;</code></td><td><code>bottom</code>, <code>top</code>, or <code>middle</code></td><td>Engine default</td></tr>
+          <tr><td><code>--debug</code></td><td>Show diagnostic details on failure</td><td><code>false</code></td></tr>
         </tbody>
       </table>
 
@@ -93,9 +111,10 @@ arena process "https://www.youtube.com/watch?v=VIDEO_ID" --cookies-from-browser 
           <tr><th>Option</th><th>Description</th><th>Default</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>-o, --output &lt;file&gt;</code></td><td>Output transcript path</td><td><code>transcript.json</code></td></tr>
+          <tr><td><code>-o, --output &lt;file&gt;</code></td><td>Output transcript path</td><td><code>&lt;input&gt;_transcript.json</code></td></tr>
           <tr><td><code>--no-cache</code></td><td>Force re-transcription</td><td><code>false</code></td></tr>
-          <tr><td><code>--cookies-from-browser</code></td><td>Browser cookies for YouTube</td><td>-</td></tr>
+          <tr><td><code>--cookies-from-browser &lt;browser&gt;</code></td><td>Use browser cookies for URL downloads</td><td>Not set</td></tr>
+          <tr><td><code>--debug</code></td><td>Show diagnostic details on failure</td><td><code>false</code></td></tr>
         </tbody>
       </table>
 
@@ -122,11 +141,13 @@ arena transcribe video.mp4 --no-cache`} />
           <tr><th>Option</th><th>Description</th><th>Default</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>-o, --output &lt;file&gt;</code></td><td>Output analysis path</td><td><code>analysis.json</code></td></tr>
-          <tr><td><code>-n, --num-clips</code></td><td>Number of clips to analyze</td><td><code>5</code></td></tr>
+          <tr><td><code>-o, --output &lt;file&gt;</code></td><td>Output analysis path</td><td><code>&lt;video&gt;_analysis.json</code></td></tr>
+          <tr><td><code>-n, --num-clips</code></td><td>Number of clips to analyze</td><td>Engine default</td></tr>
           <tr><td><code>--min / --max</code></td><td>Duration constraints</td><td><code>30 / 90</code></td></tr>
           <tr><td><code>--editorial-model</code></td><td>Model for analysis</td><td><code>gpt-4o</code></td></tr>
           <tr><td><code>--transcript &lt;file&gt;</code></td><td>Use existing transcript</td><td>-</td></tr>
+          <tr><td><code>--scene-detection</code></td><td>Use scene changes to improve boundaries</td><td><code>false</code></td></tr>
+          <tr><td><code>--debug</code></td><td>Show diagnostic details on failure</td><td><code>false</code></td></tr>
         </tbody>
       </table>
 
@@ -150,10 +171,12 @@ arena analyze video.mp4 --editorial-model gpt-4o-mini`} />
           <tr><th>Option</th><th>Description</th><th>Default</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>-o, --output &lt;dir&gt;</code></td><td>Output directory</td><td><code>output/clips</code></td></tr>
+          <tr><td><code>-o, --output &lt;dir&gt;</code></td><td>Output directory</td><td><code>./clips</code></td></tr>
+          <tr><td><code>-n, --num-clips &lt;number&gt;</code></td><td>Limit the number of generated clips</td><td>All</td></tr>
           <tr><td><code>--select &lt;1,3,5&gt;</code></td><td>Generate specific clips by index</td><td>all</td></tr>
           <tr><td><code>--fast</code></td><td>Stream copy mode</td><td><code>false</code></td></tr>
-          <tr><td><code>--padding &lt;seconds&gt;</code></td><td>Padding before/after</td><td><code>0.5</code></td></tr>
+          <tr><td><code>--padding &lt;seconds&gt;</code></td><td>Padding before/after</td><td>Engine default</td></tr>
+          <tr><td><code>--debug</code></td><td>Show diagnostic details on failure</td><td><code>false</code></td></tr>
         </tbody>
       </table>
 
@@ -184,6 +207,23 @@ arena format clips/ -p instagram-reels --crop smart -o reels/
 # With blur background
 arena format video.mp4 -p youtube --pad blur -o youtube/`} />
 
+      <h3>Options</h3>
+      <table>
+        <thead><tr><th>Option</th><th>Description</th><th>Default</th></tr></thead>
+        <tbody>
+          <tr><td><code>-p, --platform &lt;platform&gt;</code></td><td>Required target platform</td><td>Required</td></tr>
+          <tr><td><code>-o, --output &lt;dir&gt;</code></td><td>Output directory</td><td><code>output/formatted</code></td></tr>
+          <tr><td><code>--crop &lt;strategy&gt;</code></td><td>Crop strategy</td><td><code>center</code></td></tr>
+          <tr><td><code>--pad &lt;strategy&gt;</code></td><td>Padding strategy</td><td><code>blur</code></td></tr>
+          <tr><td><code>--pad-color &lt;color&gt;</code></td><td>Hex padding color</td><td><code>#000000</code></td></tr>
+          <tr><td><code>--no-quality</code></td><td>Use faster, lower-quality encoding</td><td><code>false</code></td></tr>
+          <tr><td><code>--captions &lt;srt&gt;</code></td><td>Burn captions from an SRT file</td><td>Not set</td></tr>
+          <tr><td><code>--caption-font-size &lt;size&gt;</code></td><td>Caption font size</td><td>Engine default</td></tr>
+          <tr><td><code>--caption-color &lt;color&gt;</code></td><td>Caption color</td><td>Engine default</td></tr>
+          <tr><td><code>--caption-position &lt;position&gt;</code></td><td>Caption position</td><td>Engine default</td></tr>
+        </tbody>
+      </table>
+
       <h2>arena detect-scenes</h2>
       <p>Analyze and output visual scene change boundaries.</p>
       <DocCodeBlock lang="bash" filename="Terminal" code={`arena detect-scenes <video> [options]`} />
@@ -192,12 +232,30 @@ arena format video.mp4 -p youtube --pad blur -o youtube/`} />
       <DocCodeBlock lang="bash" filename="Terminal" code={`arena detect-scenes video.mp4
 arena detect-scenes video.mp4 --threshold 0.35`} />
 
+      <h3>Options</h3>
+      <table>
+        <thead><tr><th>Option</th><th>Description</th><th>Default</th></tr></thead>
+        <tbody>
+          <tr><td><code>-o, --output &lt;file&gt;</code></td><td>Scenes JSON path</td><td>Engine default</td></tr>
+          <tr><td><code>--threshold &lt;value&gt;</code></td><td>Detection threshold from 0.0 to 1.0</td><td><code>0.4</code></td></tr>
+          <tr><td><code>--min-duration &lt;seconds&gt;</code></td><td>Minimum scene duration</td><td><code>2.0</code></td></tr>
+          <tr><td><code>--report</code></td><td>Generate a detailed report</td><td><code>false</code></td></tr>
+          <tr><td><code>--debug</code></td><td>Show diagnostic details on failure</td><td><code>false</code></td></tr>
+        </tbody>
+      </table>
+
       <h2>arena config</h2>
       <p>View and manage Arena configuration.</p>
       <DocCodeBlock lang="bash" filename="Terminal" code={`arena config                        # View current config
-arena config set <key> <value>      # Set config value
+arena config set <key> <value>      # Set a non-sensitive value
 arena config get <key>              # Get specific value
 arena config reset                  # Reset to defaults`} />
+
+      <p>
+        API keys are entered through a private interactive prompt. Do not place a
+        key directly in the command because shell history may retain it.
+      </p>
+      <DocCodeBlock lang="bash" filename="Terminal" code="arena config set openai_api_key" />
 
       <h3>Common config keys</h3>
       <table>
@@ -206,7 +264,7 @@ arena config reset                  # Reset to defaults`} />
         </thead>
         <tbody>
           <tr><td><code>openai_api_key</code></td><td>OpenAI API key</td></tr>
-          <tr><td><code>whisper_mode</code></td><td>Transcription mode (<code>api</code> or <code>local</code>)</td></tr>
+          <tr><td><code>whisper_mode</code></td><td>Transcription mode (currently <code>api</code>)</td></tr>
           <tr><td><code>clip_duration</code></td><td>Default duration range</td></tr>
           <tr><td><code>output_format</code></td><td>Video output format</td></tr>
         </tbody>
@@ -227,6 +285,8 @@ arena config reset                  # Reset to defaults`} />
           <tr><td><code>--bitrate</code></td><td>Audio bitrate</td><td><code>192k</code></td></tr>
           <tr><td><code>--sample-rate</code></td><td>Sample rate in Hz</td><td>auto</td></tr>
           <tr><td><code>--mono</code></td><td>Convert to mono</td><td><code>false</code></td></tr>
+          <tr><td><code>--cookies-from-browser &lt;browser&gt;</code></td><td>Use browser cookies for URL downloads</td><td>Not set</td></tr>
+          <tr><td><code>--debug</code></td><td>Show diagnostic details on failure</td><td><code>false</code></td></tr>
         </tbody>
       </table>
 
@@ -238,11 +298,17 @@ arena extract-audio video.mp4
 arena extract-audio video.mp4 --format wav -o audio.wav
 
 # Mono for speech processing
-arena extract-audio video.mp4 --mono --bitrate 128k`} />
+arena extract-audio video.mp4 --mono --bitrate 128k
+
+# Extract audio from an authenticated URL
+arena extract-audio "https://www.youtube.com/watch?v=VIDEO_ID" --cookies-from-browser chrome`} />
 
       <h2>arena setup</h2>
-      <p>Automatically install and verify all required dependencies.</p>
-      <DocCodeBlock lang="bash" filename="Terminal" code={`arena setup`} />
+      <p>Create, verify, or repair Arena&apos;s managed processing runtime.</p>
+      <DocCodeBlock lang="bash" filename="Terminal" code={`arena setup          # Create or update the managed runtime
+arena setup --check  # Check health without changing anything
+arena setup --force  # Rebuild the managed runtime
+arena setup --yes    # Approve supported dependency installation`} />
 
       <h2>arena diagnose</h2>
       <p>Run system diagnostics to check your environment.</p>

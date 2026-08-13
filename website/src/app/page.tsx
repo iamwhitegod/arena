@@ -1,17 +1,18 @@
 import type { Metadata } from "next";
 import { Hero } from "@/components/home/Hero";
 import { Features } from "@/components/home/Features";
+import { LocalFirst } from "@/components/home/LocalFirst";
 import { HowItWorks } from "@/components/home/HowItWorks";
 import { InstallCTA } from "@/components/home/InstallCTA";
 
 export const metadata: Metadata = {
-  title: "Arena — AI-Powered Video Clip Generation",
+  title: "Arena — Local-First Video Clipping for the Terminal",
   description:
-    "Turn long-form video into viral clips for TikTok, Reels, and Shorts. Open-source, developer-first, runs locally. From $0.20 per video.",
+    "Arena is an AI-powered, open-source, local-first video clipping engine for the terminal that automatically finds the best moments in your videos and exports platform-ready clips for TikTok, Reels, and Shorts.",
   openGraph: {
-    title: "Arena — Turn Long-Form Video Into Viral Clips",
+    title: "Arena — Local-First Video Clipping for the Terminal",
     description:
-      "AI-powered clipping engine with a 4-layer editorial system. Open source, runs locally, costs $0.20 per video.",
+      "Automatically find the best moments in your videos and export platform-ready clips for TikTok, Reels, and Shorts.",
   },
 };
 
@@ -20,6 +21,7 @@ export default function Home() {
     <>
       <Hero />
       <Features />
+      <LocalFirst />
       <HowItWorks />
       <InstallCTA />
     </>

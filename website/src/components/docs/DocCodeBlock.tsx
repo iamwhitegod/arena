@@ -16,14 +16,21 @@ export async function DocCodeBlock({
 
   const html = await codeToHtml(trimmedCode, {
     lang,
-    theme: "github-dark",
+    theme: "monokai",
   });
 
   return (
-    <div className="not-prose rounded-lg overflow-hidden border border-[#30363d] my-6 relative group">
+    <div className="not-prose rounded-xl overflow-hidden border border-[#403e41] bg-[#191919] my-6 relative group shadow-[0_14px_35px_rgba(0,0,0,0.18)]">
       {filename && (
-        <div className="flex items-center justify-between px-4 py-2 bg-[#161b22] border-b border-[#30363d]">
-          <span className="text-xs text-[#8b949e] font-mono">{filename}</span>
+        <div className="flex items-center justify-between px-4 py-2.5 bg-[#221f22] border-b border-[#403e41]">
+          <div className="flex items-center gap-3">
+            <span className="flex gap-1.5" aria-hidden="true">
+              <span className="size-2.5 rounded-full bg-[#ff6188]" />
+              <span className="size-2.5 rounded-full bg-[#ffd866]" />
+              <span className="size-2.5 rounded-full bg-[#a9dc76]" />
+            </span>
+            <span className="text-xs text-[#c1c0c0] font-mono">{filename}</span>
+          </div>
           <CopyButton code={trimmedCode} />
         </div>
       )}

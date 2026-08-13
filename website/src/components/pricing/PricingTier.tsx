@@ -2,17 +2,21 @@ import { Button } from "@/components/shared/Button";
 
 interface PricingTierProps {
   name: string;
-  price: number;
+  price: string;
+  priceSuffix: string;
+  badge: string;
   description: string;
   features: readonly string[];
   cta: string;
   highlighted: boolean;
-  ctaHref?: string;
+  ctaHref: string;
 }
 
 export function PricingTier({
   name,
   price,
+  priceSuffix,
+  badge,
   description,
   features,
   cta,
@@ -29,7 +33,13 @@ export function PricingTier({
     >
       {highlighted && (
         <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-arena-600 text-white text-xs font-semibold px-3 py-1 rounded-full">
-          Popular
+          {badge}
+        </span>
+      )}
+
+      {!highlighted && (
+        <span className="self-start mb-4 rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold text-muted">
+          {badge}
         </span>
       )}
 
@@ -40,9 +50,9 @@ export function PricingTier({
 
       <div className="mb-8">
         <span className="text-4xl font-extrabold tracking-tight">
-          ${price}
+          {price}
         </span>
-        {price > 0 && <span className="text-muted text-sm">/month</span>}
+        <span className="ml-2 text-muted text-sm">{priceSuffix}</span>
       </div>
 
       <ul className="space-y-3 mb-8 flex-1">
@@ -66,37 +76,15 @@ export function PricingTier({
         ))}
       </ul>
 
-      {ctaHref ? (
-        <Button
-          href={ctaHref}
-          external
-          variant={highlighted ? "primary" : "secondary"}
-          size="lg"
-          className="w-full"
-        >
-          {cta}
-        </Button>
-      ) : (
-        <WaitlistButton highlighted={highlighted} cta={cta} />
-      )}
+      <Button
+        href={ctaHref}
+        external={ctaHref.startsWith("http")}
+        variant={highlighted ? "primary" : "secondary"}
+        size="lg"
+        className="w-full"
+      >
+        {cta}
+      </Button>
     </div>
-  );
-}
-
-function WaitlistButton({
-  highlighted,
-  cta,
-}: {
-  highlighted: boolean;
-  cta: string;
-}) {
-  return (
-    <Button
-      variant={highlighted ? "primary" : "secondary"}
-      size="lg"
-      className="w-full"
-    >
-      {cta}
-    </Button>
   );
 }

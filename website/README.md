@@ -1,6 +1,6 @@
 # Arena website
 
-The Arena marketing and documentation website is a Next.js 16 application in the main Arena repository.
+Arena is an AI-powered, open-source, local-first video clipping engine for the terminal that automatically finds the best moments in your videos and exports platform-ready clips for TikTok, Reels, and Shorts. This directory contains its Next.js 16 marketing and documentation website.
 
 ## Development
 

@@ -1,12 +1,12 @@
 # Arena CLI
 
-**AI-powered video clip generation for the terminal**
+**AI-powered, open-source, local-first video clipping for the terminal**
 
 [![npm version](https://badge.fury.io/js/@whitegodkingsley/arena-cli.svg)](https://www.npmjs.com/package/@whitegodkingsley/arena-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/node-22--24-brightgreen.svg)](https://nodejs.org/)
 
-Arena automatically identifies and extracts the best moments from long-form video content using AI. Transform podcasts, lectures, and streams into viral-ready clips optimized for TikTok, Instagram Reels, YouTube Shorts, and more.
+Arena is an AI-powered, open-source, local-first video clipping engine for the terminal that automatically finds the best moments in your videos and exports platform-ready clips for TikTok, Reels, and Shorts. It supports local video and audio files plus URLs from YouTube and 1,000+ sites supported by `yt-dlp`.
 
 ## Quick Start
 

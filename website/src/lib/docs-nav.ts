@@ -31,6 +31,13 @@ export const docsNav: DocNavSection[] = [
     ],
   },
   {
+    title: "Product",
+    items: [
+      { title: "Pricing & Cloud", href: "/docs/pricing" },
+      { title: "Product Roadmap", href: "/roadmap" },
+    ],
+  },
+  {
     title: "Support",
     items: [
       { title: "Troubleshooting", href: "/docs/troubleshooting" },

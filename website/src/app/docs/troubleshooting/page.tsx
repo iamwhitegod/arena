@@ -54,13 +54,12 @@ pyenv install 3.11.0
 pyenv global 3.11.0`} />
 
       <h3>Python dependencies missing</h3>
-      <DocCodeBlock lang="bash" filename="Terminal" code={`cd engine
-pip install -r requirements.txt
-
-# Or use a virtual environment
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt`} />
+      <p>
+        Repair Arena&apos;s isolated runtime rather than installing packages into
+        global Python:
+      </p>
+      <DocCodeBlock lang="bash" filename="Terminal" code={`arena setup --check
+arena setup --force`} />
 
       <h2>FFmpeg issues</h2>
 
@@ -89,8 +88,8 @@ sudo apt update && sudo apt install ffmpeg`} />
       <DocCodeBlock lang="bash" filename="Terminal" code={`# Set environment variable
 export OPENAI_API_KEY="sk-..."
 
-# Or use Arena config
-arena config set openai_api_key "sk-..."
+# Or use Arena's interactive owner-only credential store
+arena config set openai_api_key
 
 # Verify
 arena config get openai_api_key`} />
@@ -125,7 +124,7 @@ arena config get openai_api_key`} />
         <li><strong>All clips failed quality gate</strong> — Export layers to debug</li>
       </ul>
       <DocCodeBlock lang="bash" filename="Terminal" code={`# Check why clips were rejected
-arena process video.mp4 --export-editorial-layers
+arena process video.mp4 --export-layers
 cat output/editorial_layers/layer3_validated.json | \\
   jq '.[] | select(.verdict=="REJECT") | {rejection_reason}'`} />
 

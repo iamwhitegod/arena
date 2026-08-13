@@ -1,6 +1,6 @@
 # Arena workflow guide
 
-Complete guide to Arena CLI commands and workflows. For terminal presentation and state semantics, see [CLI output and states](../reference/cli-output.md).
+Arena is an AI-powered, open-source, local-first video clipping engine for the terminal that automatically finds the best moments in your videos and exports platform-ready clips for TikTok, Reels, and Shorts. This guide covers its common CLI workflows. For terminal presentation and state semantics, see [CLI output and states](../reference/cli-output.md).
 
 ## Installation
 

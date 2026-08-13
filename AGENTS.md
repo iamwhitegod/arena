@@ -4,7 +4,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## Project Overview
 
-Arena is an AI-powered video clip generation tool that extracts the best moments from long-form video content and repurposes them for social media. It uses a hybrid TypeScript (CLI) + Python (engine) architecture.
+Arena is an AI-powered, open-source, local-first video clipping engine for the terminal that automatically finds the best moments in videos and exports platform-ready clips for TikTok, Reels, and Shorts. It uses a hybrid TypeScript (CLI) + Python (engine) architecture.
 
 ## Build & Development Commands
 

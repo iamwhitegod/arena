@@ -1,11 +1,20 @@
 # Arena
 
-> AI-powered video clip generation for the terminal - Turn long-form content into viral clips
+> AI-powered, open-source, local-first video clipping for the terminal
 
 [![npm](https://img.shields.io/npm/v/@whitegodkingsley/arena-cli)](https://www.npmjs.com/package/@whitegodkingsley/arena-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Arena is a professional video clip generation tool that uses AI to automatically identify and extract the best moments from your long-form content. Works with local files, audio files, and URLs (YouTube, Vimeo, Twitter, and 1000+ sites). Perfect for content creators, podcasters, course producers, and anyone who wants to repurpose their content for social media.
+Arena is an AI-powered, open-source, local-first video clipping engine for the terminal that automatically finds the best moments in your videos and exports platform-ready clips for TikTok, Reels, and Shorts. It works with local video and audio files plus URLs from YouTube, Vimeo, Twitter/X, TikTok, and 1,000+ sites supported by `yt-dlp`.
+
+## Why local-first?
+
+- **No upfront upload:** Start processing immediately from your terminal. Arena does not require you to upload large source videos to the cloud.
+- **Save time and data:** Avoid lengthy uploads and unnecessary bandwidth usage before processing can begin.
+- **Built for unreliable connections:** Process videos locally without repeatedly restarting failed uploads when your connection drops.
+- **Your files stay with you:** Source videos, transcripts, analysis results, and generated clips remain on your machine unless you explicitly use an external provider or Arena Cloud.
+- **Ready for local AI models:** Arena's architecture creates a path toward optional local transcription, analysis, and embedding models in the future.
+- **Creator and developer friendly:** Creators get a fast, private workflow; developers get a scriptable terminal interface, inspectable artifacts, and automation-friendly commands.
 
 ## ✨ Features
 
@@ -490,6 +499,8 @@ arena process video.mp4 --min 20 --max 90
 See [Troubleshooting](./docs/guides/troubleshooting.md) for more solutions.
 
 ## 🚀 Roadmap
+
+See the [Arena product roadmap](./docs/roadmap.md) for the maintained plan across Arena Terminal, Cloud, Desktop, and Mobile.
 
 **Current (v0.4):**
 - ✅ 11-command CLI

@@ -46,11 +46,15 @@ export default async function FormattingPage() {
         </thead>
         <tbody>
           <tr><td><code>-p, --platform</code></td><td>Target platform (required)</td><td>-</td></tr>
-          <tr><td><code>-o, --output &lt;dir&gt;</code></td><td>Output directory</td><td>auto</td></tr>
+          <tr><td><code>-o, --output &lt;dir&gt;</code></td><td>Output directory</td><td><code>output/formatted</code></td></tr>
           <tr><td><code>--crop &lt;strategy&gt;</code></td><td><code>center</code>, <code>smart</code>, <code>top</code>, <code>bottom</code></td><td><code>center</code></td></tr>
           <tr><td><code>--pad &lt;strategy&gt;</code></td><td><code>blur</code>, <code>black</code>, <code>white</code>, <code>color</code></td><td><code>blur</code></td></tr>
           <tr><td><code>--pad-color &lt;hex&gt;</code></td><td>Custom padding color</td><td><code>#000000</code></td></tr>
           <tr><td><code>--no-quality</code></td><td>Disable high quality encoding</td><td><code>false</code></td></tr>
+          <tr><td><code>--captions &lt;srt&gt;</code></td><td>Burn captions from an SRT file</td><td>Not set</td></tr>
+          <tr><td><code>--caption-font-size &lt;size&gt;</code></td><td>Caption font size</td><td>Engine default</td></tr>
+          <tr><td><code>--caption-color &lt;color&gt;</code></td><td>Caption color</td><td>Engine default</td></tr>
+          <tr><td><code>--caption-position &lt;position&gt;</code></td><td>Caption position</td><td>Engine default</td></tr>
         </tbody>
       </table>
 
@@ -85,7 +89,7 @@ arena format clip.mp4 -p instagram-reels --crop smart -o reels/
 arena format clip.mp4 -p youtube --pad blur -o youtube/
 
 # Custom padding color
-arena format clip.mp4 -p instagram-feed --pad color --pad-color #FF5733`} />
+arena format clip.mp4 -p instagram-feed --pad color --pad-color "#FF5733"`} />
 
       <h3>Batch formatting</h3>
       <DocCodeBlock lang="bash" filename="Terminal" code={`# Format all clips in a directory

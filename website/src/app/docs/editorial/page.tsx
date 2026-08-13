@@ -27,7 +27,7 @@ export default async function EditorialPage() {
         lang="bash"
         filename="Terminal"
         code={`# Enable layer export to see Layer 1 output
-arena process video.mp4 --export-editorial-layers
+arena process video.mp4 --export-layers
 
 # Check: output/editorial_layers/layer1_moments.json`}
       />
@@ -69,7 +69,7 @@ arena process video.mp4 --export-editorial-layers
         lang="bash"
         filename="Terminal"
         code={`# Export layer data
-arena process video.mp4 --export-editorial-layers
+arena process video.mp4 --export-layers
 
 # Check rejection reasons
 cat output/editorial_layers/layer3_validated.json | \\
