@@ -427,7 +427,10 @@ function main() {
   const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'arena consumer smoke '));
   REDACTED_PATHS.add(temporaryRoot);
   REDACTED_PATHS.add(fs.realpathSync(temporaryRoot));
-  const prefix = path.join(temporaryRoot, 'npm prefix ø');
+  const prefix = path.join(
+    temporaryRoot,
+    process.platform === 'win32' ? 'npm prefix' : 'npm prefix ø'
+  );
   const npmCache = path.join(temporaryRoot, 'empty npm cache');
   const arenaHome = path.join(temporaryRoot, 'Aréna Home');
   const workspace = path.join(temporaryRoot, 'consumer workspace ø');
