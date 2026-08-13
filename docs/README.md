@@ -36,6 +36,7 @@ Arena starts processing from the terminal without requiring an upfront cloud upl
 - [Audio enhancement settings](./reference/audio-enhancement-settings.md)
 - [Clip naming](./reference/clip-naming.md)
 - [AI prompts](./reference/prompts.md)
+- [Current artifact inventory](./reference/artifact-contracts.md)
 
 ## Architecture
 
@@ -65,6 +66,8 @@ Cloud documents describe proposed product boundaries and are not commitments for
 - [Release process](./development/release-process.md)
 - [Installation verification plan](./development/plans/installation-verification.md)
 - [OSS hardening plan](./development/plans/oss-hardening.md)
+- [Repository boundary implementation plan](./development/plans/repository-boundary-implementation.md)
+- [Three-repository split workplan](./development/plans/repository-split-workplan.md)
 - [Platform-formatting verification](./development/testing/platform-formatting.md)
 - [CLI test guide](../cli/tests/README.md)
 
