@@ -4,7 +4,7 @@
 
 **Last reviewed:** August 13, 2026
 
-This plan turns the five migration gates in [Repository boundary](../../cloud/repository-boundary.md#migration-gates) into reviewable delivery slices. Gates 1–4 primarily change the public Arena repository. Gate 5 describes acceptance requirements for a future private `arena-cloud` repository; it does not imply that repository or service exists today.
+This plan turns the five migration gates in [Repository boundary](../../cloud/repository-boundary.md#migration-gates) into reviewable delivery slices. Gates 1–4 primarily change the public Arena repository. A private `arena-cloud` repository now exists as a non-production policy scaffold; Gate 5 describes the acceptance requirements for implementing and operating the hosted service.
 
 > **Production hold:** The private service must not process production customer media until Gates 1–3 are complete. Prototypes may use synthetic or explicitly approved non-production fixtures only.
 

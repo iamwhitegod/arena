@@ -32,22 +32,21 @@ A private-looking directory inside the public repository is not a security bound
 
 ## Current state
 
-The current public repository is still a combined checkout containing:
+The existing public OSS repository is still in its cutover window and contains:
 
 - `cli/` — the TypeScript CLI and its Python subprocess bridge.
 - `engine/` — the Python processing engine and command implementation.
-- `website/` — the public marketing website awaiting history-preserving extraction.
+- `website/` — the former marketing website copy retained temporarily for deployment rollback.
 - `docs/` — maintained product documentation and historical records.
 - Root packaging, container, governance, and release files.
 
-The following proposed boundary components do not yet exist as stable public contracts:
+The public `arena-website` repository and private `arena-cloud` scaffold now exist. The Cloud scaffold is non-production and contains boundary controls only. The following components do not yet exist as stable public contracts or production capabilities:
 
 - A root `schemas/` package.
 - Cross-language contract and compatibility tests.
 - An authenticated `arena cloud` CLI namespace.
 - A published programmatic engine facade intended for Cloud workers.
-- A separate public `arena-website` repository.
-- A private `arena-cloud` repository.
+- A production-ready private Cloud service.
 
 Until those components exist, Cloud code must not copy or import evolving engine internals and present that coupling as a supported integration.
 

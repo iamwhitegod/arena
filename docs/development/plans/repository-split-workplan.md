@@ -1,6 +1,6 @@
 # Three-repository split workplan
 
-**Status:** Approved for implementation
+**Status:** In progress
 
 **Last reviewed:** August 13, 2026
 
@@ -31,6 +31,26 @@ arena/                         # Local workspace; not a Git repository
 ```
 
 The directories are ordinary sibling checkouts. They are not symlinks, Git submodules, or relative package dependencies. The local directory may be named `arena-oss`, while the existing public remote and GitHub repository may continue to be named `arena`.
+
+## Implementation status
+
+| Phase                            | Status                                       | Evidence or remaining gate                                                                                                                                                 |
+| -------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0. Approve the split             | Complete                                     | Recommended checklist approved August 13, 2026                                                                                                                             |
+| 1. Establish a clean baseline    | Complete                                     | Protected rollback tag `pre-repository-split-2026-08-13`; CLI, engine, Website, and container checks recorded in the foundation PR                                         |
+| 2. Extract `arena-website`       | Preview complete; production cutover pending | Public repository created with 13 history-preserved Website commits; clean install, lint, build, main CI, CODEOWNERS, protected branch, and Vercel preview routes verified |
+| 3. Establish `arena-oss`         | In progress                                  | Existing public remote retained; `website/` removal waits for Website deployment cutover and one release observation window                                                |
+| 4. Create `arena-cloud`          | Scaffold complete; product work gated        | Private non-production repository and boundary CI created; production hold remains in force                                                                                |
+| 5. Create the local workspace    | Complete                                     | Non-Git `arena/` parent contains three independent sibling checkouts and `arena.code-workspace`                                                                            |
+| 6. Cross-repository release flow | Pending                                      | Begins after Website deployment cutover and published Gate 2–3 Cloud contracts                                                                                             |
+
+Current repositories:
+
+- Arena OSS: <https://github.com/iamwhitegod/arena>
+- Arena Website: <https://github.com/iamwhitegod/arena-website>
+- Arena Cloud: private `iamwhitegod/arena-cloud`
+
+The private repository has CODEOWNERS and a green required-boundary workflow. Server-side branch-protection enforcement is pending a GitHub plan that supports protected branches on private repositories.
 
 ## Dependency rules
 
