@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import List, Dict, Optional
 
+from arena.providers.subprocess_env import scrubbed_env
+
 
 class SceneDetector:
     """
@@ -64,7 +66,8 @@ class SceneDetector:
                 command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
+                env=scrubbed_env(),
             )
 
             # Parse scene timestamps from ffmpeg output

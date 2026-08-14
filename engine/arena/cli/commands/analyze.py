@@ -29,9 +29,23 @@ def run_analyze(args):
         required.add(Capability.SPEECH)
 
     try:
-        inference = resolve_inference(required=required)
+        inference = resolve_inference(
+            required=required,
+            provider=getattr(args, 'provider', None),
+            chat_provider=getattr(args, 'chat_provider', None),
+            chat_model=getattr(args, 'chat_model', None) or getattr(args, 'editorial_model', None),
+            overview_chat_provider=getattr(args, 'overview_chat_provider', None),
+            overview_chat_model=getattr(args, 'overview_chat_model', None),
+            embedding_provider=getattr(args, 'embedding_provider', None),
+            embedding_model=getattr(args, 'embedding_model', None),
+            transcription_provider=getattr(args, 'transcription_provider', None),
+            transcription_model=getattr(args, 'transcription_model', None),
+        )
     except ProviderAuthError as e:
         print(f"❌ Error: {e}")
+        return 1
+    except ValueError as e:
+        print(f"❌ Provider configuration failed: {e}")
         return 1
 
     print(f"\n🧠 Analyzing: {video_path.name}\n")
@@ -95,7 +109,11 @@ def run_analyze(args):
         return 0
 
     except Exception as e:
-        print(f"\n❌ Analysis failed: {e}")
-        import traceback
-        traceback.print_exc()
+        from arena.providers.base import ProviderError
+        if isinstance(e, ProviderError):
+            print(f"\n❌ Analysis failed: {e}")
+        else:
+            print(f"\n❌ Analysis failed: {e}")
+            import traceback
+            traceback.print_exc()
         return 1

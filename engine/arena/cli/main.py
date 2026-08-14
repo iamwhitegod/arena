@@ -11,6 +11,36 @@ if sys.platform == 'win32':
 
 from . import __version__
 
+_PROVIDER_CHOICES = ["openai"]
+_CHAT_MODEL_CHOICES = ["gpt-4o", "gpt-4o-mini"]
+_EMBEDDING_MODEL_CHOICES = ["text-embedding-3-small", "text-embedding-3-large"]
+_TRANSCRIPTION_MODEL_CHOICES = ["whisper-1"]
+
+
+def _add_capability_provider_args(
+    parser,
+    *,
+    chat: bool = False,
+    overview_chat: bool = False,
+    embedding: bool = False,
+    transcription: bool = False,
+):
+    """Add non-secret per-capability provider/model selectors."""
+    if chat:
+        parser.add_argument("--chat-provider", choices=_PROVIDER_CHOICES, default=None)
+        parser.add_argument("--chat-model", choices=_CHAT_MODEL_CHOICES, default=None)
+    if overview_chat:
+        parser.add_argument("--overview-chat-provider", choices=_PROVIDER_CHOICES, default=None)
+        parser.add_argument("--overview-chat-model", choices=_CHAT_MODEL_CHOICES, default=None)
+    if embedding:
+        parser.add_argument("--embedding-provider", choices=_PROVIDER_CHOICES, default=None)
+        parser.add_argument("--embedding-model", choices=_EMBEDDING_MODEL_CHOICES, default=None)
+    if transcription:
+        parser.add_argument("--transcription-provider", choices=_PROVIDER_CHOICES, default=None)
+        parser.add_argument(
+            "--transcription-model", choices=_TRANSCRIPTION_MODEL_CHOICES, default=None
+        )
+
 
 def main():
     """Main CLI entry point"""
@@ -172,9 +202,16 @@ Documentation:
     )
     process_parser.add_argument(
         '--provider',
-        choices=['openai'],
+        choices=_PROVIDER_CHOICES,
         default=None,
         help='Inference provider for all capabilities (default: openai)'
+    )
+    _add_capability_provider_args(
+        process_parser,
+        chat=True,
+        overview_chat=True,
+        embedding=True,
+        transcription=True,
     )
     process_parser.add_argument(
         '--export-editorial-layers',
@@ -265,6 +302,13 @@ Documentation:
         default=None,
         help='Browser to extract cookies from for URL downloads (chrome, firefox, safari, brave, edge)'
     )
+    transcribe_parser.add_argument(
+        '--provider',
+        choices=_PROVIDER_CHOICES,
+        default=None,
+        help='Inference provider shorthand (default: openai)'
+    )
+    _add_capability_provider_args(transcribe_parser, transcription=True)
 
     # =========================================================================
     # arena analyze
@@ -315,6 +359,25 @@ Documentation:
         type=float,
         default=0.3,
         help='Energy boost weight 0-1 (default: 0.3)'
+    )
+    analyze_parser.add_argument(
+        '--editorial-model',
+        choices=['gpt-4o', 'gpt-4o-mini'],
+        default='gpt-4o',
+        help='Model to use for editorial analysis (default: gpt-4o, mini saves ~60%% cost)'
+    )
+    analyze_parser.add_argument(
+        '--provider',
+        choices=_PROVIDER_CHOICES,
+        default=None,
+        help='Inference provider for all capabilities (default: openai)'
+    )
+    _add_capability_provider_args(
+        analyze_parser,
+        chat=True,
+        overview_chat=True,
+        embedding=True,
+        transcription=True,
     )
 
     # =========================================================================
@@ -510,8 +573,10 @@ Documentation:
         return 130
     except Exception as e:
         print(f"\n❌ Error: {e}", file=sys.stderr)
-        import traceback
-        traceback.print_exc()
+        from arena.providers.base import ProviderError
+        if not isinstance(e, ProviderError):
+            import traceback
+            traceback.print_exc()
         return 1
 
 

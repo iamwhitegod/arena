@@ -60,17 +60,14 @@ class OpenAIChatModel(ChatModel):
         response_mode: ResponseMode = ResponseMode.TEXT,
         json_schema: Optional[dict] = None,
     ) -> ChatResponse:
-        self._ensure_client()
-
+        kwargs = dict(model=self._model, messages=messages, temperature=temperature)
         response_format = self._translate_response_mode(response_mode)
+        if response_format is not None:
+            kwargs["response_format"] = response_format
 
         try:
-            response = self._client.chat.completions.create(
-                model=self._model,
-                messages=messages,
-                temperature=temperature,
-                response_format=response_format,
-            )
+            self._ensure_client()
+            response = self._client.chat.completions.create(**kwargs)
         except Exception as e:
             raise self._translate_error(e) from e
 
@@ -83,7 +80,7 @@ class OpenAIChatModel(ChatModel):
                 parsed = json.loads(content)
             except (json.JSONDecodeError, ValueError) as e:
                 raise ProviderResponseError(
-                    f"Model returned invalid JSON: {content[:200]}",
+                    "Model returned invalid JSON",
                     code="response_error",
                     retryable=True,
                 ) from e
@@ -120,7 +117,9 @@ class OpenAIChatModel(ChatModel):
             )
         except ImportError:
             return ProviderError(
-                str(e), code="unknown", retryable=False,
+                "OpenAI provider dependency is unavailable.",
+                code="unavailable",
+                retryable=False,
             )
 
         if isinstance(e, AuthenticationError):
@@ -143,7 +142,7 @@ class OpenAIChatModel(ChatModel):
             )
         if isinstance(e, BadRequestError):
             return ProviderInvalidRequestError(
-                f"OpenAI rejected the request: {e}",
+                "OpenAI rejected the request.",
                 code="invalid_request", retryable=False,
             )
         if isinstance(e, APITimeoutError):
@@ -166,7 +165,7 @@ class OpenAIChatModel(ChatModel):
             )
 
         return ProviderError(
-            f"OpenAI error: {e}", code="unknown", retryable=False,
+            "Unexpected OpenAI error.", code="unknown", retryable=False,
         )
 
 
@@ -184,9 +183,8 @@ class OpenAIEmbeddingModel(EmbeddingModel):
             self._client = OpenAI(api_key=self._api_key)
 
     def embed(self, texts: list[str]) -> EmbeddingResponse:
-        self._ensure_client()
-
         try:
+            self._ensure_client()
             response = self._client.embeddings.create(
                 model=self._model,
                 input=texts,
@@ -225,9 +223,8 @@ class OpenAISpeechModel(SpeechModel):
         return 24.0  # OpenAI's 25MB limit with 1MB safety buffer
 
     def transcribe(self, audio_path: Path) -> TranscriptionResponse:
-        self._ensure_client()
-
         try:
+            self._ensure_client()
             with open(audio_path, "rb") as audio_file:
                 response = self._client.audio.transcriptions.create(
                     model=self._model,

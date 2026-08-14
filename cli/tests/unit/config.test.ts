@@ -65,6 +65,10 @@ describe('ConfigManager', () => {
       expect(config.whisper_mode).toBe('api');
       expect(config.clip_duration).toEqual([30, 90]);
       expect(config.output_format).toBe('mp4');
+      expect(config.provider).toBe('openai');
+      expect(config.chat_model).toBe('gpt-4o');
+      expect(config.embedding_model).toBe('text-embedding-3-small');
+      expect(config.transcription_model).toBe('whisper-1');
 
       if (process.platform !== 'win32') {
         expect((await fs.stat(configPath)).mode & 0o777).toBe(0o600);

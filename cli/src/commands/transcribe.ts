@@ -14,8 +14,9 @@ import { isArenaError } from '../errors/index.js';
 import { displayTranscriptionSummary } from '../ui/summary.js';
 import { isUrl } from '../utils/url.js';
 import { commandHeader } from '../ui/output.js';
+import { requiredProviders, type ProviderSelectors } from '../core/providers.js';
 
-interface TranscribeOptions {
+interface TranscribeOptions extends ProviderSelectors {
   output?: string;
   cache?: boolean; // Note: commander negates --no-cache to cache: false
   cookiesFromBrowser?: string;
@@ -45,6 +46,14 @@ export async function transcribeCommand(
       );
     }
 
+    const configManager = new ConfigManager();
+    const globalConfig = await configManager.getGlobalConfig();
+    const selectors: ProviderSelectors = {
+      provider: options.provider || globalConfig.provider,
+      transcriptionProvider: options.transcriptionProvider || globalConfig.transcription_provider,
+      transcriptionModel: options.transcriptionModel || globalConfig.transcription_model,
+    };
+
     commandHeader('Transcribe media', [
       ['Input', isUrl(videoPath) ? videoPath : path.basename(absoluteVideoPath)],
       ['Output', outputFile],
@@ -53,7 +62,7 @@ export async function transcribeCommand(
     const preflightResult = await runPreflightChecksWithProgress({
       videoPath: absoluteVideoPath,
       outputDir: path.dirname(outputFile),
-      skipApiKeyCheck: false,
+      requiredProviders: requiredProviders(selectors, ['transcription']),
       enginePath: bridge.getEnginePath(),
     });
 
@@ -61,10 +70,6 @@ export async function transcribeCommand(
       console.log(formatErrorWithHelp(preflightResult.errors[0], options.debug));
       process.exit(1);
     }
-
-    // Load config for defaults
-    const configManager = new ConfigManager();
-    const globalConfig = await configManager.getGlobalConfig();
 
     // Show progress
     progress.start(chalk.cyan('Transcribing audio with Whisper...'));
@@ -76,6 +81,7 @@ export async function transcribeCommand(
         outputFile,
         noCache: options.cache === false,
         cookiesFromBrowser: options.cookiesFromBrowser || globalConfig?.cookies_from_browser,
+        ...selectors,
       },
       (update) => {
         if (update.progress !== undefined) {

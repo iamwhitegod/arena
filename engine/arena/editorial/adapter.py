@@ -12,10 +12,13 @@ New Architecture (Weeks 1-4):
 This replaces the old 4-layer system with a more robust approach.
 """
 
-from typing import List, Dict, Optional
+from typing import List, Dict, Mapping, Optional
 from pathlib import Path
+import hashlib
 import json
+import math
 import sys
+from types import MappingProxyType
 
 
 class FourLayerAdapter:
@@ -69,30 +72,77 @@ class FourLayerAdapter:
             self._overview_chat = inference.require_overview_chat()
             self._embedding = inference.require_embedding()
             self.api_key = None
+            if inference.profile is not None:
+                from arena.providers.profile import Capability
+                self.model = inference.profile.binding_for(Capability.CHAT).model
+                self._inference_fingerprint = inference.profile.fingerprint(
+                    {Capability.CHAT, Capability.OVERVIEW_CHAT, Capability.EMBEDDING},
+                    namespace="arena-editorial-v3",
+                )
+            else:
+                self.model = model
+                self._inference_fingerprint = self._legacy_fingerprint(model)
         elif api_key is not None:
             from arena.providers.openai_adapter import OpenAIChatModel, OpenAIEmbeddingModel
             self._chat = OpenAIChatModel(api_key=api_key, model=model)
             self._overview_chat = self._chat
             self._embedding = OpenAIEmbeddingModel(api_key=api_key)
             self.api_key = api_key
+            self.model = model
+            self._inference_fingerprint = self._legacy_fingerprint(model)
         else:
             raise ValueError("Either inference bundle or api_key is required")
 
-        self.model = model
         self.export_layers = export_layers
         self.layer_outputs = {}  # Store for export
         self.enable_checkpoints = enable_checkpoints
         self.checkpoint_dir = checkpoint_dir
         self.max_workers = max_workers
 
-        # Default scoring weights (75% completeness, 25% standalone)
-        self.score_weights = score_weights or {
-            'completeness': 0.75,
-            'standalone': 0.25
-        }
+        # Scoring weights affect both output and checkpoint identity. Keep an
+        # immutable, validated snapshot so the two cannot drift mid-run.
+        self.score_weights = self._validate_score_weights(score_weights)
 
-        # Modules will be initialized on first use
-        # (lazy initialization to avoid loading if not needed)
+        # Modules will be initialized on first use.
+
+    @staticmethod
+    def _legacy_fingerprint(model: str) -> str:
+        payload = {
+            "namespace": "arena-editorial-v3",
+            "chat": {"provider": "openai", "model": model},
+            "embedding": {"provider": "openai", "model": "text-embedding-3-small"},
+        }
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()[:20]
+
+    @staticmethod
+    def _validate_score_weights(
+        score_weights: Optional[Mapping[str, float]],
+    ) -> Mapping[str, float]:
+        weights = score_weights or {
+            "completeness": 0.75,
+            "standalone": 0.25,
+        }
+        expected = {"completeness", "standalone"}
+        if not isinstance(weights, Mapping) or set(weights) != expected:
+            raise ValueError(
+                "score_weights must contain exactly 'completeness' and 'standalone'"
+            )
+
+        validated = {}
+        for key in sorted(expected):
+            value = weights[key]
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError(f"score_weights['{key}'] must be a number")
+            numeric = float(value)
+            if not math.isfinite(numeric) or numeric < 0:
+                raise ValueError(
+                    f"score_weights['{key}'] must be a finite non-negative number"
+                )
+            validated[key] = numeric
+        if sum(validated.values()) <= 0:
+            raise ValueError("At least one score weight must be greater than zero")
+        return MappingProxyType(validated)
 
     def analyze_transcript(
         self,
@@ -153,7 +203,22 @@ class FourLayerAdapter:
             checkpoint_dir=self.checkpoint_dir,
             enabled=self.enable_checkpoints
         )
-        job_id = f"{CheckpointManager.generate_job_id(transcript_data)}_two_pass_v1"
+        checkpoint_context = {
+            "pipeline_version": "thought-unit-v3",
+            "inference": self._inference_fingerprint,
+            "target_clips": target_clips,
+            "min_duration": min_duration,
+            "max_duration": max_duration,
+            "score_weights": dict(self.score_weights),
+        }
+        context_bytes = json.dumps(
+            checkpoint_context, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        context_fingerprint = hashlib.sha256(context_bytes).hexdigest()[:20]
+        job_id = (
+            f"{CheckpointManager.generate_job_id(transcript_data)}_"
+            f"{context_fingerprint}_v3"
+        )
 
         if self.enable_checkpoints:
             existing_checkpoints = checkpoint_mgr.list_checkpoints(job_id)

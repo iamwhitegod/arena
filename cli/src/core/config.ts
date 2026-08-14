@@ -1,6 +1,12 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { getArenaHome } from './runtime.js';
+import type {
+  ChatModelName,
+  EmbeddingModelName,
+  ProviderName,
+  TranscriptionModelName,
+} from './providers.js';
 
 const PRIVATE_DIRECTORY_MODE = 0o700;
 const PRIVATE_FILE_MODE = 0o600;
@@ -14,6 +20,15 @@ export interface GlobalConfig {
   clip_duration?: [number, number];
   output_format?: string;
   cookies_from_browser?: string;
+  provider?: ProviderName;
+  chat_provider?: ProviderName;
+  chat_model?: ChatModelName;
+  overview_chat_provider?: ProviderName;
+  overview_chat_model?: ChatModelName;
+  embedding_provider?: ProviderName;
+  embedding_model?: EmbeddingModelName;
+  transcription_provider?: ProviderName;
+  transcription_model?: TranscriptionModelName;
   subtitle_style?: {
     font: string;
     size: number;
@@ -42,6 +57,10 @@ function defaultGlobalConfig(): GlobalConfig {
     whisper_mode: 'api',
     clip_duration: [30, 90],
     output_format: 'mp4',
+    provider: 'openai',
+    chat_model: 'gpt-4o',
+    embedding_model: 'text-embedding-3-small',
+    transcription_model: 'whisper-1',
     subtitle_style: {
       font: 'Arial',
       size: 24,

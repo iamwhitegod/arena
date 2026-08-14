@@ -6,6 +6,8 @@ import json
 import shutil
 import re
 
+from arena.providers.subprocess_env import scrubbed_env
+
 
 class ClipGenerator:
     """Generates video clips from selected segments using FFmpeg"""
@@ -67,7 +69,8 @@ class ClipGenerator:
                 command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                check=True
+                check=True,
+                env=scrubbed_env(),
             )
 
             data = json.loads(result.stdout.decode('utf-8'))
@@ -281,7 +284,8 @@ class ClipGenerator:
                 command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                check=True
+                check=True,
+                env=scrubbed_env(),
             )
 
             # Get output file size
@@ -375,7 +379,8 @@ class ClipGenerator:
                 command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                check=True
+                check=True,
+                env=scrubbed_env(),
             )
 
             output_size = output_path.stat().st_size
@@ -533,7 +538,8 @@ class ClipGenerator:
                 command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                check=True
+                check=True,
+                env=scrubbed_env(),
             )
             return output_path
 

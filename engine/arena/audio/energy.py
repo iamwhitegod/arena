@@ -5,6 +5,8 @@ import numpy as np
 import subprocess
 import tempfile
 
+from arena.providers.subprocess_env import scrubbed_env
+
 
 class AudioEnergyAnalyzer:
     """Analyzes audio for energy peaks indicating enthusiasm or emphasis"""
@@ -222,7 +224,8 @@ class AudioEnergyAnalyzer:
                 command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                check=True
+                check=True,
+                env=scrubbed_env(),
             )
             return audio_path
         except subprocess.CalledProcessError as e:

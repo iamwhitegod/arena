@@ -114,6 +114,16 @@ class TestJobIDGeneration(unittest.TestCase):
 
         self.assertEqual(job_id1, job_id2, "Same transcript should generate same job ID")
 
+    def test_job_id_uses_complete_transcript(self):
+        shared_intro = "same intro " * 60
+        transcript1 = {"text": shared_intro + "first ending", "duration": 10.0}
+        transcript2 = {"text": shared_intro + "second ending", "duration": 10.0}
+
+        self.assertNotEqual(
+            CheckpointManager.generate_job_id(transcript1),
+            CheckpointManager.generate_job_id(transcript2),
+        )
+
     def test_different_transcripts_different_ids(self):
         """Test that different transcripts generate different job IDs"""
         transcript1 = {"text": "First transcript"}

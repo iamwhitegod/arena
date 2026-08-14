@@ -15,6 +15,7 @@ import {
   validateDependencies,
   validateDurationRange,
 } from '../validation/index.js';
+import { SUPPORTED_PROVIDERS } from './providers.js';
 
 export interface PreflightOptions {
   videoPath: string;
@@ -24,6 +25,7 @@ export interface PreflightOptions {
   maxDuration?: string;
   padding?: string;
   skipApiKeyCheck?: boolean;
+  requiredProviders?: string[];
   enginePath?: string;
 }
 
@@ -32,6 +34,23 @@ export interface PreflightResult {
   errors: PreflightError[];
   warnings: string[];
   pythonVersion?: string;
+}
+
+function providerError(options: PreflightOptions): PreflightError | undefined {
+  const required = options.requiredProviders || ['openai'];
+  const unsupported = required.find(
+    (provider) => !SUPPORTED_PROVIDERS.includes(provider as (typeof SUPPORTED_PROVIDERS)[number])
+  );
+  if (!unsupported) return undefined;
+  return new PreflightError(
+    'UNSUPPORTED_PROVIDER',
+    `Unsupported inference provider: ${unsupported}`,
+    `Supported providers: ${SUPPORTED_PROVIDERS.join(', ')}`
+  );
+}
+
+function shouldValidateOpenAI(options: PreflightOptions): boolean {
+  return !options.skipApiKeyCheck && (options.requiredProviders || ['openai']).includes('openai');
 }
 
 /**
@@ -43,6 +62,9 @@ export async function runPreflightChecks(options: PreflightOptions): Promise<Pre
   const errors: PreflightError[] = [];
   const warnings: string[] = [];
   let pythonVersion: string | undefined;
+
+  const unsupportedProvider = providerError(options);
+  if (unsupportedProvider) errors.push(unsupportedProvider);
 
   // Video file validation
   try {
@@ -90,7 +112,7 @@ export async function runPreflightChecks(options: PreflightOptions): Promise<Pre
   }
 
   // API key validation (optional)
-  if (!options.skipApiKeyCheck) {
+  if (shouldValidateOpenAI(options)) {
     try {
       validateApiKey();
     } catch (error) {
@@ -137,6 +159,12 @@ export async function runPreflightChecksWithProgress(
 ): Promise<PreflightResult> {
   const spinner = ora();
   spinner.start('Running preflight checks...');
+
+  const unsupportedProvider = providerError(options);
+  if (unsupportedProvider) {
+    spinner.fail(chalk.red('Provider validation failed'));
+    return { passed: false, errors: [unsupportedProvider], warnings: [] };
+  }
 
   // Video file check
   spinner.text = 'Validating input...';
@@ -202,7 +230,7 @@ export async function runPreflightChecksWithProgress(
   }
 
   // API key check (optional)
-  if (!options.skipApiKeyCheck) {
+  if (shouldValidateOpenAI(options)) {
     spinner.text = 'Checking OpenAI API key...';
     try {
       validateApiKey();

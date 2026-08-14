@@ -109,6 +109,21 @@ describe('runPreflightChecks', () => {
     expect(mockValidateApiKey).toHaveBeenCalled();
   });
 
+  it('should reject unsupported providers before processing', async () => {
+    const result = await runPreflightChecks({
+      ...baseOptions,
+      requiredProviders: ['untrusted-provider'],
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.errors.some((error) => error.code === 'UNSUPPORTED_PROVIDER')).toBe(true);
+  });
+
+  it('should only validate OpenAI credentials when OpenAI is required', async () => {
+    await runPreflightChecks({ ...baseOptions, requiredProviders: [] });
+    expect(mockValidateApiKey).not.toHaveBeenCalled();
+  });
+
   it('should include python version in result', async () => {
     mockValidatePython.mockResolvedValue('Python 3.10.14');
 

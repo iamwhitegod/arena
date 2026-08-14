@@ -14,6 +14,7 @@ from .registry import InferenceBundle, ProviderRegistry
 def resolve_inference(
     *,
     required: set[Capability],
+    profile: Optional[RuntimeProfile] = None,
     provider: Optional[str] = None,
     chat_provider: Optional[str] = None,
     chat_model: Optional[str] = None,
@@ -41,7 +42,7 @@ def resolve_inference(
     Returns:
         InferenceBundle with only the requested models constructed.
     """
-    profile = RuntimeProfile.from_args(
+    resolved_profile = profile or RuntimeProfile.from_args(
         provider=provider,
         chat_provider=chat_provider,
         chat_model=chat_model,
@@ -56,4 +57,4 @@ def resolve_inference(
     creds = credentials or EnvironmentCredentialResolver()
     reg = registry or ProviderRegistry()
 
-    return reg.build_required(profile, required, creds)
+    return reg.build_required(resolved_profile, required, creds)

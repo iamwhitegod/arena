@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import hashlib
 import json
 import sys
 import os
@@ -45,6 +46,8 @@ def process_video(args):
         from arena.editorial import FourLayerAdapter
         from arena.clipping.scorer import SegmentScorer
         from arena.export.exporter import Exporter
+        from arena.providers import Capability, RuntimeProfile, resolve_inference
+        from arena.providers.base import ProviderAuthError
 
         video_path = Path(args.video_path)
         output_dir = Path(args.output_dir)
@@ -69,8 +72,36 @@ def process_video(args):
         video_metadata = loader.load()
         reporter.report("Loading", 100, f"Video loaded: {video_metadata['filename']}")
 
+        runtime_profile = RuntimeProfile.from_args(
+            provider=getattr(args, "provider", None),
+            chat_provider=getattr(args, "chat_provider", None),
+            chat_model=getattr(args, "chat_model", None),
+            overview_chat_provider=getattr(args, "overview_chat_provider", None),
+            overview_chat_model=getattr(args, "overview_chat_model", None),
+            embedding_provider=getattr(args, "embedding_provider", None),
+            embedding_model=getattr(args, "embedding_model", None),
+            transcription_provider=getattr(args, "transcription_provider", None),
+            transcription_model=getattr(args, "transcription_model", None),
+        )
+
         # Stage 2: Transcription
-        transcript_cache_path = cache_dir / "transcript.json"
+        whisper_mode = os.getenv("ARENA_WHISPER_MODE", "api").lower()
+        enhance_audio = os.getenv("ARENA_ENHANCE_AUDIO", "false").lower() == "true"
+        if whisper_mode == "local":
+            speech_binding_fingerprint = hashlib.sha256(
+                b"arena-transcription-v1:local:openai-whisper:base"
+            ).hexdigest()[:20]
+        else:
+            speech_binding_fingerprint = runtime_profile.fingerprint(
+                {Capability.SPEECH}, namespace="arena-transcription-v1"
+            )
+        speech_fingerprint = hashlib.sha256(
+            (
+                f"arena-transcript-cache-v2:{speech_binding_fingerprint}:"
+                f"enhance_audio={enhance_audio}"
+            ).encode("utf-8")
+        ).hexdigest()[:20]
+        transcript_cache_path = cache_dir / f"transcript_{speech_fingerprint}.json"
         transcript = None
 
         # Check cache first
@@ -89,34 +120,32 @@ def process_video(args):
         if transcript is None:
             reporter.report("Transcription", 0, "Starting transcription...")
 
-            # Determine whisper mode from environment variable
-            whisper_mode = os.getenv("ARENA_WHISPER_MODE", "api").lower()
-            api_key = os.getenv("OPENAI_API_KEY")
-
-            # Validate configuration based on mode
-            if whisper_mode == "api":
-                if not api_key:
+            if whisper_mode == "local":
+                reporter.report("Transcription", 10, "Using local Whisper model (first run downloads model)...")
+                try:
+                    transcriber = Transcriber(mode="local")
+                except ValueError as e:
+                    reporter.error(str(e))
+                    return 1
+            else:
+                reporter.report("Transcription", 10, "Using Whisper API...")
+                try:
+                    speech_bundle = resolve_inference(
+                        required={Capability.SPEECH}, profile=runtime_profile,
+                    )
+                    transcriber = Transcriber(speech=speech_bundle.require_speech())
+                except ProviderAuthError as e:
                     reporter.error(
-                        "OPENAI_API_KEY environment variable not set.\n"
+                        f"{e}\n"
                         "Option 1: Set API key: export OPENAI_API_KEY='sk-...'\n"
                         "Option 2: Use local Whisper: export ARENA_WHISPER_MODE='local'"
                     )
                     return 1
-                reporter.report("Transcription", 10, "Using OpenAI Whisper API...")
-            else:
-                reporter.report("Transcription", 10, "Using local Whisper model (first run downloads model)...")
-                # No API key needed for local mode
-                api_key = None
-
-            try:
-                transcriber = Transcriber(api_key=api_key, mode=whisper_mode)
-            except ValueError as e:
-                reporter.error(str(e))
-                return 1
+                except ValueError as e:
+                    reporter.error(str(e))
+                    return 1
 
             # Check if audio enhancement is enabled
-            enhance_audio = os.getenv("ARENA_ENHANCE_AUDIO", "false").lower() == "true"
-
             if enhance_audio:
                 reporter.report("Transcription", 20, "Enhancing audio quality...")
                 try:
@@ -167,7 +196,15 @@ def process_video(args):
         reporter.report("Analysis", 0, "Analyzing transcript with AI...")
 
         try:
-            analyzer = FourLayerAdapter(api_key=os.getenv("OPENAI_API_KEY"))
+            try:
+                edit_bundle = resolve_inference(
+                    required={Capability.CHAT, Capability.EMBEDDING},
+                    profile=runtime_profile,
+                )
+            except ProviderAuthError as e:
+                reporter.error(str(e))
+                return 1
+            analyzer = FourLayerAdapter(inference=edit_bundle)
             ai_segments = analyzer.analyze_transcript(
                 transcript,
                 target_clips=args.clip_count,
@@ -239,8 +276,10 @@ def process_video(args):
 
     except Exception as e:
         reporter.error(str(e))
-        import traceback
-        traceback.print_exc(file=sys.stderr)
+        from arena.providers.base import ProviderError
+        if not isinstance(e, ProviderError):
+            import traceback
+            traceback.print_exc(file=sys.stderr)
         return 1
 
 
@@ -262,6 +301,23 @@ def main():
                                 help='Maximum clip duration in seconds')
     process_parser.add_argument('--clip-count', type=int, default=10,
                                 help='Target number of clips to generate')
+    process_parser.add_argument('--provider', choices=['openai'], default=None)
+    process_parser.add_argument('--chat-provider', choices=['openai'], default=None)
+    process_parser.add_argument(
+        '--chat-model', choices=['gpt-4o', 'gpt-4o-mini'], default='gpt-4o'
+    )
+    process_parser.add_argument('--overview-chat-provider', choices=['openai'], default=None)
+    process_parser.add_argument(
+        '--overview-chat-model', choices=['gpt-4o', 'gpt-4o-mini'], default=None
+    )
+    process_parser.add_argument('--embedding-provider', choices=['openai'], default=None)
+    process_parser.add_argument(
+        '--embedding-model',
+        choices=['text-embedding-3-small', 'text-embedding-3-large'],
+        default=None,
+    )
+    process_parser.add_argument('--transcription-provider', choices=['openai'], default=None)
+    process_parser.add_argument('--transcription-model', choices=['whisper-1'], default=None)
 
     args = parser.parse_args()
 

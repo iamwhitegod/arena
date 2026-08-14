@@ -42,8 +42,9 @@ class CheckpointManager:
         """
         Generate unique job ID from transcript.
 
-        Uses hash of first 500 characters of transcript text to create
-        a stable identifier for this video.
+        Uses a canonical hash of the complete transcript payload. This avoids
+        collisions between videos that share an intro or whose differences
+        occur after the first few hundred characters.
 
         Args:
             transcript_data: Transcript dict with 'text' field
@@ -55,9 +56,14 @@ class CheckpointManager:
             >>> job_id = CheckpointManager.generate_job_id(transcript_data)
             >>> print(job_id)  # e.g., "a3f9c8e2b1d4"
         """
-        text_sample = str(transcript_data.get('text', ''))[:500]
-        hash_obj = hashlib.md5(text_sample.encode())
-        return hash_obj.hexdigest()[:12]
+        canonical = json.dumps(
+            transcript_data,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            default=str,
+        ).encode("utf-8")
+        return hashlib.sha256(canonical).hexdigest()[:12]
 
     def save_checkpoint(
         self,

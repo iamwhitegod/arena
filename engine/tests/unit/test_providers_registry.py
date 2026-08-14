@@ -50,6 +50,11 @@ class TestInferenceBundle(unittest.TestCase):
         self.assertIsNone(bundle.embedding)
         self.assertIsNotNone(bundle.speech)
 
+    def test_built_bundle_retains_safe_profile_identity(self):
+        profile = RuntimeProfile.default_openai()
+        bundle = InferenceBundle(profile=profile, chat=FakeChatModel())
+        self.assertIs(bundle.profile, profile)
+
 
 class TestProviderRegistry(unittest.TestCase):
 

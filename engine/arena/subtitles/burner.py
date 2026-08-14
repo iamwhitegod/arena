@@ -3,6 +3,8 @@ import subprocess
 from pathlib import Path
 from typing import List, Dict, Optional
 
+from arena.providers.subprocess_env import scrubbed_env
+
 
 class SubtitleBurner:
     """Generates and burns stylized subtitles into videos"""
@@ -106,7 +108,8 @@ class SubtitleBurner:
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            check=True
+            check=True,
+            env=scrubbed_env(),
         )
 
         return output_path

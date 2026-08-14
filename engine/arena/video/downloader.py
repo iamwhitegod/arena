@@ -6,6 +6,8 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
+from arena.providers.subprocess_env import scrubbed_env
+
 
 DEFAULT_CACHE_DIR = Path.home() / '.arena' / 'cache' / 'downloads'
 
@@ -143,7 +145,7 @@ def download_video(
         cmd.insert(-1, '--cookies-from-browser')
         cmd.insert(-1, cookies_from_browser)
 
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, env=scrubbed_env())
 
     if result.returncode != 0:
         error_msg = result.stderr.strip()
@@ -210,7 +212,7 @@ def download_audio(
         cmd.insert(-1, '--cookies-from-browser')
         cmd.insert(-1, cookies_from_browser)
 
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, env=scrubbed_env())
 
     if result.returncode != 0:
         error_msg = result.stderr.strip()

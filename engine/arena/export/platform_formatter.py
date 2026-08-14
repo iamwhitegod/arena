@@ -12,6 +12,8 @@ import subprocess
 import json
 from dataclasses import dataclass
 
+from arena.providers.subprocess_env import scrubbed_env
+
 
 @dataclass
 class PlatformSpec:
@@ -157,7 +159,8 @@ class PlatformFormatter:
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            check=True
+            check=True,
+            env=scrubbed_env(),
         )
 
         data = json.loads(result.stdout.decode('utf-8'))
@@ -287,7 +290,8 @@ class PlatformFormatter:
                 command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                check=True
+                check=True,
+                env=scrubbed_env(),
             )
 
             # Get output file info

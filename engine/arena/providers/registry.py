@@ -24,6 +24,7 @@ class InferenceBundle:
     overview_chat: Optional[ChatModel] = None
     embedding: Optional[EmbeddingModel] = None
     speech: Optional[SpeechModel] = None
+    profile: Optional[RuntimeProfile] = None
 
     def require_chat(self) -> ChatModel:
         if self.chat is None:
@@ -143,7 +144,7 @@ class ProviderRegistry:
         This prevents arena transcribe from loading chat/embedding models
         and arena analyze --transcript from loading a speech model.
         """
-        bundle = InferenceBundle()
+        bundle = InferenceBundle(profile=profile)
 
         if Capability.CHAT in required:
             bundle.chat = self.build_chat(

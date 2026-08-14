@@ -6,9 +6,13 @@ import subprocess
 import tempfile
 import shutil
 
+from arena.providers.subprocess_env import scrubbed_env
+
 
 class Transcriber:
     """Handles audio transcription with word-level timestamps"""
+
+    MAX_TRANSCRIPTION_CHUNKS = 1000
 
     def __init__(self, api_key: str = None, mode: str = "api", *, speech=None):
         """
@@ -137,13 +141,34 @@ class Transcriber:
         Returns:
             Merged transcript from all chunks
         """
+        import math
+
         duration = self._get_audio_duration(audio_path)
+        if not math.isfinite(duration) or duration <= 0:
+            raise ValueError("Audio duration must be a positive finite number")
 
-        # Split into 10-minute chunks (safe for typical size limits at 128kbps)
-        chunk_duration = 600  # 10 minutes in seconds
-        num_chunks = int(duration / chunk_duration) + 1
+        limit_mb = self._speech.max_file_size_mb
+        if not math.isfinite(limit_mb) or limit_mb <= 0:
+            raise ValueError("Speech provider file-size limit must be positive and finite")
 
-        print(f"   Splitting {duration/60:.1f} minutes into {num_chunks} chunks...")
+        limit_bytes = int(limit_mb * 1024 * 1024)
+        # Chunks are encoded as 64 kbps mono MP3. Reserve 10% for container
+        # overhead and bitrate variation, then verify the actual output size.
+        encoded_bytes_per_second = 64_000 / 8
+        chunk_duration = min(600.0, (limit_bytes * 0.9) / encoded_bytes_per_second)
+        minimum_chunk_duration = 0.25
+        if chunk_duration < minimum_chunk_duration:
+            raise ValueError("Speech provider file-size limit is too small for audio chunks")
+
+        estimated_chunks = max(math.ceil(duration / chunk_duration), 1)
+        if estimated_chunks > self.MAX_TRANSCRIPTION_CHUNKS:
+            raise ValueError(
+                f"Transcription would require more than {self.MAX_TRANSCRIPTION_CHUNKS} chunks"
+            )
+        print(
+            f"   Splitting {duration/60:.1f} minutes into "
+            f"approximately {estimated_chunks} chunks..."
+        )
 
         all_words = []
         all_segments = []
@@ -153,14 +178,36 @@ class Transcriber:
         temp_dir = Path(tempfile.mkdtemp())
 
         try:
-            for i in range(num_chunks):
-                start_time = i * chunk_duration
-                end_time = min((i + 1) * chunk_duration, duration)
+            start_time = 0.0
+            chunk_index = 0
+            while start_time < duration:
+                if chunk_index >= self.MAX_TRANSCRIPTION_CHUNKS:
+                    raise ValueError(
+                        f"Transcription exceeded {self.MAX_TRANSCRIPTION_CHUNKS} chunks"
+                    )
+                candidate_duration = min(chunk_duration, duration - start_time)
+                chunk_path = temp_dir / f"chunk_{chunk_index:03d}.mp3"
 
-                chunk_path = temp_dir / f"chunk_{i:03d}.mp3"
-                self._extract_audio_chunk(audio_path, chunk_path, start_time, end_time)
+                while True:
+                    end_time = min(start_time + candidate_duration, duration)
+                    self._extract_audio_chunk(audio_path, chunk_path, start_time, end_time)
+                    if chunk_path.stat().st_size <= limit_bytes:
+                        break
 
-                print(f"   Transcribing chunk {i+1}/{num_chunks} ({start_time/60:.1f}-{end_time/60:.1f} min)...")
+                    chunk_path.unlink(missing_ok=True)
+                    candidate_duration /= 2
+                    if candidate_duration < minimum_chunk_duration:
+                        raise ValueError(
+                            "Unable to create an audio chunk within the provider file-size limit"
+                        )
+
+                # If real encoded output was larger than estimated, retain the
+                # smaller proven duration for subsequent chunks.
+                chunk_duration = min(chunk_duration, candidate_duration)
+                print(
+                    f"   Transcribing chunk {chunk_index + 1} "
+                    f"({start_time/60:.1f}-{end_time/60:.1f} min)..."
+                )
 
                 response = self._speech.transcribe(chunk_path)
                 chunk_dict = self._response_to_dict(
@@ -175,8 +222,10 @@ class Transcriber:
                 last_language = chunk_dict["language"]
 
                 chunk_path.unlink()
+                start_time = end_time
+                chunk_index += 1
 
-            print(f"   ✓ Transcription complete ({num_chunks} chunks merged)\n")
+            print(f"   ✓ Transcription complete ({chunk_index} chunks merged)\n")
 
             return {
                 "text": " ".join(full_text),
@@ -204,7 +253,8 @@ class Transcriber:
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            env=scrubbed_env(),
         )
 
         return float(result.stdout.strip())
@@ -219,17 +269,15 @@ class Transcriber:
         """Extract a specific time range from audio file"""
         duration = end_time - start_time
 
-        # Use codec copy when input/output formats match, re-encode otherwise
-        input_ext = Path(audio_path).suffix.lower()
-        output_ext = Path(output_path).suffix.lower()
-        codec_args = ["-acodec", "copy"] if input_ext == output_ext else ["-q:a", "2"]
-
         command = [
             "ffmpeg",
             "-i", str(audio_path),
             "-ss", str(start_time),
             "-t", str(duration),
-            *codec_args,
+            "-acodec", "libmp3lame",
+            "-ar", "16000",
+            "-ac", "1",
+            "-b:a", "64k",
             "-y",
             str(output_path)
         ]
@@ -238,7 +286,8 @@ class Transcriber:
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            check=True
+            check=True,
+            env=scrubbed_env(),
         )
 
     def _transcribe_local(self, audio_path: Path) -> Dict:
@@ -328,7 +377,8 @@ class Transcriber:
                 command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                check=True
+                check=True,
+                env=scrubbed_env(),
             )
             return output_path
         except subprocess.CalledProcessError as e:

@@ -1,6 +1,6 @@
 """arena transcribe - Transcribe video audio"""
 
-import os
+import hashlib
 import json
 from pathlib import Path
 from arena.audio.transcriber import Transcriber
@@ -21,21 +21,28 @@ def run_transcribe(args):
         print(f"❌ Error: File not found: {args.video}")
         return 1
 
-    # Resolve inference providers (speech only for transcribe)
+    # Build a non-secret transcription identity before constructing adapters.
     if args.mode == "local":
-        # Local mode uses openai-whisper package directly, no provider needed
+        transcription_fingerprint = hashlib.sha256(
+            b"arena-transcription-v1:local:openai-whisper:base"
+        ).hexdigest()[:20]
+        runtime_profile = None
         speech = None
     else:
-        from arena.providers import resolve_inference, Capability
-        from arena.providers.base import ProviderAuthError
+        from arena.providers import Capability, RuntimeProfile
         try:
-            inference = resolve_inference(required={Capability.SPEECH})
-            speech = inference.require_speech()
-        except ProviderAuthError as e:
-            print(f"❌ Error: {e}")
-            print("   Get one at: https://platform.openai.com/api-keys")
-            print("   Set it with: export OPENAI_API_KEY='sk-your-key-here'")
+            runtime_profile = RuntimeProfile.from_args(
+                provider=getattr(args, 'provider', None),
+                transcription_provider=getattr(args, 'transcription_provider', None),
+                transcription_model=getattr(args, 'transcription_model', None),
+            )
+        except ValueError as e:
+            print(f"❌ Provider configuration failed: {e}")
             return 1
+        transcription_fingerprint = runtime_profile.fingerprint(
+            {Capability.SPEECH}, namespace="arena-transcription-v1"
+        )
+        speech = None
 
     # Determine output path
     if args.output:
@@ -43,13 +50,38 @@ def run_transcribe(args):
     else:
         output_path = video_path.parent / f"{video_path.stem}_transcript.json"
 
-    # Check cache
-    if not args.no_cache and output_path.exists():
+    cache_metadata_path = output_path.with_suffix(output_path.suffix + ".arena-cache.json")
+
+    # Reuse only artifacts produced by the same transcription binding.
+    cache_matches = False
+    if not args.no_cache and output_path.exists() and cache_metadata_path.exists():
+        try:
+            with open(cache_metadata_path) as f:
+                cache_metadata = json.load(f)
+            cache_matches = cache_metadata.get("transcription_fingerprint") == transcription_fingerprint
+        except (OSError, ValueError, TypeError):
+            cache_matches = False
+
+    if cache_matches:
         with open(output_path) as f:
             transcript_data = json.load(f)
         progress("transcription", 100, "Using cached transcript")
         result({"success": True, "cached": True, "duration": transcript_data.get("duration", 0), "wordCount": len(transcript_data.get("words", [])), "language": transcript_data.get("language", "unknown"), "outputFile": str(output_path)})
         return 0
+
+    if args.mode != "local":
+        from arena.providers import resolve_inference, Capability
+        from arena.providers.base import ProviderAuthError
+        try:
+            inference = resolve_inference(
+                required={Capability.SPEECH}, profile=runtime_profile,
+            )
+            speech = inference.require_speech()
+        except ProviderAuthError as e:
+            print(f"❌ Error: {e}")
+            print("   Get one at: https://platform.openai.com/api-keys")
+            print("   Set it with: export OPENAI_API_KEY='sk-your-key-here'")
+            return 1
 
     print(f"\n🎤 Transcribing: {video_path.name}")
     print(f"   Mode: {args.mode}")
@@ -69,6 +101,8 @@ def run_transcribe(args):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, 'w') as f:
             json.dump(transcript_data, f, indent=2)
+        with open(cache_metadata_path, 'w') as f:
+            json.dump({"transcription_fingerprint": transcription_fingerprint}, f, indent=2)
 
         print(f"\n✅ Transcription complete!")
         print(f"   Duration: {transcript_data.get('duration', 0):.1f}s")

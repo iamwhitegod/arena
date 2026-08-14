@@ -40,7 +40,16 @@ def run_process(args):
                 'position': getattr(args, 'caption_position', None),
             }.items() if v is not None
         } if getattr(args, 'captions', False) else None,
-        cookies_from_browser=getattr(args, 'cookies_from_browser', None)
+        cookies_from_browser=getattr(args, 'cookies_from_browser', None),
+        provider=getattr(args, 'provider', None),
+        chat_provider=getattr(args, 'chat_provider', None),
+        chat_model=getattr(args, 'chat_model', None),
+        overview_chat_provider=getattr(args, 'overview_chat_provider', None),
+        overview_chat_model=getattr(args, 'overview_chat_model', None),
+        embedding_provider=getattr(args, 'embedding_provider', None),
+        embedding_model=getattr(args, 'embedding_model', None),
+        transcription_provider=getattr(args, 'transcription_provider', None),
+        transcription_model=getattr(args, 'transcription_model', None),
         )
     if exit_code == 0:
         result({"success": True, "outputDir": str(Path(args.output).resolve())})

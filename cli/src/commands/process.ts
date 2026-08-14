@@ -9,8 +9,9 @@ import { formatErrorWithHelp } from '../errors/formatter.js';
 import { isArenaError } from '../errors/index.js';
 import { isUrl } from '../utils/url.js';
 import { commandHeader } from '../ui/output.js';
+import { requiredProviders, type ProviderSelectors } from '../core/providers.js';
 
-interface ProcessOptions {
+interface ProcessOptions extends ProviderSelectors {
   output?: string;
   numClips?: string;
   min?: string;
@@ -42,6 +43,21 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
     const absoluteVideoPath = isUrl(videoPath) ? videoPath : path.resolve(videoPath);
     const outputDir = options.output || '.arena/output';
 
+    const configManager = new ConfigManager();
+    await configManager.ensureGlobalConfig();
+    const globalConfig = await configManager.getGlobalConfig();
+    const selectors: ProviderSelectors = {
+      provider: options.provider || globalConfig.provider,
+      chatProvider: options.chatProvider || globalConfig.chat_provider,
+      chatModel: options.chatModel || options.editorialModel || globalConfig.chat_model || 'gpt-4o',
+      overviewChatProvider: options.overviewChatProvider || globalConfig.overview_chat_provider,
+      overviewChatModel: options.overviewChatModel || globalConfig.overview_chat_model,
+      embeddingProvider: options.embeddingProvider || globalConfig.embedding_provider,
+      embeddingModel: options.embeddingModel || globalConfig.embedding_model,
+      transcriptionProvider: options.transcriptionProvider || globalConfig.transcription_provider,
+      transcriptionModel: options.transcriptionModel || globalConfig.transcription_model,
+    };
+
     commandHeader('Arena', [
       ['Input', isUrl(videoPath) ? videoPath : path.basename(absoluteVideoPath)],
       ['Output', path.resolve(outputDir)],
@@ -58,7 +74,12 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
       minDuration: options.min,
       maxDuration: options.max,
       padding: options.padding,
-      skipApiKeyCheck: false,
+      requiredProviders: requiredProviders(selectors, [
+        'chat',
+        'overviewChat',
+        'embedding',
+        'transcription',
+      ]),
       enginePath: bridge.getEnginePath(),
     });
 
@@ -73,9 +94,6 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
     await workspace.initialize();
 
     // Create config and load defaults
-    const configManager = new ConfigManager();
-    await configManager.ensureGlobalConfig();
-    const globalConfig = await configManager.getGlobalConfig();
     await configManager.createProjectConfig(absoluteVideoPath);
 
     // Initialize processing stages for progress tracking
@@ -95,7 +113,8 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
         minDuration: options.min ? parseInt(options.min) : undefined,
         maxDuration: options.max ? parseInt(options.max) : undefined,
         clipCount: options.numClips ? parseInt(options.numClips) : undefined,
-        editorialModel: options.editorialModel || 'gpt-4o',
+        editorialModel: options.editorialModel,
+        ...selectors,
         exportLayers: options.exportLayers || false,
         fast: options.fast || false,
         noCache: options.cache === false, // --no-cache sets cache to false

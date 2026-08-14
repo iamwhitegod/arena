@@ -1,16 +1,21 @@
 """
-Provider-aware retry with exponential backoff.
+Provider-aware retry with exponential backoff and jitter.
 
 Retry decisions are driven by ProviderError.retryable — no provider_type
 strings or exception-message matching.
 """
 
+import random
 import time
+import math
 from typing import Callable, TypeVar
 
 from .base import ProviderError
 
 T = TypeVar("T")
+
+# Maximum delay between retries, regardless of retry_after header
+MAX_RETRY_DELAY = 120.0  # 2 minutes
 
 
 def retry_with_backoff(
@@ -20,10 +25,11 @@ def retry_with_backoff(
     initial_delay: float = 1.0,
     verbose: bool = True,
 ) -> T:
-    """Retry fn on retryable ProviderErrors with exponential backoff.
+    """Retry fn on retryable ProviderErrors with exponential backoff and jitter.
 
     - If ProviderError.retryable is False, re-raises immediately.
-    - If ProviderError.retry_after is set, uses that delay instead of backoff.
+    - If ProviderError.retry_after is set, uses that (capped at MAX_RETRY_DELAY).
+    - Adds jitter (50-150% of base delay) to avoid thundering herd.
     - Non-ProviderError exceptions propagate without retry.
     """
     delay = initial_delay
@@ -35,7 +41,14 @@ def retry_with_backoff(
             if not e.retryable or attempt >= max_retries:
                 raise
 
-            wait = e.retry_after if e.retry_after is not None else delay
+            if e.retry_after is not None and math.isfinite(e.retry_after):
+                wait = min(max(e.retry_after, 0.0), MAX_RETRY_DELAY)
+            else:
+                # Jitter: 50-150% of current delay
+                wait = delay * (0.5 + random.random())
+
+            wait = min(max(wait, 0.0), MAX_RETRY_DELAY)
+
             if verbose:
                 print(
                     f"      Retrying ({attempt + 1}/{max_retries}) "

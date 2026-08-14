@@ -10,7 +10,7 @@ This script runs the complete Arena pipeline:
 """
 
 import sys
-import os
+import hashlib
 import json
 import time
 from pathlib import Path
@@ -62,7 +62,16 @@ def run_arena_pipeline(
     pad_color: str = "#000000",
     captions: bool = False,
     caption_style: Optional[dict] = None,
-    cookies_from_browser: Optional[str] = None
+    cookies_from_browser: Optional[str] = None,
+    provider: Optional[str] = None,
+    chat_provider: Optional[str] = None,
+    chat_model: Optional[str] = None,
+    overview_chat_provider: Optional[str] = None,
+    overview_chat_model: Optional[str] = None,
+    embedding_provider: Optional[str] = None,
+    embedding_model: Optional[str] = None,
+    transcription_provider: Optional[str] = None,
+    transcription_model: Optional[str] = None,
 ):
     """
     Run the complete Arena pipeline
@@ -128,13 +137,31 @@ def run_arena_pipeline(
     print()
 
     # Resolve inference providers
-    from arena.providers import resolve_inference, Capability
+    from arena.providers import resolve_inference, Capability, RuntimeProfile
     from arena.providers.base import ProviderAuthError
 
     try:
+        runtime_profile = RuntimeProfile.from_args(
+            provider=provider,
+            chat_provider=chat_provider,
+            chat_model=chat_model or editorial_model,
+            overview_chat_provider=overview_chat_provider,
+            overview_chat_model=overview_chat_model,
+            embedding_provider=embedding_provider,
+            embedding_model=embedding_model,
+            transcription_provider=transcription_provider,
+            transcription_model=transcription_model,
+        )
+    except ValueError as e:
+        print(f"❌ Provider configuration failed: {e}")
+        return 1
+    effective_editorial_model = runtime_profile.binding_for(Capability.CHAT).model
+
+    # Resolve chat + embedding eagerly; speech is deferred until needed.
+    try:
         inference = resolve_inference(
-            required={Capability.CHAT, Capability.EMBEDDING, Capability.SPEECH},
-            chat_model=editorial_model,
+            required={Capability.CHAT, Capability.EMBEDDING},
+            profile=runtime_profile,
         )
     except ProviderAuthError as e:
         print(f"⚠️  {e}")
@@ -144,9 +171,6 @@ def run_arena_pipeline(
     except Exception as e:
         print(f"❌ Provider setup failed: {e}")
         return 1
-
-    # Backward compat: keep api_key for any remaining direct usage
-    api_key = os.getenv('OPENAI_API_KEY')
 
     # Pipeline progress tracking
     total_steps = 4  # Added professional alignment step
@@ -160,7 +184,16 @@ def run_arena_pipeline(
     print(f"[{current_step}/{total_steps}] 📝 Transcription")
     print(f"{'='*70}\n")
 
-    transcript_cache = cache_dir / f"{video_file.stem}_transcript.json"
+    speech_binding_fingerprint = runtime_profile.fingerprint(
+        {Capability.SPEECH}, namespace="arena-transcription-v1"
+    )
+    speech_fingerprint = hashlib.sha256(
+        (
+            f"arena-transcript-cache-v2:{speech_binding_fingerprint}:"
+            f"enhance_audio={enhance_audio}"
+        ).encode("utf-8")
+    ).hexdigest()[:20]
+    transcript_cache = cache_dir / f"{video_file.stem}_transcript_{speech_fingerprint}.json"
     enhanced_audio_path = cache_dir / f"{video_file.stem}_enhanced.wav"
 
     # Check if we should enhance audio
@@ -184,12 +217,14 @@ def run_arena_pipeline(
 
                 # Extract audio from video first
                 import subprocess
+                from arena.providers.subprocess_env import scrubbed_env
                 subprocess.run([
                     "ffmpeg", "-i", str(video_file),
                     "-vn", "-acodec", "pcm_s16le",
                     "-ar", "44100", "-ac", "2",
                     "-y", str(temp_audio)
-                ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+                ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
+                   env=scrubbed_env())
 
                 # Enhance the extracted audio
                 enhancer.enhance(temp_audio, enhanced_audio_path)
@@ -214,10 +249,19 @@ def run_arena_pipeline(
         print(f"  Duration: {transcript_data.get('duration', 0):.1f}s")
         print(f"  Words:    {len(transcript_data.get('words', []))}\n")
     else:
+        # Resolve speech provider only when transcription is actually needed
+        try:
+            speech_bundle = resolve_inference(
+                required={Capability.SPEECH}, profile=runtime_profile,
+            )
+        except ProviderAuthError as e:
+            print(f"⚠️  {e}")
+            return 1
+
         if HAS_TQDM:
             with tqdm(total=100, desc="🎤 Transcribing", bar_format='{l_bar}{bar}| {elapsed}') as pbar:
                 try:
-                    transcriber = Transcriber(speech=inference.require_speech())
+                    transcriber = Transcriber(speech=speech_bundle.require_speech())
                     pbar.update(20)
                     transcript_data = transcriber.transcribe(
                         audio_to_transcribe,
@@ -238,13 +282,13 @@ def run_arena_pipeline(
                     print(f"\n❌ Transcription failed: {e}")
                     return 1
         else:
-            print("🎤 Transcribing video with OpenAI Whisper...")
+            print("🎤 Transcribing audio...")
             print("   This may take a few minutes...\n")
 
             try:
-                transcriber = Transcriber(api_key=api_key, mode='api')
+                transcriber = Transcriber(speech=speech_bundle.require_speech())
                 transcript_data = transcriber.transcribe(
-                    audio_to_transcribe,  # Use enhanced audio if available
+                    audio_to_transcribe,
                     cache_dir=cache_dir
                 )
 
@@ -275,7 +319,7 @@ def run_arena_pipeline(
             with tqdm(total=100, desc="🔧 Initializing", bar_format='{l_bar}{bar}') as pbar:
                 ai_analyzer = FourLayerAdapter(
                     inference=inference,
-                    model=editorial_model,
+                    model=effective_editorial_model,
                     export_layers=export_editorial_layers,
                 )
                 pbar.update(33)
@@ -290,11 +334,11 @@ def run_arena_pipeline(
             print()
         else:
             print("🔧 Initializing analyzers...")
-            print(f"   Using 4-layer editorial system (model: {editorial_model})")
+            print(f"   Using 4-layer editorial system (model: {effective_editorial_model})")
             ai_analyzer = FourLayerAdapter(
-                api_key=api_key,
-                model=editorial_model,
-                export_layers=export_editorial_layers
+                inference=inference,
+                model=effective_editorial_model,
+                export_layers=export_editorial_layers,
             )
             energy_analyzer = AudioEnergyAnalyzer(video_path=video_file)
             hybrid_analyzer = HybridAnalyzer(
@@ -333,8 +377,10 @@ def run_arena_pipeline(
 
     except Exception as e:
         print(f"❌ Analysis failed: {e}")
-        import traceback
-        traceback.print_exc()
+        from arena.providers.base import ProviderError
+        if not isinstance(e, ProviderError):
+            import traceback
+            traceback.print_exc()
         return 1
 
     # =========================================================================

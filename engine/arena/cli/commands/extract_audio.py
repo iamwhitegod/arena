@@ -3,6 +3,7 @@
 import subprocess
 from pathlib import Path
 from arena.cli.protocol import progress, result as emit_result
+from arena.providers.subprocess_env import scrubbed_env
 
 
 def run_extract_audio(args):
@@ -92,7 +93,8 @@ def run_extract_audio(args):
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            check=True
+            check=True,
+            env=scrubbed_env(),
         )
 
         # Get file size

@@ -11,8 +11,9 @@ import {
   prependPath,
   resolveEnginePath,
 } from '../core/runtime.js';
+import type { ProviderSelectors } from '../core/providers.js';
 
-export interface ProcessOptions {
+export interface ProcessOptions extends ProviderSelectors {
   videoPath: string;
   outputDir: string;
   minDuration?: number;
@@ -35,7 +36,7 @@ export interface ProcessOptions {
   cookiesFromBrowser?: string;
 }
 
-export interface AnalyzeOptions {
+export interface AnalyzeOptions extends ProviderSelectors {
   videoPath: string;
   outputFile: string;
   minDuration?: number;
@@ -46,7 +47,7 @@ export interface AnalyzeOptions {
   sceneDetection?: boolean;
 }
 
-export interface TranscribeOptions {
+export interface TranscribeOptions extends ProviderSelectors {
   videoPath: string;
   outputFile: string;
   noCache?: boolean;
@@ -99,6 +100,23 @@ export interface ProgressUpdate {
   stage: string;
   progress: number;
   message: string;
+}
+
+function appendProviderArgs(args: string[], selectors: ProviderSelectors): void {
+  const values: Array<[string, string | undefined]> = [
+    ['--provider', selectors.provider],
+    ['--chat-provider', selectors.chatProvider],
+    ['--chat-model', selectors.chatModel],
+    ['--overview-chat-provider', selectors.overviewChatProvider],
+    ['--overview-chat-model', selectors.overviewChatModel],
+    ['--embedding-provider', selectors.embeddingProvider],
+    ['--embedding-model', selectors.embeddingModel],
+    ['--transcription-provider', selectors.transcriptionProvider],
+    ['--transcription-model', selectors.transcriptionModel],
+  ];
+  for (const [flag, value] of values) {
+    if (value) args.push(flag, value);
+  }
 }
 
 export class PythonBridge {
@@ -278,6 +296,7 @@ export class PythonBridge {
       if (options.editorialModel) {
         cmdArgs.push('--editorial-model', options.editorialModel);
       }
+      appendProviderArgs(cmdArgs, options);
       if (options.exportLayers) {
         cmdArgs.push('--export-editorial-layers');
       }
@@ -357,6 +376,7 @@ export class PythonBridge {
       if (options.sceneDetection) {
         cmdArgs.push('--scene-detection');
       }
+      appendProviderArgs(cmdArgs, options);
 
       const { command, args } = this.getArenaCommand('analyze', cmdArgs);
       this.runCommand(command, args, resolve, reject, onProgress, onError);
@@ -382,6 +402,11 @@ export class PythonBridge {
       if (options.cookiesFromBrowser) {
         cmdArgs.push('--cookies-from-browser', options.cookiesFromBrowser);
       }
+      appendProviderArgs(cmdArgs, {
+        provider: options.provider,
+        transcriptionProvider: options.transcriptionProvider,
+        transcriptionModel: options.transcriptionModel,
+      });
 
       const { command, args } = this.getArenaCommand('transcribe', cmdArgs);
       this.runCommand(command, args, resolve, reject, onProgress, onError);

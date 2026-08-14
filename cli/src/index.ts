@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -17,6 +17,12 @@ import { detectScenesCommand } from './commands/detect-scenes.js';
 import { diagnoseCommand } from './commands/diagnose.js';
 import { ConfigManager } from './core/config.js';
 import { unsupportedNodeVersionMessage } from './core/node-version.js';
+import {
+  CHAT_MODELS,
+  EMBEDDING_MODELS,
+  SUPPORTED_PROVIDERS,
+  TRANSCRIPTION_MODELS,
+} from './core/providers.js';
 
 const nodeVersionError = unsupportedNodeVersionMessage();
 if (nodeVersionError) {
@@ -41,6 +47,15 @@ try {
 }
 
 const program = new Command();
+
+const providerOption = (flags: string, description: string) =>
+  new Option(flags, description).choices([...SUPPORTED_PROVIDERS]);
+const chatModelOption = (flags: string, description: string) =>
+  new Option(flags, description).choices([...CHAT_MODELS]);
+const embeddingModelOption = (flags: string, description: string) =>
+  new Option(flags, description).choices([...EMBEDDING_MODELS]);
+const transcriptionModelOption = (flags: string, description: string) =>
+  new Option(flags, description).choices([...TRANSCRIPTION_MODELS]);
 
 program
   .name('arena')
@@ -68,10 +83,8 @@ program
   .option('-n, --num-clips <number>', 'target number of clips to generate', '8')
   .option('--min <seconds>', 'minimum clip duration', '30')
   .option('--max <seconds>', 'maximum clip duration', '90')
-  .option(
-    '--editorial-model <model>',
-    'model for editorial analysis: gpt-4o or gpt-4o-mini',
-    'gpt-4o'
+  .addOption(
+    chatModelOption('--editorial-model <model>', 'backward-compatible alias for --chat-model')
   )
   .option('--export-layers', 'export intermediate layer results for debugging')
   .option('--fast', 'fast mode - stream copy (10x faster)')
@@ -101,6 +114,15 @@ program
   .option('--caption-font-size <size>', 'caption font size')
   .option('--caption-color <color>', 'caption text color: white, yellow, red, black')
   .option('--caption-position <position>', 'caption position: bottom, top, middle')
+  .addOption(providerOption('--provider <provider>', 'provider shorthand for all capabilities'))
+  .addOption(providerOption('--chat-provider <provider>', 'chat inference provider'))
+  .addOption(chatModelOption('--chat-model <model>', 'chat inference model'))
+  .addOption(providerOption('--overview-chat-provider <provider>', 'overview chat provider'))
+  .addOption(chatModelOption('--overview-chat-model <model>', 'overview chat model'))
+  .addOption(providerOption('--embedding-provider <provider>', 'embedding provider'))
+  .addOption(embeddingModelOption('--embedding-model <model>', 'embedding model'))
+  .addOption(providerOption('--transcription-provider <provider>', 'transcription provider'))
+  .addOption(transcriptionModelOption('--transcription-model <model>', 'transcription model'))
   .option('--debug', 'show debug information')
   .action(processCommand);
 
@@ -115,6 +137,9 @@ program
     '--cookies-from-browser <browser>',
     'use browser cookies for URL downloads (chrome, firefox, safari, brave, edge)'
   )
+  .addOption(providerOption('--provider <provider>', 'transcription provider shorthand'))
+  .addOption(providerOption('--transcription-provider <provider>', 'transcription provider'))
+  .addOption(transcriptionModelOption('--transcription-model <model>', 'transcription model'))
   .option('--debug', 'show debug information')
   .action(transcribeCommand);
 
@@ -127,13 +152,20 @@ program
   .option('-n, --num-clips <number>', 'target number of clips to analyze')
   .option('--min <seconds>', 'minimum clip duration')
   .option('--max <seconds>', 'maximum clip duration')
-  .option(
-    '--editorial-model <model>',
-    'model for editorial analysis: gpt-4o or gpt-4o-mini',
-    'gpt-4o'
+  .addOption(
+    chatModelOption('--editorial-model <model>', 'backward-compatible alias for --chat-model')
   )
   .option('--transcript <file>', 'use existing transcript file')
   .option('--scene-detection', 'enable scene detection for better clip boundaries')
+  .addOption(providerOption('--provider <provider>', 'provider shorthand for all capabilities'))
+  .addOption(providerOption('--chat-provider <provider>', 'chat inference provider'))
+  .addOption(chatModelOption('--chat-model <model>', 'chat inference model'))
+  .addOption(providerOption('--overview-chat-provider <provider>', 'overview chat provider'))
+  .addOption(chatModelOption('--overview-chat-model <model>', 'overview chat model'))
+  .addOption(providerOption('--embedding-provider <provider>', 'embedding provider'))
+  .addOption(embeddingModelOption('--embedding-model <model>', 'embedding model'))
+  .addOption(providerOption('--transcription-provider <provider>', 'transcription provider'))
+  .addOption(transcriptionModelOption('--transcription-model <model>', 'transcription model'))
   .option('--debug', 'show debug information')
   .action(analyzeCommand);
 

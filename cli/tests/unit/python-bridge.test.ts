@@ -80,6 +80,80 @@ describe('PythonBridge', () => {
   });
 
   describe('stdout JSON parsing', () => {
+    it('should forward all process provider selectors to Python', async () => {
+      const mockProc = createMockProcess();
+      mockSpawn.mockReturnValue(mockProc);
+
+      const promise = bridge.runProcess({
+        videoPath: '/test.mp4',
+        outputDir: '/out',
+        provider: 'openai',
+        chatProvider: 'openai',
+        chatModel: 'gpt-4o-mini',
+        overviewChatModel: 'gpt-4o',
+        embeddingModel: 'text-embedding-3-large',
+        transcriptionModel: 'whisper-1',
+      });
+
+      const args = mockSpawn.mock.calls[0][1] as string[];
+      expect(args).toEqual(
+        expect.arrayContaining([
+          '--provider',
+          'openai',
+          '--chat-model',
+          'gpt-4o-mini',
+          '--embedding-model',
+          'text-embedding-3-large',
+          '--transcription-model',
+          'whisper-1',
+        ])
+      );
+      mockProc.emit('close', 0);
+      await promise;
+    });
+
+    it('should forward analyze and transcribe provider selectors', async () => {
+      const analyzeProc = createMockProcess();
+      mockSpawn.mockReturnValueOnce(analyzeProc);
+      const analyzePromise = bridge.runAnalyze({
+        videoPath: '/test.mp4',
+        outputFile: '/analysis.json',
+        chatProvider: 'openai',
+        overviewChatModel: 'gpt-4o-mini',
+      });
+      const analyzeArgs = mockSpawn.mock.calls[0][1] as string[];
+      expect(analyzeArgs).toEqual(
+        expect.arrayContaining([
+          '--chat-provider',
+          'openai',
+          '--overview-chat-model',
+          'gpt-4o-mini',
+        ])
+      );
+      analyzeProc.emit('close', 0);
+      await analyzePromise;
+
+      const transcribeProc = createMockProcess();
+      mockSpawn.mockReturnValueOnce(transcribeProc);
+      const transcribePromise = bridge.runTranscribe({
+        videoPath: '/test.mp4',
+        outputFile: '/transcript.json',
+        transcriptionProvider: 'openai',
+        transcriptionModel: 'whisper-1',
+      });
+      const transcribeArgs = mockSpawn.mock.calls[1][1] as string[];
+      expect(transcribeArgs).toEqual(
+        expect.arrayContaining([
+          '--transcription-provider',
+          'openai',
+          '--transcription-model',
+          'whisper-1',
+        ])
+      );
+      transcribeProc.emit('close', 0);
+      await transcribePromise;
+    });
+
     it('should call onProgress for progress updates', async () => {
       const mockProc = createMockProcess();
       mockSpawn.mockReturnValue(mockProc);
