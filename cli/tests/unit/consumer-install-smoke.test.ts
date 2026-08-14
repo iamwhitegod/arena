@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -51,7 +52,7 @@ describe('consumer install smoke command resolution', () => {
 
   it('resolves the packaged Arena launcher without accepting absolute bin paths', () => {
     expect(packageBinEntry({ bin: { arena: 'dist/launcher.js' } }, 'arena')).toBe(
-      'dist/launcher.js'
+      path.join('dist', 'launcher.js')
     );
     expect(() => packageBinEntry({ bin: { arena: '/tmp/launcher.js' } }, 'arena')).toThrow(
       'does not define a valid arena executable'
