@@ -19,6 +19,81 @@ const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const MAX_CAPTURE_CHARS = 24_000;
 const REDACTED_PATHS = new Set([os.homedir()]);
 
+function directNodeCommand(script, displayName) {
+  return {
+    executable: process.execPath,
+    args: [script],
+    displayName,
+  };
+}
+
+function resolveInvocation(command, args) {
+  if (typeof command === 'string') {
+    return {
+      executable: command,
+      args,
+      displayName: path.basename(command),
+    };
+  }
+  return {
+    executable: command.executable,
+    args: [...command.args, ...args],
+    displayName: command.displayName ?? path.basename(command.executable),
+  };
+}
+
+function npmCliCandidates(nodeExecutable, npmExecPath, platform = process.platform) {
+  const pathApi = platform === 'win32' ? path.win32 : path;
+  const nodeDirectory = pathApi.dirname(nodeExecutable);
+  return [
+    npmExecPath,
+    pathApi.join(nodeDirectory, 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    pathApi.resolve(nodeDirectory, '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+  ].filter(Boolean);
+}
+
+function npmCliFromPath(searchPath, platform = process.platform) {
+  if (platform === 'win32') return null;
+  for (const directory of String(searchPath ?? '').split(path.delimiter)) {
+    if (!directory) continue;
+    const candidate = path.join(directory, 'npm');
+    if (!fs.existsSync(candidate)) continue;
+    const resolved = fs.realpathSync(candidate);
+    if (path.basename(resolved) === 'npm-cli.js') return resolved;
+  }
+  return null;
+}
+
+function resolveNpmCommand() {
+  const candidates = npmCliCandidates(process.execPath, process.env.npm_execpath);
+  const pathCandidate = npmCliFromPath(process.env.PATH);
+  if (pathCandidate) candidates.push(pathCandidate);
+  const pathApi = process.platform === 'win32' ? path.win32 : path;
+  const npmCli = candidates.find(
+    (candidate) =>
+      pathApi.basename(candidate).toLowerCase() === 'npm-cli.js' && fs.existsSync(candidate)
+  );
+  if (!npmCli) {
+    throw new Error('Could not locate npm-cli.js for the active Node.js runtime');
+  }
+  return directNodeCommand(npmCli, 'npm');
+}
+
+function packageBinEntry(packageMetadata, name) {
+  const entry =
+    typeof packageMetadata.bin === 'string' ? packageMetadata.bin : packageMetadata.bin?.[name];
+  const normalized = typeof entry === 'string' ? path.normalize(entry) : '';
+  if (
+    normalized.length === 0 ||
+    path.isAbsolute(normalized) ||
+    normalized === '..' ||
+    normalized.startsWith(`..${path.sep}`)
+  ) {
+    throw new Error(`Installed package does not define a valid ${name} executable`);
+  }
+  return normalized;
+}
+
 function usage() {
   return [
     'Usage: node scripts/consumer-install-smoke.cjs --tarball <file-or-directory>',
@@ -117,7 +192,8 @@ function trimOutput(value) {
 
 function runCommand(evidence, name, command, args, options = {}) {
   const startedAt = Date.now();
-  const result = spawnSync(command, args, {
+  const invocation = resolveInvocation(command, args);
+  const result = spawnSync(invocation.executable, invocation.args, {
     cwd: options.cwd,
     env: options.env,
     encoding: 'utf8',
@@ -128,7 +204,7 @@ function runCommand(evidence, name, command, args, options = {}) {
   });
   const record = {
     name,
-    executable: path.basename(command),
+    executable: invocation.displayName,
     durationMs: Date.now() - startedAt,
     exitCode: result.status,
     signal: result.signal,
@@ -467,8 +543,7 @@ function main() {
         : '/bin/sh',
   };
 
-  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  const windowsShell = process.platform === 'win32';
+  const npmCommand = resolveNpmCommand();
   const packageRoot =
     process.platform === 'win32'
       ? path.join(prefix, 'node_modules', ...PACKAGE_NAME.split('/'))
@@ -526,8 +601,7 @@ function main() {
       'npm version',
       npmCommand,
       ['--version'],
-      childEnv,
-      windowsShell
+      childEnv
     );
     evidence.platform.python =
       probeVersion(evidence, 'python3 version', 'python3', ['--version'], childEnv) ??
@@ -581,7 +655,7 @@ function main() {
         prefix,
         tarball,
       ],
-      { cwd: workspace, env: installEnv, shell: windowsShell, timeoutMs: options.timeoutMs }
+      { cwd: workspace, env: installEnv, timeoutMs: options.timeoutMs }
     );
     evidence.assertions.postinstallAdvisoryRan = install.stdout.includes('Arena CLI installed.');
     if (!evidence.assertions.postinstallAdvisoryRan) {
@@ -626,11 +700,16 @@ function main() {
     );
     evidence.assertions.engineManifestVerified = true;
 
-    const arenaCommand = process.platform === 'win32' ? 'arena' : arenaShim;
+    const arenaCommand =
+      process.platform === 'win32'
+        ? directNodeCommand(
+            path.join(packageRoot, packageBinEntry(installedPackage, 'arena')),
+            'arena'
+          )
+        : arenaShim;
     const version = runCommand(evidence, 'arena version', arenaCommand, ['--version'], {
       cwd: workspace,
       env: childEnv,
-      shell: windowsShell,
       timeoutMs: 30_000,
     });
     if (version.stdout.trim() !== installedPackage.version) {
@@ -643,7 +722,6 @@ function main() {
     const help = runCommand(evidence, 'arena help', arenaCommand, ['--help'], {
       cwd: workspace,
       env: childEnv,
-      shell: windowsShell,
       timeoutMs: 30_000,
     });
     if (!help.stdout.includes('AI-powered video clip generation tool')) {
@@ -655,13 +733,11 @@ function main() {
       runCommand(evidence, 'install managed runtime', arenaCommand, ['setup', '--yes'], {
         cwd: workspace,
         env: childEnv,
-        shell: windowsShell,
         timeoutMs: options.timeoutMs,
       });
       runCommand(evidence, 'check managed runtime', arenaCommand, ['setup', '--check'], {
         cwd: workspace,
         env: childEnv,
-        shell: windowsShell,
         timeoutMs: 60_000,
       });
 
@@ -711,7 +787,6 @@ function main() {
       runCommand(evidence, 'verify idempotent setup', arenaCommand, ['setup', '--yes'], {
         cwd: workspace,
         env: childEnv,
-        shell: windowsShell,
         timeoutMs: 60_000,
       });
       evidence.assertions.setupIsIdempotent = true;
@@ -723,7 +798,7 @@ function main() {
           workspace,
           childEnv,
           options.timeoutMs,
-          windowsShell
+          false
         );
       }
       runLocalProcessingSmoke(
@@ -732,14 +807,13 @@ function main() {
         workspace,
         childEnv,
         options.timeoutMs,
-        windowsShell
+        false
       );
     }
 
     runCommand(evidence, 'uninstall Arena', npmCommand, ['uninstall', '--global', PACKAGE_NAME], {
       cwd: workspace,
       env: childEnv,
-      shell: windowsShell,
       timeoutMs: options.timeoutMs,
     });
     if (fs.existsSync(packageRoot) || fs.existsSync(arenaShim)) {
@@ -768,9 +842,18 @@ function main() {
   }
 }
 
-try {
-  main();
-} catch (error) {
-  console.error(`Consumer installation smoke test failed: ${error.message}`);
-  process.exitCode = 1;
+module.exports = {
+  npmCliCandidates,
+  npmCliFromPath,
+  packageBinEntry,
+  resolveInvocation,
+};
+
+if (require.main === module) {
+  try {
+    main();
+  } catch (error) {
+    console.error(`Consumer installation smoke test failed: ${error.message}`);
+    process.exitCode = 1;
+  }
 }
