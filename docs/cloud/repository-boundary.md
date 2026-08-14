@@ -1,76 +1,91 @@
-# Arena OSS and Cloud repository boundary
+# Arena repository boundary
 
-**Status:** Proposed architecture decision
+**Status:** Accepted architecture decision
 
 **Last reviewed:** August 13, 2026
 
 ## Decision
 
-Arena uses two repositories with a one-way dependency:
+Arena uses three repositories inside an optional local workspace:
 
 1. The public `arena` repository owns the complete local-first product, processing engine, CLI, public artifact contracts, and public client interfaces.
-2. The private `arena-cloud` repository owns the hosted service, customer data plane, control plane, billing, tenant operations, and infrastructure.
+2. The public `arena-website` repository owns the marketing website, public product presentation, and download/release discovery experience.
+3. The private `arena-cloud` repository owns the hosted service, customer data plane, control plane, authenticated Cloud application, billing, tenant operations, and infrastructure.
 
-`arena-cloud` may depend on published Arena OSS releases and public contracts. Arena OSS must never depend on the private repository or require Arena Cloud to perform local work.
+Developers may keep the three repositories as ordinary sibling checkouts under a non-Git parent directory named `arena/`. The parent is a local workspace, not a fourth product repository, Git submodule superproject, or cross-repository dependency mechanism.
+
+`arena-cloud` may depend on published Arena OSS releases and public contracts. `arena-website` may consume released public metadata and render or link to canonical OSS documentation. Arena OSS must never depend on either sibling repository or require Arena Cloud to perform local work.
 
 This document specifies ownership and dependency rules. It is not a promise that every proposed directory or Cloud feature already exists.
 
-## Why separate repositories
+## Why three repositories
 
-The split protects four properties:
+The split protects five properties:
 
 - **Local independence:** Arena remains useful without an account, network connection to Arena Cloud, or Cloud subscription.
 - **Open implementation:** The complete local editorial and media-processing pipeline remains inspectable and modifiable.
 - **Commercial isolation:** Billing, tenant data, hosted infrastructure, abuse controls, and operational secrets do not enter the public repository.
-- **Stable integration:** Both products meet through versioned artifacts and APIs instead of undocumented imports.
+- **Stable integration:** The repositories meet through versioned artifacts, released metadata, and APIs instead of undocumented imports.
+- **Independent delivery:** The public website can build and deploy without sharing the engine release lifecycle, dependencies, permissions, or working tree.
 
 A private-looking directory inside the public repository is not a security boundary. Private Cloud code belongs in a repository with separate access control, CI, release credentials, and incident response.
 
 ## Current state
 
-The public repository currently contains:
+The existing public OSS repository is still in its cutover window and contains:
 
 - `cli/` — the TypeScript CLI and its Python subprocess bridge.
 - `engine/` — the Python processing engine and command implementation.
-- `website/` — the public marketing and documentation site.
+- `website/` — the former marketing website copy retained temporarily for deployment rollback.
 - `docs/` — maintained product documentation and historical records.
 - Root packaging, container, governance, and release files.
 
-The following proposed boundary components do not yet exist as stable public contracts:
+The public `arena-website` repository and private `arena-cloud` scaffold now exist. The Cloud scaffold is non-production and contains boundary controls only. The following components do not yet exist as stable public contracts or production capabilities:
 
 - A root `schemas/` package.
 - Cross-language contract and compatibility tests.
 - An authenticated `arena cloud` CLI namespace.
 - A published programmatic engine facade intended for Cloud workers.
-- A private `arena-cloud` repository.
+- A production-ready private Cloud service.
 
 Until those components exist, Cloud code must not copy or import evolving engine internals and present that coupling as a supported integration.
 
 ## Ownership matrix
 
-| Capability | Arena OSS | Arena Cloud |
-|---|---|---|
-| Local CLI and configuration | Owns | May invoke through public interfaces |
-| Editorial analysis and scoring | Owns | Executes a pinned OSS release |
-| Transcription, clipping, captions, formatting | Owns | Executes a pinned OSS release |
-| Provider interfaces and bring-your-own-key support | Owns | May provide managed adapters through public interfaces |
-| Local caches and artifacts | Owns | May import only with explicit user action |
-| Public artifact schemas and event vocabulary | Owns | Consumes and compatibility-tests |
-| Cloud client commands and API models | Owns when shipped in the public CLI | Implements the server side |
-| Authentication and customer accounts | No local dependency | Owns |
-| Hosted job orchestration and queues | No | Owns |
-| Hosted object storage and retention | No | Owns |
-| Billing, entitlements, quotas, and metering | No | Owns |
-| Teams, roles, approvals, and audit logs | No | Owns |
-| Tenant isolation and abuse prevention | No | Owns |
-| Cloud observability and incident operations | No | Owns |
-| Publishing integrations | Owns only public/local extension points | Owns managed credentials and hosted execution |
+| Capability                                         | Arena OSS                               | Arena Website                           | Arena Cloud                                                 |
+| -------------------------------------------------- | --------------------------------------- | --------------------------------------- | ----------------------------------------------------------- |
+| Local CLI and configuration                        | Owns                                    | Links to released installation guidance | May invoke through public interfaces                        |
+| Editorial analysis and scoring                     | Owns                                    | Describes released capabilities         | Executes a pinned OSS release                               |
+| Transcription, clipping, captions, formatting      | Owns                                    | Describes released capabilities         | Executes a pinned OSS release                               |
+| Provider interfaces and bring-your-own-key support | Owns                                    | No                                      | May provide managed adapters through public interfaces      |
+| Local caches and artifacts                         | Owns                                    | No                                      | May import only with explicit user action                   |
+| Public artifact schemas and event vocabulary       | Owns                                    | May link to published references        | Consumes and compatibility-tests                            |
+| Technical CLI/engine documentation                 | Canonical source                        | Renders or links released content       | Consumes public contracts                                   |
+| Marketing site and public product presentation     | Supplies released product facts         | Owns                                    | Supplies public service facts through explicit APIs/content |
+| Cloud client commands and API models               | Owns when shipped in the public CLI     | Documents released commands             | Implements the server side                                  |
+| Authentication and customer accounts               | No local dependency                     | No                                      | Owns                                                        |
+| Authenticated Cloud application                    | No                                      | No                                      | Owns                                                        |
+| Hosted job orchestration and queues                | No                                      | No                                      | Owns                                                        |
+| Hosted object storage and retention                | No                                      | No                                      | Owns                                                        |
+| Billing, entitlements, quotas, and metering        | No                                      | No                                      | Owns                                                        |
+| Teams, roles, approvals, and audit logs            | No                                      | No                                      | Owns                                                        |
+| Tenant isolation and abuse prevention              | No                                      | No                                      | Owns                                                        |
+| Cloud observability and incident operations        | No                                      | Website deployment only                 | Owns                                                        |
+| Publishing integrations                            | Owns only public/local extension points | No                                      | Owns managed credentials and hosted execution               |
 
 The editorial quality of local and hosted runs must not be differentiated by hiding a better core algorithm in the private repository. Cloud may offer different managed models, more compute, concurrency, or operational features, but the product must describe those differences accurately.
 
 ## Dependency direction
 
 ```text
+arena-website
+    │
+    ├── consumes released version/download metadata
+    └── renders or links canonical public documentation
+             │
+             ▼
+          arena OSS
+
 arena-cloud
     │
     ├── pins an Arena OSS release or immutable engine image
@@ -81,7 +96,16 @@ arena-cloud
           arena OSS
 
 arena OSS ──X──> arena-cloud private source
+arena OSS ──X──> arena-website source checkout
 ```
+
+Allowed Website dependencies:
+
+- Released package/container version and download metadata.
+- Stable public documentation, schema, repository, and release URLs.
+- Explicit public APIs for Cloud service facts when the website presents them.
+
+The Website must not require a sibling checkout, import OSS source through `../arena-oss`, or publish unreleased behavior as current product fact.
 
 Allowed Cloud dependencies:
 
@@ -199,14 +223,14 @@ Published schemas and fixtures are immutable. If a contract is found to expose s
 
 Classify data before defining sync behavior:
 
-| Class | Examples | Default Cloud behavior |
-|---|---|---|
-| Operational | Arena version, schema version, duration bucket, outcome code | May be sent only for an explicit Cloud operation or separately consented telemetry |
-| Content-derived | Titles, summaries, timestamps, scores, hashtags | Do not upload until the user selects a sync or Cloud-processing operation |
-| Media-derived | Transcript, thumbnail, waveform, caption file | Separate explicit selection and retention disclosure |
-| Raw media | Source video and audio | Never upload for metadata-only sync; explicit confirmation for remote processing |
-| Secrets | API keys, browser cookies, OAuth tokens, publishing credentials | Never serialize into Arena artifacts; store only in the responsible credential system |
-| Identity and billing | Email, organization, subscription, invoices | Cloud repository and systems only |
+| Class                | Examples                                                        | Default Cloud behavior                                                                |
+| -------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Operational          | Arena version, schema version, duration bucket, outcome code    | May be sent only for an explicit Cloud operation or separately consented telemetry    |
+| Content-derived      | Titles, summaries, timestamps, scores, hashtags                 | Do not upload until the user selects a sync or Cloud-processing operation             |
+| Media-derived        | Transcript, thumbnail, waveform, caption file                   | Separate explicit selection and retention disclosure                                  |
+| Raw media            | Source video and audio                                          | Never upload for metadata-only sync; explicit confirmation for remote processing      |
+| Secrets              | API keys, browser cookies, OAuth tokens, publishing credentials | Never serialize into Arena artifacts; store only in the responsible credential system |
+| Identity and billing | Email, organization, subscription, invoices                     | Cloud repository and systems only                                                     |
 
 Before upload, the CLI should show the destination, data classes, approximate size, retention policy, and whether deletion is supported. `arena cloud sync` must not silently expand from operational data to transcripts, thumbnails, or raw media in a later release.
 
@@ -252,7 +276,6 @@ arena/
 ├── tests/
 │   ├── contracts/
 │   └── compatibility/
-├── website/                     # Public product and documentation site
 ├── docs/
 │   ├── architecture/
 │   ├── cloud/
@@ -261,6 +284,18 @@ arena/
 │   ├── reference/
 │   └── security/
 ├── scripts/                     # Packaging, release, and verification tooling
+└── README.md
+```
+
+### Public `arena-website`
+
+```text
+arena-website/
+├── src/                         # Marketing and public product experience
+├── public/                      # Static public assets
+├── tests/                       # UI, route, and deployment checks
+├── docs/                        # Website-specific development/deployment docs
+├── package.json
 └── README.md
 ```
 
@@ -304,8 +339,12 @@ arena-cloud/
 8. Secrets never cross the boundary inside ordinary project artifacts.
 9. Private billing, tenancy, and infrastructure code never enters the public repository.
 10. A new Cloud capability cannot silently change the behavior or privacy posture of an existing local command.
+11. The Website can build and deploy without the OSS or Cloud repository checked out beside it.
+12. Released technical behavior remains canonical in Arena OSS; the Website does not silently fork technical documentation.
 
 ## Migration gates
+
+These gates govern public contracts and safe Cloud execution. The physical extraction of `arena-website` is independent of Gates 1–5 and is sequenced in the [Three-repository split workplan](../development/plans/repository-split-workplan.md).
 
 ### Gate 1: Document the current artifacts
 
@@ -356,6 +395,9 @@ The following decisions need explicit architecture records before implementation
 
 ## Related documents
 
+- [Repository boundary implementation plan](../development/plans/repository-boundary-implementation.md)
+- [Three-repository split workplan](../development/plans/repository-split-workplan.md)
+- [Current artifact inventory](../reference/artifact-contracts.md)
 - [Arena Cloud plan](./plan.md)
 - [Arena Cloud pricing model](./pricing.md)
 - [Arena OSS data and privacy](../security/data-and-privacy.md)

@@ -28,11 +28,12 @@ export function DocsTableOfContents() {
     if (!article) return;
 
     const headings = Array.from(
-      article.querySelectorAll<HTMLHeadingElement>("h2, h3")
+      article.querySelectorAll<HTMLHeadingElement>("h2, h3"),
     );
     const usedIds = new Set<string>();
     const nextItems = headings.map((heading) => {
-      const baseId = heading.id || slugify(heading.textContent || "section") || "section";
+      const baseId =
+        heading.id || slugify(heading.textContent || "section") || "section";
       let id = baseId;
       let suffix = 2;
 
@@ -52,8 +53,10 @@ export function DocsTableOfContents() {
       } as TableOfContentsItem;
     });
 
-    setItems(nextItems);
-    setActiveId(window.location.hash.slice(1) || nextItems[0]?.id || "");
+    const initializationFrame = window.requestAnimationFrame(() => {
+      setItems(nextItems);
+      setActiveId(window.location.hash.slice(1) || nextItems[0]?.id || "");
+    });
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -63,16 +66,22 @@ export function DocsTableOfContents() {
 
         if (visible[0]) setActiveId(visible[0].target.id);
       },
-      { rootMargin: "-96px 0px -70% 0px", threshold: 0 }
+      { rootMargin: "-96px 0px -70% 0px", threshold: 0 },
     );
 
     headings.forEach((heading) => observer.observe(heading));
-    return () => observer.disconnect();
+    return () => {
+      window.cancelAnimationFrame(initializationFrame);
+      observer.disconnect();
+    };
   }, [pathname]);
 
   if (items.length === 0) return null;
 
-  const scrollToSection = (event: MouseEvent<HTMLAnchorElement>, id: string) => {
+  const scrollToSection = (
+    event: MouseEvent<HTMLAnchorElement>,
+    id: string,
+  ) => {
     event.preventDefault();
 
     const heading = document.getElementById(id);
@@ -86,7 +95,9 @@ export function DocsTableOfContents() {
   return (
     <aside className="hidden xl:block w-52 shrink-0" aria-label="On this page">
       <nav className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pb-8">
-        <h2 className="text-sm font-semibold text-foreground mb-4">On this page</h2>
+        <h2 className="text-sm font-semibold text-foreground mb-4">
+          On this page
+        </h2>
         <ol className="space-y-2.5 border-l border-border">
           {items.map((item) => (
             <li key={item.id} className={item.level === 3 ? "pl-3" : ""}>

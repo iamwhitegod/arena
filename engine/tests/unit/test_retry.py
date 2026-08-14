@@ -9,6 +9,7 @@ import unittest
 import time
 import sys
 from pathlib import Path
+from unittest.mock import call, patch
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -82,37 +83,26 @@ class TestRetryLogic(unittest.TestCase):
         self.assertIn("Persistent failure", str(context.exception))
 
     def test_exponential_backoff_timing(self):
-        """Test that exponential backoff increases delays correctly"""
-        call_times = []
+        """Test that exponential backoff requests the expected delays"""
+        call_count = 0
 
         def failing_func():
-            call_times.append(time.time())
+            nonlocal call_count
+            call_count += 1
             raise Exception("Test failure")
 
-        try:
-            call_api_with_retry(
-                failing_func,
-                max_retries=2,
-                initial_delay=0.1,
-                backoff_factor=2.0,
-                verbose=False
-            )
-        except APIRetryError:
-            pass
+        with patch('arena.editorial.retry.time.sleep') as mock_sleep:
+            with self.assertRaises(APIRetryError):
+                call_api_with_retry(
+                    failing_func,
+                    max_retries=2,
+                    initial_delay=0.1,
+                    backoff_factor=2.0,
+                    verbose=False
+                )
 
-        # Should have 3 calls total
-        self.assertEqual(len(call_times), 3)
-
-        # Check delays between calls
-        if len(call_times) >= 2:
-            delay1 = call_times[1] - call_times[0]
-            self.assertGreaterEqual(delay1, 0.09, "First retry delay should be ~0.1s")
-            self.assertLessEqual(delay1, 0.15, "First retry delay should be ~0.1s")
-
-        if len(call_times) >= 3:
-            delay2 = call_times[2] - call_times[1]
-            self.assertGreaterEqual(delay2, 0.18, "Second retry delay should be ~0.2s")
-            self.assertLessEqual(delay2, 0.25, "Second retry delay should be ~0.2s")
+        self.assertEqual(call_count, 3)
+        self.assertEqual(mock_sleep.call_args_list, [call(0.1), call(0.2)])
 
 
 class TestSmartRetry(unittest.TestCase):
