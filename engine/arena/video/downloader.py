@@ -48,9 +48,18 @@ def _get_js_runtimes() -> str:
     return ','.join(runtimes)
 
 
-def _format_download_error(error_msg: str, url: str, command: str) -> str:
+def _format_download_error(error_msg: str, url: str, command: str, cookies_from_browser: Optional[str] = None) -> str:
     """Format yt-dlp errors with actionable suggestions."""
     if 'n challenge' in error_msg or 'page needs to be reloaded' in error_msg:
+        if cookies_from_browser:
+            return (
+                f"yt-dlp failed (YouTube challenge — cookies from {cookies_from_browser} didn't help):\n{error_msg}\n\n"
+                f"URL: {url}\n\n"
+                f"Fixes to try:\n"
+                f"  1. Fully quit {cookies_from_browser} (not just close — quit the app) and retry\n"
+                f"  2. Update yt-dlp:  pip install -U yt-dlp\n"
+                f"  3. Try a different browser:  --cookies-from-browser chrome"
+            )
         return (
             f"yt-dlp failed (YouTube challenge solving failed):\n{error_msg}\n\n"
             f"URL: {url}\n\n"
@@ -59,6 +68,16 @@ def _format_download_error(error_msg: str, url: str, command: str) -> str:
             f"  2. Use cookies:    arena {command} \"{url}\" --cookies-from-browser chrome"
         )
     if 'Sign in to confirm' in error_msg or 'HTTP Error 429' in error_msg:
+        if cookies_from_browser:
+            return (
+                f"yt-dlp failed (auth required — cookies from {cookies_from_browser} didn't help):\n{error_msg}\n\n"
+                f"URL: {url}\n\n"
+                f"Fixes to try:\n"
+                f"  1. Fully quit {cookies_from_browser} (not just close — quit the app) and retry\n"
+                f"  2. Update yt-dlp:  pip install -U yt-dlp\n"
+                f"  3. Try a different browser:  --cookies-from-browser chrome\n"
+                f"  4. Set a default:  arena config set cookies_from_browser {cookies_from_browser}"
+            )
         return (
             f"yt-dlp failed (authentication required):\n{error_msg}\n\n"
             f"URL: {url}\n\n"
@@ -128,7 +147,7 @@ def download_video(
 
     if result.returncode != 0:
         error_msg = result.stderr.strip()
-        raise RuntimeError(_format_download_error(error_msg, url, 'process'))
+        raise RuntimeError(_format_download_error(error_msg, url, 'process', cookies_from_browser))
 
     downloaded = list(cache_dir.glob(f"{cache_key}.*"))
     if not downloaded:
@@ -153,7 +172,7 @@ def download_audio(
         url: Video URL
         cache_dir: Where to store downloads
         audio_format: Output audio format (default: mp3)
-        cookies_from_browser: Browser to extract cookies from (e.g. 'chrome', 'firefox', 'safari')
+        cookies_from_browser: Browser to extract cookies from (e.g. 'chrome', 'firefox', 'brave')
 
     Returns:
         Path to downloaded audio file
@@ -195,7 +214,7 @@ def download_audio(
 
     if result.returncode != 0:
         error_msg = result.stderr.strip()
-        raise RuntimeError(_format_download_error(error_msg, url, 'transcribe'))
+        raise RuntimeError(_format_download_error(error_msg, url, 'transcribe', cookies_from_browser))
 
     downloaded = list(cache_dir.glob(f"{cache_key}.*"))
     if not downloaded:

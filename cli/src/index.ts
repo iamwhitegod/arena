@@ -95,7 +95,7 @@ program
   .option('--pad-color <color>', 'padding color (hex) for platform formatting', '#000000')
   .option(
     '--cookies-from-browser <browser>',
-    'use browser cookies for URL downloads (chrome, firefox, safari, edge)'
+    'use browser cookies for URL downloads (chrome, firefox, safari, brave, edge)'
   )
   .option('--captions', 'burn subtitle captions into clips')
   .option('--caption-font-size <size>', 'caption font size')
@@ -113,7 +113,7 @@ program
   .option('--no-cache', 'force re-transcription, ignore cached transcript')
   .option(
     '--cookies-from-browser <browser>',
-    'use browser cookies for URL downloads (chrome, firefox, safari, edge)'
+    'use browser cookies for URL downloads (chrome, firefox, safari, brave, edge)'
   )
   .option('--debug', 'show debug information')
   .action(transcribeCommand);
@@ -163,7 +163,7 @@ program
   .option('--mono', 'convert to mono')
   .option(
     '--cookies-from-browser <browser>',
-    'use browser cookies for URL downloads (chrome, firefox, safari, edge)'
+    'use browser cookies for URL downloads (chrome, firefox, safari, brave, edge)'
   )
   .option('--debug', 'show debug information')
   .action(extractAudioCommand);
