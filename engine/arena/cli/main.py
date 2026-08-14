@@ -171,6 +171,12 @@ Documentation:
         help='Model to use for Layers 1-2 (default: gpt-4o, mini saves ~60%% cost)'
     )
     process_parser.add_argument(
+        '--provider',
+        choices=['openai'],
+        default=None,
+        help='Inference provider for all capabilities (default: openai)'
+    )
+    process_parser.add_argument(
         '--export-editorial-layers',
         action='store_true',
         help='Export intermediate results from each editorial layer for debugging'

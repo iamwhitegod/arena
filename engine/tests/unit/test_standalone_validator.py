@@ -2,20 +2,22 @@
 """
 Unit Tests for arena.editorial.standalone_validator
 
-Tests standalone validation logic with mocked OpenAI API calls.
+Tests standalone validation logic using FakeChatModel.
 """
 
 import unittest
 import json
 import sys
+from decimal import Decimal
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from arena.editorial.thought_unit import ThoughtUnit, RhetoricalType, DependencyLevel
 from arena.editorial.standalone_validator import StandaloneValidator
+from arena.providers.base import ChatResponse, ProviderError, ProviderUsage
+from arena.providers.fake import FakeChatModel
 
 
 def make_thought_unit(**kwargs):
@@ -35,10 +37,8 @@ def make_thought_unit(**kwargs):
 
 
 def make_standalone_response():
-    """Helper to create a mock response for standalone content."""
-    response = MagicMock()
-    response.choices = [MagicMock()]
-    response.choices[0].message.content = json.dumps({
+    """Helper to create a fake response for standalone content."""
+    content = json.dumps({
         'is_standalone': True,
         'standalone_score': 0.95,
         'issues': [],
@@ -46,18 +46,19 @@ def make_standalone_response():
         'reasoning': 'Content is fully self-contained with clear context.',
         'confidence': 0.9,
     })
-    response.usage = MagicMock()
-    response.usage.total_tokens = 300
-    response.usage.prompt_tokens = 250
-    response.usage.completion_tokens = 50
-    return response
+    return ChatResponse(
+        content=content,
+        parsed=json.loads(content),
+        usage=ProviderUsage(
+            input_tokens=250, output_tokens=50, total_tokens=300,
+            estimated_cost_usd=Decimal("0.000165"),
+        ),
+    )
 
 
 def make_needs_context_response():
-    """Helper to create a mock response for content needing context."""
-    response = MagicMock()
-    response.choices = [MagicMock()]
-    response.choices[0].message.content = json.dumps({
+    """Helper to create a fake response for content needing context."""
+    content = json.dumps({
         'is_standalone': False,
         'standalone_score': 0.3,
         'issues': [
@@ -68,23 +69,23 @@ def make_needs_context_response():
         'reasoning': 'Content references prior discussion that viewer would not have seen.',
         'confidence': 0.85,
     })
-    response.usage = MagicMock()
-    response.usage.total_tokens = 350
-    response.usage.prompt_tokens = 280
-    response.usage.completion_tokens = 70
-    return response
+    return ChatResponse(
+        content=content,
+        parsed=json.loads(content),
+        usage=ProviderUsage(
+            input_tokens=280, output_tokens=70, total_tokens=350,
+            estimated_cost_usd=Decimal("0.000198"),
+        ),
+    )
 
 
 class TestStandaloneValidation(unittest.TestCase):
     """Test standalone validation logic."""
 
-    @patch('arena.editorial.standalone_validator.call_api_with_smart_retry')
-    @patch('openai.OpenAI')
-    def test_standalone_content_passes(self, mock_openai_cls, mock_retry):
+    def test_standalone_content_passes(self):
         """Content with no unresolved references should pass validation."""
-        mock_retry.return_value = make_standalone_response()
-
-        validator = StandaloneValidator(api_key='sk-test')
+        chat = FakeChatModel([make_standalone_response()])
+        validator = StandaloneValidator(chat=chat)
         unit = make_thought_unit()
         result = validator.validate(unit)
 
@@ -92,13 +93,10 @@ class TestStandaloneValidation(unittest.TestCase):
         self.assertGreater(result['standalone_score'], 0.8)
         self.assertEqual(len(result['issues']), 0)
 
-    @patch('arena.editorial.standalone_validator.call_api_with_smart_retry')
-    @patch('openai.OpenAI')
-    def test_context_dependent_content_fails(self, mock_openai_cls, mock_retry):
+    def test_context_dependent_content_fails(self):
         """Content with unresolved references should fail validation."""
-        mock_retry.return_value = make_needs_context_response()
-
-        validator = StandaloneValidator(api_key='sk-test')
+        chat = FakeChatModel([make_needs_context_response()])
+        validator = StandaloneValidator(chat=chat)
         unit = make_thought_unit(
             premise_text='He was talking about that idea earlier.',
             claim_text='And that is exactly why it matters.',
@@ -109,13 +107,10 @@ class TestStandaloneValidation(unittest.TestCase):
         self.assertLess(result['standalone_score'], 0.5)
         self.assertGreater(len(result['issues']), 0)
 
-    @patch('arena.editorial.standalone_validator.call_api_with_smart_retry')
-    @patch('openai.OpenAI')
-    def test_metrics_tracked(self, mock_openai_cls, mock_retry):
+    def test_metrics_tracked(self):
         """Metrics should track validated units and standalone counts."""
-        mock_retry.return_value = make_standalone_response()
-
-        validator = StandaloneValidator(api_key='sk-test')
+        chat = FakeChatModel([make_standalone_response()])
+        validator = StandaloneValidator(chat=chat)
         unit = make_thought_unit()
         validator.validate(unit)
 
@@ -123,26 +118,22 @@ class TestStandaloneValidation(unittest.TestCase):
         self.assertEqual(validator.metrics['units_standalone'], 1)
         self.assertEqual(validator.metrics['units_need_context'], 0)
 
-    @patch('arena.editorial.standalone_validator.call_api_with_smart_retry')
-    @patch('openai.OpenAI')
-    def test_needs_context_metrics(self, mock_openai_cls, mock_retry):
+    def test_needs_context_metrics(self):
         """Needs-context results should increment the right counter."""
-        mock_retry.return_value = make_needs_context_response()
-
-        validator = StandaloneValidator(api_key='sk-test')
+        chat = FakeChatModel([make_needs_context_response()])
+        validator = StandaloneValidator(chat=chat)
         unit = make_thought_unit()
-        result = validator.validate(unit)
+        validator.validate(unit)
 
-        # The result should indicate needs_context dependency level
         self.assertEqual(validator.metrics['units_validated'], 1)
 
-    @patch('arena.editorial.standalone_validator.call_api_with_smart_retry')
-    @patch('openai.OpenAI')
-    def test_api_error_returns_conservative_default(self, mock_openai_cls, mock_retry):
+    def test_api_error_returns_conservative_default(self):
         """API errors should return conservative defaults (assume not standalone)."""
-        mock_retry.side_effect = Exception('API unavailable')
+        class FailingChat(FakeChatModel):
+            def complete(self, *args, **kwargs):
+                raise ProviderError("unavailable", code="unavailable", retryable=False)
 
-        validator = StandaloneValidator(api_key='sk-test')
+        validator = StandaloneValidator(chat=FailingChat())
         unit = make_thought_unit()
         result = validator.validate(unit)
 
@@ -150,26 +141,23 @@ class TestStandaloneValidation(unittest.TestCase):
         self.assertEqual(result['standalone_score'], 0.5)
         self.assertEqual(result['confidence'], 0.0)
 
-    @patch('arena.editorial.standalone_validator.call_api_with_smart_retry')
-    @patch('openai.OpenAI')
-    def test_api_error_does_not_crash(self, mock_openai_cls, mock_retry):
+    def test_api_error_does_not_crash(self):
         """API errors should be caught gracefully."""
-        mock_retry.side_effect = ConnectionError('Network error')
+        class FailingChat(FakeChatModel):
+            def complete(self, *args, **kwargs):
+                raise ConnectionError('Network error')
 
-        validator = StandaloneValidator(api_key='sk-test')
+        validator = StandaloneValidator(chat=FailingChat())
         unit = make_thought_unit()
 
         # Should not raise
         result = validator.validate(unit)
         self.assertIn('issues', result)
 
-    @patch('arena.editorial.standalone_validator.call_api_with_smart_retry')
-    @patch('openai.OpenAI')
-    def test_uses_full_text_for_analysis(self, mock_openai_cls, mock_retry):
-        """Validator should pass the full text (premise + claim + resolution) to the API."""
-        mock_retry.return_value = make_standalone_response()
-
-        validator = StandaloneValidator(api_key='sk-test')
+    def test_uses_chat_model(self):
+        """Validator should use the injected ChatModel."""
+        chat = FakeChatModel([make_standalone_response()])
+        validator = StandaloneValidator(chat=chat)
         unit = make_thought_unit(
             premise_text='First part.',
             claim_text='Second part.',
@@ -177,21 +165,24 @@ class TestStandaloneValidation(unittest.TestCase):
         )
         validator.validate(unit)
 
-        # Verify the API was called (via mock_retry)
-        self.assertTrue(mock_retry.called)
+        self.assertEqual(chat.call_count, 1)
 
-    @patch('arena.editorial.standalone_validator.call_api_with_smart_retry')
-    @patch('openai.OpenAI')
-    def test_multiple_validations_accumulate_metrics(self, mock_openai_cls, mock_retry):
+    def test_multiple_validations_accumulate_metrics(self):
         """Multiple validations should accumulate metrics correctly."""
-        mock_retry.return_value = make_standalone_response()
+        responses = [make_standalone_response() for _ in range(3)]
+        chat = FakeChatModel(responses)
 
-        validator = StandaloneValidator(api_key='sk-test')
+        validator = StandaloneValidator(chat=chat)
         for _ in range(3):
             validator.validate(make_thought_unit())
 
         self.assertEqual(validator.metrics['units_validated'], 3)
         self.assertEqual(validator.metrics['units_standalone'], 3)
+
+    def test_backward_compat_api_key(self):
+        """api_key constructor path should still work."""
+        validator = StandaloneValidator(api_key='sk-test')
+        self.assertIsNotNone(validator._chat)
 
 
 if __name__ == '__main__':

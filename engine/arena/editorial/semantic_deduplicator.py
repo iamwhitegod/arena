@@ -28,15 +28,22 @@ class SemanticDeduplicator:
     Clusters units by cosine similarity to identify duplicates.
     """
 
-    def __init__(self, api_key: str, model: str = "text-embedding-3-small"):
+    def __init__(self, api_key=None, model: str = "text-embedding-3-small", *, embedding=None):
         """
         Initialize semantic deduplicator
 
         Args:
-            api_key: OpenAI API key
+            api_key: OpenAI API key (legacy, creates OpenAIEmbeddingModel internally)
             model: Embedding model (default: text-embedding-3-small)
+            embedding: EmbeddingModel inference port (preferred)
         """
-        self.api_key = api_key
+        if embedding is not None:
+            self._embedding = embedding
+        elif api_key is not None:
+            from arena.providers.openai_adapter import OpenAIEmbeddingModel
+            self._embedding = OpenAIEmbeddingModel(api_key=api_key, model=model)
+        else:
+            raise ValueError("Either embedding or api_key required")
         self.model = model
         self.metrics = {
             'api_calls': 0,
@@ -68,15 +75,8 @@ class SemanticDeduplicator:
             - unique_units: One representative from each cluster
             - all_clusters: All clusters found (for analysis)
         """
-        try:
-            from openai import OpenAI
-        except ImportError:
-            raise ImportError("openai package required. Install with: pip install openai")
-
         if not thought_units:
             return [], []
-
-        client = OpenAI(api_key=self.api_key)
 
         if verbose:
             print(f"\n📍 STEP: Semantic + Temporal Deduplication")
@@ -88,7 +88,7 @@ class SemanticDeduplicator:
         if verbose:
             print(f"   Generating embeddings...")
 
-        embeddings = self._generate_embeddings(client, thought_units, verbose)
+        embeddings = self._generate_embeddings(thought_units, verbose)
 
         # Step 2: Calculate similarity matrix
         if verbose:
@@ -131,7 +131,6 @@ class SemanticDeduplicator:
 
     def _generate_embeddings(
         self,
-        client,
         thought_units: List[ThoughtUnit],
         verbose: bool
     ) -> np.ndarray:
@@ -139,7 +138,6 @@ class SemanticDeduplicator:
         Generate embeddings for all ThoughtUnits.
 
         Args:
-            client: OpenAI client
             thought_units: List of ThoughtUnit instances
             verbose: Print progress
 
@@ -150,20 +148,16 @@ class SemanticDeduplicator:
         texts = [unit.claim_text for unit in thought_units]
 
         # Generate embeddings (batched)
-        response = client.embeddings.create(
-            model=self.model,
-            input=texts
-        )
+        response = self._embedding.embed(texts)
 
         # Track metrics
         self.metrics['api_calls'] += 1
         self.metrics['tokens_used'] += response.usage.total_tokens
-
-        # Calculate cost (text-embedding-3-small: $0.020/1M tokens)
-        self.metrics['cost_usd'] += (response.usage.total_tokens / 1_000_000) * 0.020
+        if response.usage.estimated_cost_usd is not None:
+            self.metrics['cost_usd'] += float(response.usage.estimated_cost_usd)
 
         # Extract embeddings
-        embeddings = np.array([item.embedding for item in response.data])
+        embeddings = np.array(response.embeddings)
 
         if verbose:
             print(f"      Generated {len(embeddings)} embeddings ({response.usage.total_tokens} tokens, ${self.metrics['cost_usd']:.4f})")

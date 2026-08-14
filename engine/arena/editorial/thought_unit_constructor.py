@@ -29,25 +29,34 @@ class ThoughtUnitConstructor:
 
     def __init__(
         self,
-        api_key: str,
+        api_key=None,
         model: str = "gpt-4o-mini",
-        verbose: bool = True
+        verbose: bool = True,
+        *,
+        chat=None
     ):
         """
         Initialize thought unit constructor
 
         Args:
-            api_key: OpenAI API key
+            api_key: OpenAI API key (legacy, creates OpenAIChatModel internally)
             model: Model to use for detection
             verbose: Print progress messages
+            chat: ChatModel inference port (preferred)
         """
-        self.api_key = api_key
+        if chat is not None:
+            self._chat = chat
+        elif api_key is not None:
+            from arena.providers.openai_adapter import OpenAIChatModel
+            self._chat = OpenAIChatModel(api_key=api_key, model=model)
+        else:
+            raise ValueError("Either chat or api_key required")
         self.model = model
         self.verbose = verbose
 
         # Initialize detectors
-        self.premise_detector = PremiseDetector(api_key, model)
-        self.resolution_detector = ResolutionDetector(api_key, model)
+        self.premise_detector = PremiseDetector(chat=self._chat)
+        self.resolution_detector = ResolutionDetector(chat=self._chat)
 
         # Metrics
         self.metrics = {

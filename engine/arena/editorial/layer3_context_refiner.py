@@ -9,10 +9,12 @@ independent pieces of content that make sense to viewers who just clicked.
 Implements iterative refinement to adjust boundaries if needed.
 """
 
+import warnings
 from typing import List, Dict, Optional, Tuple
-import json
 from enum import Enum
 from .utils import extract_clip_text, format_timestamp
+from arena.providers.base import ResponseMode
+from arena.providers.retry import retry_with_backoff
 
 
 class RejectionReason(Enum):
@@ -59,15 +61,27 @@ class StandaloneContextRefiner:
     REVISE_THRESHOLD = 0.4    # Below 0.4 = auto-reject
     MAX_ITERATIONS = 2        # Try refinement up to 2 times
 
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini"):
+    def __init__(self, api_key=None, model: str = "gpt-4o-mini", *, chat=None):
         """
         Initialize standalone context refiner
 
         Args:
-            api_key: OpenAI API key
-            model: Model to use (default: gpt-4o-mini for cost efficiency)
+            api_key: OpenAI API key (deprecated, pass chat instead)
+            model: Model to use (default: gpt-4o-mini)
+            chat: ChatModel instance (preferred)
         """
-        self.api_key = api_key
+        warnings.warn(
+            f"{self.__class__.__name__} is deprecated. Use FourLayerAdapter instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if chat is not None:
+            self._chat = chat
+        elif api_key is not None:
+            from arena.providers.openai_adapter import OpenAIChatModel
+            self._chat = OpenAIChatModel(api_key=api_key, model=model)
+        else:
+            raise ValueError("Either chat or api_key required")
         self.model = model
         self.metrics = {
             'api_calls': 0,
@@ -77,8 +91,8 @@ class StandaloneContextRefiner:
             'revised': 0,
             'rejected': 0,
             'pass_rate': 0.0,
-            'no_changes_needed': 0,  # Layer 2 boundaries were perfect
-            'boundary_quality_rate': 0.0  # no_changes / (passed + revised)
+            'no_changes_needed': 0,
+            'boundary_quality_rate': 0.0
         }
 
     def refine_all(
@@ -110,15 +124,9 @@ class StandaloneContextRefiner:
             }
         """
         if not thoughts:
-            print("      ⚠️  No thoughts to refine")
+            print("      No thoughts to refine")
             return []
 
-        try:
-            from openai import OpenAI
-        except ImportError:
-            raise ImportError("openai package required. Install with: pip install openai")
-
-        client = OpenAI(api_key=self.api_key)
         segments = transcript_data.get('segments', [])
 
         if not segments:
@@ -132,7 +140,6 @@ class StandaloneContextRefiner:
         for idx, thought in enumerate(thoughts, 1):
             try:
                 clip = self._validate_and_refine(
-                    client,
                     thought,
                     segments,
                     min_duration,
@@ -182,7 +189,6 @@ class StandaloneContextRefiner:
 
     def _validate_and_refine(
         self,
-        client,
         thought: Dict,
         segments: List[Dict],
         min_duration: Optional[int],
@@ -192,7 +198,6 @@ class StandaloneContextRefiner:
         Validate and iteratively refine a single thought
 
         Args:
-            client: OpenAI client
             thought: Thought from Layer 2
             segments: Transcript segments
             min_duration: Optional min duration
@@ -217,7 +222,6 @@ class StandaloneContextRefiner:
 
             # Validate standalone quality
             result = self._validate_single(
-                client,
                 clip_text,
                 current_start,
                 current_end,
@@ -374,7 +378,6 @@ class StandaloneContextRefiner:
 
     def _validate_single(
         self,
-        client,
         clip_text: str,
         start: float,
         end: float,
@@ -384,7 +387,6 @@ class StandaloneContextRefiner:
         Validate standalone quality of a single clip
 
         Args:
-            client: OpenAI client
             clip_text: Extracted transcript text for clip
             start: Current start time
             end: Current end time
@@ -396,81 +398,38 @@ class StandaloneContextRefiner:
         """
         prompt = self._create_prompt(clip_text, start, end, thought)
 
-        # Retry configuration for rate limits
-        max_retries = 5
-        base_delay = 2.0
+        response = retry_with_backoff(
+            lambda: self._chat.complete(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a senior video editor evaluating whether clips can stand alone without prior context."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.3,
+                response_mode=ResponseMode.JSON,
+            ),
+            max_retries=5,
+        )
 
-        for attempt in range(max_retries):
-            try:
-                response = client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You are a senior video editor evaluating whether clips can stand alone without prior context."
-                        },
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
-                    temperature=0.3,  # Low temp for consistent evaluation
-                    response_format={"type": "json_object"}
-                )
+        self.metrics['api_calls'] += 1
+        self.metrics['tokens_used'] += response.usage.total_tokens
+        if response.usage.estimated_cost_usd is not None:
+            self.metrics['cost_usd'] += float(response.usage.estimated_cost_usd)
 
-                # Track metrics
-                self.metrics['api_calls'] += 1
-                self.metrics['tokens_used'] += response.usage.total_tokens
+        result = response.parsed
 
-                # Calculate cost (GPT-4o-mini pricing: $0.15/1M input, $0.60/1M output)
-                input_cost = (response.usage.prompt_tokens / 1_000_000) * 0.15
-                output_cost = (response.usage.completion_tokens / 1_000_000) * 0.60
-                self.metrics['cost_usd'] += input_cost + output_cost
+        refined_start = float(result.get('refined_start', start))
+        refined_end = float(result.get('refined_end', end))
+        standalone_score = float(result['standalone_score'])
+        editor_notes = result['editor_notes']
+        rejection_reason = result.get('rejection_reason')
 
-                # Parse response
-                result = json.loads(response.choices[0].message.content)
-
-                refined_start = float(result.get('refined_start', start))
-                refined_end = float(result.get('refined_end', end))
-                standalone_score = float(result['standalone_score'])
-                editor_notes = result['editor_notes']
-                rejection_reason = result.get('rejection_reason')
-
-                return (refined_start, refined_end, standalone_score, editor_notes, rejection_reason)
-
-            except (json.JSONDecodeError, KeyError, ValueError) as e:
-                print(f"      ⚠️  Failed to parse validation response: {e}")
-                return None
-
-            except Exception as e:
-                error_str = str(e)
-
-                # Check if this is a rate limit error
-                if "rate_limit_exceeded" in error_str or "429" in error_str:
-                    # Calculate wait time
-                    wait_time = base_delay * (2 ** attempt)
-
-                    # Try to parse suggested wait time from error
-                    import re
-                    match = re.search(r'try again in (\d+\.?\d*)s', error_str)
-                    if match:
-                        wait_time = float(match.group(1)) + 1.0
-
-                    if attempt < max_retries - 1:
-                        print(f"      ⚠️  API error during validation: {e}")
-                        print(f"      ⏳ Retrying in {wait_time:.1f}s (attempt {attempt + 2}/{max_retries})...")
-                        import time
-                        time.sleep(wait_time)
-                        continue
-                    else:
-                        print(f"      ❌ Validation failed after {max_retries} retries")
-                        return None
-                else:
-                    # Non-rate-limit error
-                    print(f"      ⚠️  API error during validation: {e}")
-                    return None
-
-        return None
+        return (refined_start, refined_end, standalone_score, editor_notes, rejection_reason)
 
     def _create_prompt(
         self,

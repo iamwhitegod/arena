@@ -10,19 +10,31 @@ import shutil
 class Transcriber:
     """Handles audio transcription with word-level timestamps"""
 
-    def __init__(self, api_key: str = None, mode: str = "api"):
+    def __init__(self, api_key: str = None, mode: str = "api", *, speech=None):
         """
         Initialize transcriber
 
         Args:
-            api_key: OpenAI API key (required for 'api' mode)
+            api_key: OpenAI API key (used when no speech model is provided)
             mode: 'api' for OpenAI Whisper API, 'local' for local Whisper model
+            speech: Optional SpeechModel instance (takes precedence over api_key/mode)
         """
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        self.mode = mode
-
-        if self.mode == "api" and not self.api_key:
-            raise ValueError("OpenAI API key is required for 'api' mode")
+        if speech is not None:
+            self._speech = speech
+            self.mode = "provider"
+        elif mode == "local":
+            self._speech = None
+            self.mode = "local"
+        elif api_key is not None or os.getenv("OPENAI_API_KEY"):
+            api_key = api_key or os.getenv("OPENAI_API_KEY")
+            from arena.providers.openai_adapter import OpenAISpeechModel
+            self._speech = OpenAISpeechModel(api_key=api_key)
+            self.mode = "provider"
+        else:
+            raise ValueError(
+                "Either speech model, api_key, or mode='local' required"
+            )
+        self.api_key = api_key  # keep for backward compat
 
     AUDIO_EXTENSIONS = {'.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma', '.opus'}
 
@@ -61,10 +73,10 @@ class Transcriber:
             is_direct_audio = False
 
         # Transcribe based on mode
-        if self.mode == "api":
-            result = self._transcribe_with_api(audio_path)
-        else:
+        if self.mode == "local":
             result = self._transcribe_local(audio_path)
+        else:
+            result = self._transcribe_with_provider(audio_path)
 
         # Clean up temporary file if not cached (don't delete user's audio file)
         if not is_direct_audio and not cache_dir and audio_path.exists():
@@ -72,90 +84,62 @@ class Transcriber:
 
         return result
 
-    def _transcribe_with_api(self, audio_path: Path) -> Dict:
-        """Transcribe using OpenAI Whisper API"""
-        try:
-            from openai import OpenAI
-        except ImportError:
-            raise ImportError(
-                "openai package is required for API mode. "
-                "Install with: pip install openai"
-            )
+    @staticmethod
+    def _response_to_dict(response, offset: float = 0.0, segment_id_start: int = 0) -> Dict:
+        """Convert a TranscriptionResponse to the plain-dict format Arena expects.
 
-        # Check file size (OpenAI limit is 25MB)
+        Args:
+            response: TranscriptionResponse from a SpeechModel
+            offset: Timestamp offset to add (for chunked transcription)
+            segment_id_start: Starting segment ID (for chunked transcription)
+        """
+        words = [
+            {"word": w.word, "start": w.start + offset, "end": w.end + offset}
+            for w in response.words
+        ]
+        segments = [
+            {
+                "id": segment_id_start + i,
+                "start": s.start + offset,
+                "end": s.end + offset,
+                "text": s.text,
+            }
+            for i, s in enumerate(response.segments)
+        ]
+        return {
+            "text": response.text,
+            "language": response.language,
+            "duration": response.duration,
+            "words": words,
+            "segments": segments,
+        }
+
+    def _transcribe_with_provider(self, audio_path: Path) -> Dict:
+        """Transcribe using the injected SpeechModel."""
         file_size_mb = audio_path.stat().st_size / (1024 * 1024)
+        limit = self._speech.max_file_size_mb
 
-        if file_size_mb > 24:  # Leave 1MB buffer
-            print(f"⚠️  Audio file is {file_size_mb:.1f}MB (limit: 25MB)")
+        if file_size_mb > limit:
+            print(f"⚠️  Audio file is {file_size_mb:.1f}MB (limit: {limit:.0f}MB)")
             print(f"   Chunking audio into smaller segments...")
             return self._transcribe_chunked(audio_path)
 
-        client = OpenAI(api_key=self.api_key)
-
-        with open(audio_path, "rb") as audio_file:
-            # Call Whisper API with verbose JSON format
-            transcript = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file,
-                response_format="verbose_json",
-                timestamp_granularities=["word", "segment"]
-            )
-
-        # Convert response to our format
-        result = {
-            "text": transcript.text,
-            "language": getattr(transcript, 'language', 'en'),
-            "duration": getattr(transcript, 'duration', 0),
-            "words": [],
-            "segments": []
-        }
-
-        # Extract word-level timestamps
-        if hasattr(transcript, 'words') and transcript.words:
-            result["words"] = [
-                {
-                    "word": word.word,
-                    "start": word.start,
-                    "end": word.end
-                }
-                for word in transcript.words
-            ]
-
-        # Extract segment-level timestamps
-        if hasattr(transcript, 'segments') and transcript.segments:
-            result["segments"] = [
-                {
-                    "id": segment.id,
-                    "start": segment.start,
-                    "end": segment.end,
-                    "text": segment.text
-                }
-                for segment in transcript.segments
-            ]
-
-        return result
+        response = self._speech.transcribe(audio_path)
+        return self._response_to_dict(response)
 
     def _transcribe_chunked(self, audio_path: Path) -> Dict:
         """
-        Transcribe large audio files by chunking into smaller segments
+        Transcribe large audio files by chunking into smaller segments.
 
         Args:
-            audio_path: Path to audio file (>25MB)
+            audio_path: Path to audio file exceeding the provider's size limit
 
         Returns:
             Merged transcript from all chunks
         """
-        try:
-            from openai import OpenAI
-        except ImportError:
-            raise ImportError("openai package required")
-
-        client = OpenAI(api_key=self.api_key)
-
-        # Get audio duration
         duration = self._get_audio_duration(audio_path)
 
-        # Split into 10-minute chunks (safe for 25MB limit at 128kbps)
+        # Split into 10-minute chunks (safe for typical size limits at 128kbps)
         chunk_duration = 600  # 10 minutes in seconds
         num_chunks = int(duration / chunk_duration) + 1
 
@@ -164,6 +148,7 @@ class Transcriber:
         all_words = []
         all_segments = []
         full_text = []
+        last_language = "en"
 
         temp_dir = Path(tempfile.mkdtemp())
 
@@ -172,60 +157,37 @@ class Transcriber:
                 start_time = i * chunk_duration
                 end_time = min((i + 1) * chunk_duration, duration)
 
-                # Extract chunk
                 chunk_path = temp_dir / f"chunk_{i:03d}.mp3"
                 self._extract_audio_chunk(audio_path, chunk_path, start_time, end_time)
 
                 print(f"   Transcribing chunk {i+1}/{num_chunks} ({start_time/60:.1f}-{end_time/60:.1f} min)...")
 
-                # Transcribe chunk
-                with open(chunk_path, "rb") as audio_file:
-                    transcript = client.audio.transcriptions.create(
-                        model="whisper-1",
-                        file=audio_file,
-                        response_format="verbose_json",
-                        timestamp_granularities=["word", "segment"]
-                    )
+                response = self._speech.transcribe(chunk_path)
+                chunk_dict = self._response_to_dict(
+                    response,
+                    offset=start_time,
+                    segment_id_start=len(all_segments),
+                )
 
-                # Merge results with timestamp offset
-                offset = start_time
+                all_words.extend(chunk_dict["words"])
+                all_segments.extend(chunk_dict["segments"])
+                full_text.append(chunk_dict["text"])
+                last_language = chunk_dict["language"]
 
-                if hasattr(transcript, 'words') and transcript.words:
-                    for word in transcript.words:
-                        all_words.append({
-                            "word": word.word,
-                            "start": word.start + offset,
-                            "end": word.end + offset
-                        })
-
-                if hasattr(transcript, 'segments') and transcript.segments:
-                    for segment in transcript.segments:
-                        all_segments.append({
-                            "id": len(all_segments),
-                            "start": segment.start + offset,
-                            "end": segment.end + offset,
-                            "text": segment.text
-                        })
-
-                full_text.append(transcript.text)
-
-                # Clean up chunk file
                 chunk_path.unlink()
 
             print(f"   ✓ Transcription complete ({num_chunks} chunks merged)\n")
 
             return {
                 "text": " ".join(full_text),
-                "language": getattr(transcript, 'language', 'en'),
+                "language": last_language,
                 "duration": duration,
                 "words": all_words,
-                "segments": all_segments
+                "segments": all_segments,
             }
 
         finally:
-            # Clean up temp directory
             if temp_dir.exists():
-                import shutil
                 shutil.rmtree(temp_dir)
 
     def _get_audio_duration(self, audio_path: Path) -> float:

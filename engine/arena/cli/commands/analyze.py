@@ -19,10 +19,19 @@ def run_analyze(args):
         print(f"❌ Error: Video file not found: {args.video}")
         return 1
 
-    # Check for API key
-    api_key = os.getenv('OPENAI_API_KEY')
-    if not api_key:
-        print("❌ Error: OPENAI_API_KEY environment variable not set")
+    # Resolve inference providers
+    from arena.providers import resolve_inference, Capability
+    from arena.providers.base import ProviderAuthError
+
+    has_transcript = args.transcript and Path(args.transcript).exists()
+    required = {Capability.CHAT, Capability.EMBEDDING}
+    if not has_transcript:
+        required.add(Capability.SPEECH)
+
+    try:
+        inference = resolve_inference(required=required)
+    except ProviderAuthError as e:
+        print(f"❌ Error: {e}")
         return 1
 
     print(f"\n🧠 Analyzing: {video_path.name}\n")
@@ -40,7 +49,7 @@ def run_analyze(args):
         progress("transcription", 100, "Loaded existing transcript")
     else:
         print("🎤 Transcribing video...")
-        transcriber = Transcriber(api_key=api_key)
+        transcriber = Transcriber(speech=inference.require_speech())
         progress("transcription", 5, "Transcribing audio")
         transcript_data = transcriber.transcribe(video_path)
         progress("transcription", 100, "Transcription complete")
@@ -50,7 +59,7 @@ def run_analyze(args):
     try:
         # Initialize analyzers
         print("🔧 Initializing analyzers...")
-        ai_analyzer = FourLayerAdapter(api_key=api_key)
+        ai_analyzer = FourLayerAdapter(inference=inference)
         energy_analyzer = AudioEnergyAnalyzer(video_path=video_path)
         hybrid = HybridAnalyzer(
             ai_analyzer=ai_analyzer,

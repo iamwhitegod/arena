@@ -7,11 +7,12 @@ Looks backward for setup and forward for payoff/resolution.
 Uses parallel processing to analyze multiple moments simultaneously.
 """
 
+import warnings
 from typing import List, Dict, Optional
-import json
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from .utils import format_transcript_with_timestamps, format_timestamp
+from arena.providers.base import ResponseMode
+from arena.providers.retry import retry_with_backoff
 
 
 class ThoughtBoundaryAnalyzer:
@@ -47,23 +48,34 @@ class ThoughtBoundaryAnalyzer:
     CONTEXT_WINDOW_SECONDS = 60.0  # Extract ±60s around moment for context
     DEFAULT_MAX_WORKERS = 5         # Parallel API calls
 
-    def __init__(self, api_key: str, model: str = "gpt-4o"):
+    def __init__(self, api_key=None, model: str = "gpt-4o", *, chat=None):
         """
         Initialize thought boundary analyzer
 
         Args:
-            api_key: OpenAI API key
-            model: Model to use (default: gpt-4o, can use gpt-4o-mini for cost savings)
-                  Note: gpt-4o-mini may require validation to ensure quality maintained
+            api_key: OpenAI API key (deprecated, pass chat instead)
+            model: Model to use (default: gpt-4o)
+            chat: ChatModel instance (preferred)
         """
-        self.api_key = api_key
+        warnings.warn(
+            f"{self.__class__.__name__} is deprecated. Use FourLayerAdapter instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if chat is not None:
+            self._chat = chat
+        elif api_key is not None:
+            from arena.providers.openai_adapter import OpenAIChatModel
+            self._chat = OpenAIChatModel(api_key=api_key, model=model)
+        else:
+            raise ValueError("Either chat or api_key required")
         self.model = model
         self.metrics = {
             'api_calls': 0,
             'tokens_used': 0,
             'cost_usd': 0.0,
             'thoughts_analyzed': 0,
-            'avg_expansion_ratio': 0.0  # How much boundaries expand on average
+            'avg_expansion_ratio': 0.0
         }
 
     def analyze_all(
@@ -97,12 +109,6 @@ class ThoughtBoundaryAnalyzer:
             print("      ⚠️  No moments to analyze")
             return []
 
-        try:
-            from openai import OpenAI
-        except ImportError:
-            raise ImportError("openai package required. Install with: pip install openai")
-
-        client = OpenAI(api_key=self.api_key)
         segments = transcript_data.get('segments', [])
 
         if not segments:
@@ -121,7 +127,6 @@ class ThoughtBoundaryAnalyzer:
                 future_to_moment = {
                     executor.submit(
                         self._analyze_single,
-                        client,
                         moment,
                         idx,
                         segments
@@ -145,7 +150,7 @@ class ThoughtBoundaryAnalyzer:
             print(f"      Processing {len(moments)} moments sequentially...")
             for idx, moment in enumerate(moments, 1):
                 try:
-                    thought = self._analyze_single(client, moment, idx, segments)
+                    thought = self._analyze_single(moment, idx, segments)
                     if thought:
                         thoughts.append(thought)
                         print(f"      ✓ Moment {idx}/{len(moments)} analyzed")
@@ -167,7 +172,6 @@ class ThoughtBoundaryAnalyzer:
 
     def _analyze_single(
         self,
-        client,
         moment: Dict,
         moment_id: int,
         segments: List[Dict]
@@ -176,7 +180,6 @@ class ThoughtBoundaryAnalyzer:
         Analyze thought boundaries for a single moment
 
         Args:
-            client: OpenAI client
             moment: Moment dict from Layer 1
             moment_id: Numeric ID for this moment
             segments: Full transcript segments
@@ -184,7 +187,6 @@ class ThoughtBoundaryAnalyzer:
         Returns:
             Thought boundary dict or None if failed
         """
-        # Extract context window around moment
         rough_start = moment['rough_start']
         rough_end = moment['rough_end']
         rough_center = (rough_start + rough_end) / 2
@@ -198,94 +200,47 @@ class ThoughtBoundaryAnalyzer:
         ]
 
         if not context_segments:
-            print(f"      ⚠️  No context segments found for moment {moment_id}")
+            print(f"      No context segments found for moment {moment_id}")
             return None
 
-        # Format context with timestamps
         context_transcript = format_transcript_with_timestamps(context_segments)
-
-        # Create prompt
         prompt = self._create_prompt(moment, context_transcript, rough_start, rough_end)
 
-        # Retry configuration for rate limits
-        max_retries = 5
-        base_delay = 2.0
+        response = retry_with_backoff(
+            lambda: self._chat.complete(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a senior video editor analyzing complete thought boundaries in spoken content."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.5,
+                response_mode=ResponseMode.JSON,
+            ),
+            max_retries=5,
+        )
 
-        for attempt in range(max_retries):
-            try:
-                # Call GPT-4o
-                response = client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You are a senior video editor analyzing complete thought boundaries in spoken content."
-                        },
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
-                    temperature=0.5,  # Lower temp for more consistent boundary detection
-                    response_format={"type": "json_object"}
-                )
+        self.metrics['api_calls'] += 1
+        self.metrics['tokens_used'] += response.usage.total_tokens
+        if response.usage.estimated_cost_usd is not None:
+            self.metrics['cost_usd'] += float(response.usage.estimated_cost_usd)
 
-                # Track metrics
-                self.metrics['api_calls'] += 1
-                self.metrics['tokens_used'] += response.usage.total_tokens
+        result = response.parsed
 
-                # Calculate cost (GPT-4o pricing)
-                input_cost = (response.usage.prompt_tokens / 1_000_000) * 2.50
-                output_cost = (response.usage.completion_tokens / 1_000_000) * 10.00
-                self.metrics['cost_usd'] += input_cost + output_cost
+        thought = {
+            'moment_id': f"moment_{moment_id:03d}",
+            'expanded_start': float(result['expanded_start']),
+            'expanded_end': float(result['expanded_end']),
+            'thought_summary': result['thought_summary'],
+            'confidence': float(result['confidence']),
+            'original_moment': moment
+        }
 
-                # Parse response
-                result = json.loads(response.choices[0].message.content)
-
-                # Validate and create thought dict
-                thought = {
-                    'moment_id': f"moment_{moment_id:03d}",
-                    'expanded_start': float(result['expanded_start']),
-                    'expanded_end': float(result['expanded_end']),
-                    'thought_summary': result['thought_summary'],
-                    'confidence': float(result['confidence']),
-                    'original_moment': moment
-                }
-
-                return thought
-
-            except (json.JSONDecodeError, KeyError, ValueError) as e:
-                print(f"      ⚠️  Failed to parse response for moment {moment_id}: {e}")
-                return None
-
-            except Exception as e:
-                error_str = str(e)
-
-                # Check if this is a rate limit error
-                if "rate_limit_exceeded" in error_str or "429" in error_str:
-                    # Calculate wait time
-                    wait_time = base_delay * (2 ** attempt)
-
-                    # Try to parse suggested wait time from error
-                    import re
-                    match = re.search(r'try again in (\d+\.?\d*)s', error_str)
-                    if match:
-                        wait_time = float(match.group(1)) + 1.0
-
-                    if attempt < max_retries - 1:
-                        print(f"      ⚠️  API error for moment {moment_id}: {e}")
-                        print(f"      ⏳ Retrying in {wait_time:.1f}s (attempt {attempt + 2}/{max_retries})...")
-                        time.sleep(wait_time)
-                        continue
-                    else:
-                        print(f"      ❌ Failed after {max_retries} retries for moment {moment_id}")
-                        return None
-                else:
-                    # Non-rate-limit error
-                    print(f"      ⚠️  API error for moment {moment_id}: {e}")
-                    return None
-
-        return None
+        return thought
 
     def _create_prompt(
         self,

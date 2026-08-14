@@ -31,15 +31,22 @@ class PremiseDetector:
     MAX_LOOKBACK_SENTENCES = 15  # Don't search more than 15 sentences back
     MAX_LOOKBACK_SECONDS = 90.0  # Don't search more than 90 seconds back
 
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini"):
+    def __init__(self, api_key=None, model: str = "gpt-4o-mini", *, chat=None):
         """
         Initialize premise detector
 
         Args:
-            api_key: OpenAI API key
+            api_key: OpenAI API key (legacy, creates OpenAIChatModel internally)
             model: Model to use (default: gpt-4o-mini for cost efficiency)
+            chat: ChatModel instance (preferred)
         """
-        self.api_key = api_key
+        if chat is not None:
+            self._chat = chat
+        elif api_key is not None:
+            from arena.providers.openai_adapter import OpenAIChatModel
+            self._chat = OpenAIChatModel(api_key=api_key, model=model)
+        else:
+            raise ValueError("Either chat or api_key required")
         self.model = model
         self.metrics = {
             'api_calls': 0,
@@ -75,13 +82,6 @@ class PremiseDetector:
 
             Returns None if premise cannot be found
         """
-        try:
-            from openai import OpenAI
-        except ImportError:
-            raise ImportError("openai package required. Install with: pip install openai")
-
-        client = OpenAI(api_key=self.api_key)
-
         # Find seed position in transcript
         seed_timestamp = seed['timestamp']
         seed_text = seed['text']
@@ -101,7 +101,6 @@ class PremiseDetector:
         # Call GPT to find premise
         try:
             result = self._analyze_premise(
-                client,
                 seed_text,
                 seed.get('rhetorical_type', 'unknown'),
                 context
@@ -171,7 +170,6 @@ class PremiseDetector:
 
     def _analyze_premise(
         self,
-        client,
         seed_text: str,
         rhetorical_type: str,
         context: Dict
@@ -180,7 +178,6 @@ class PremiseDetector:
         Use GPT to analyze where the premise begins.
 
         Args:
-            client: OpenAI client
             seed_text: The seed/claim text
             rhetorical_type: Type of rhetoric (argument, teaching, story, etc.)
             context: Context dict with before_segments
@@ -195,35 +192,36 @@ class PremiseDetector:
             context['before_segments']
         )
 
-        # Call GPT
-        response = client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert at identifying where thoughts begin in spoken content. You find the natural starting point (premise) that sets up a claim or insight."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            temperature=0.2,  # Lower temperature for more consistent detection
-            response_format={"type": "json_object"}
+        # Call LLM
+        from arena.providers.base import ResponseMode
+        from arena.providers.retry import retry_with_backoff
+
+        response = retry_with_backoff(
+            lambda: self._chat.complete(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert at identifying where thoughts begin in spoken content. You find the natural starting point (premise) that sets up a claim or insight."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.2,
+                response_mode=ResponseMode.JSON,
+            )
         )
 
         # Track metrics
         self.metrics['api_calls'] += 1
         self.metrics['tokens_used'] += response.usage.total_tokens
-
-        # Calculate cost (gpt-4o-mini pricing: $0.150/1M input, $0.600/1M output)
-        input_cost = (response.usage.prompt_tokens / 1_000_000) * 0.150
-        output_cost = (response.usage.completion_tokens / 1_000_000) * 0.600
-        self.metrics['cost_usd'] += input_cost + output_cost
+        if response.usage.estimated_cost_usd is not None:
+            self.metrics['cost_usd'] += float(response.usage.estimated_cost_usd)
 
         # Parse response
         try:
-            result = json.loads(response.choices[0].message.content)
+            result = response.parsed
 
             premise_index = result.get('premise_start_index', -1)
 

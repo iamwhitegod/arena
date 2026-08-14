@@ -127,13 +127,26 @@ def run_arena_pipeline(
         print(f"🎯 Target: {num_clips} clips (content-driven length)")
     print()
 
-    # Check for API key
-    api_key = os.getenv('OPENAI_API_KEY')
-    if not api_key:
-        print("⚠️  Warning: OPENAI_API_KEY not set!")
+    # Resolve inference providers
+    from arena.providers import resolve_inference, Capability
+    from arena.providers.base import ProviderAuthError
+
+    try:
+        inference = resolve_inference(
+            required={Capability.CHAT, Capability.EMBEDDING, Capability.SPEECH},
+            chat_model=editorial_model,
+        )
+    except ProviderAuthError as e:
+        print(f"⚠️  {e}")
         print("   Set it with: export OPENAI_API_KEY='your-key'")
         print("   Get one at: https://platform.openai.com/api-keys\n")
         return 1
+    except Exception as e:
+        print(f"❌ Provider setup failed: {e}")
+        return 1
+
+    # Backward compat: keep api_key for any remaining direct usage
+    api_key = os.getenv('OPENAI_API_KEY')
 
     # Pipeline progress tracking
     total_steps = 4  # Added professional alignment step
@@ -204,7 +217,7 @@ def run_arena_pipeline(
         if HAS_TQDM:
             with tqdm(total=100, desc="🎤 Transcribing", bar_format='{l_bar}{bar}| {elapsed}') as pbar:
                 try:
-                    transcriber = Transcriber(api_key=api_key, mode='api')
+                    transcriber = Transcriber(speech=inference.require_speech())
                     pbar.update(20)
                     transcript_data = transcriber.transcribe(
                         audio_to_transcribe,
@@ -261,9 +274,9 @@ def run_arena_pipeline(
         if HAS_TQDM:
             with tqdm(total=100, desc="🔧 Initializing", bar_format='{l_bar}{bar}') as pbar:
                 ai_analyzer = FourLayerAdapter(
-                    api_key=api_key,
+                    inference=inference,
                     model=editorial_model,
-                    export_layers=export_editorial_layers
+                    export_layers=export_editorial_layers,
                 )
                 pbar.update(33)
                 energy_analyzer = AudioEnergyAnalyzer(video_path=video_file)

@@ -40,19 +40,21 @@ class FourLayerAdapter:
 
     def __init__(
         self,
-        api_key: str,
+        api_key: str = None,
         model: str = "gpt-4o-mini",
         export_layers: bool = False,
         score_weights: Optional[Dict[str, float]] = None,
         enable_checkpoints: bool = True,
         checkpoint_dir: str = ".checkpoint",
-        max_workers: int = 1
+        max_workers: int = 1,
+        *,
+        inference=None,
     ):
         """
         Initialize editorial adapter
 
         Args:
-            api_key: OpenAI API key
+            api_key: OpenAI API key (backward compat — prefer inference bundle)
             model: Base model to use (default: gpt-4o-mini for cost efficiency)
             export_layers: Whether to export intermediate results for debugging
             score_weights: Custom scoring weights (default: {'completeness': 0.75, 'standalone': 0.25})
@@ -60,8 +62,22 @@ class FourLayerAdapter:
             checkpoint_dir: Directory for checkpoints (default: .checkpoint)
             max_workers: Max parallel API calls for scoring/validation (default: 1)
                         Sequential avoids 429 rate limits on most OpenAI tiers.
+            inference: InferenceBundle with chat and embedding models (preferred)
         """
-        self.api_key = api_key
+        if inference is not None:
+            self._chat = inference.require_chat()
+            self._overview_chat = inference.require_overview_chat()
+            self._embedding = inference.require_embedding()
+            self.api_key = None
+        elif api_key is not None:
+            from arena.providers.openai_adapter import OpenAIChatModel, OpenAIEmbeddingModel
+            self._chat = OpenAIChatModel(api_key=api_key, model=model)
+            self._overview_chat = self._chat
+            self._embedding = OpenAIEmbeddingModel(api_key=api_key)
+            self.api_key = api_key
+        else:
+            raise ValueError("Either inference bundle or api_key is required")
+
         self.model = model
         self.export_layers = export_layers
         self.layer_outputs = {}  # Store for export
@@ -157,7 +173,9 @@ class FourLayerAdapter:
 
         if seeds is None:
             # Run seed detection
-            self.seed_detector = ThoughtSeedDetector(self.api_key, model=self.model)
+            self.seed_detector = ThoughtSeedDetector(
+                chat=self._chat, overview_chat=self._overview_chat,
+            )
             seeds = self.seed_detector.detect_seeds(
                 transcript_data,
                 target_count=target_clips
@@ -199,9 +217,8 @@ class FourLayerAdapter:
         if thought_units_data is None:
             # Run construction
             self.constructor = ThoughtUnitConstructor(
-                self.api_key,
-                model=self.model,
-                verbose=False
+                chat=self._chat,
+                verbose=False,
             )
 
             thought_units = self.constructor.construct_from_seeds(
@@ -296,7 +313,7 @@ class FourLayerAdapter:
         # Standalone validation (parallel processing for speed)
         print("      Running standalone validation...")
         sys.stdout.flush()
-        self.standalone_validator = StandaloneValidator(self.api_key, model=self.model)
+        self.standalone_validator = StandaloneValidator(chat=self._chat)
         validations = self.standalone_validator.validate_batch_parallel(thought_units, max_workers=self.max_workers, verbose=False)
         thought_units = self.standalone_validator.update_thought_units(thought_units, validations)
 
@@ -307,7 +324,7 @@ class FourLayerAdapter:
         # Completeness scoring (parallel processing for speed)
         print("      Running completeness scoring...")
         sys.stdout.flush()
-        self.completeness_scorer = CompletenessScorer(self.api_key, model=self.model)
+        self.completeness_scorer = CompletenessScorer(chat=self._chat)
         scores = self.completeness_scorer.score_batch_parallel(thought_units, max_workers=self.max_workers, verbose=False)
         thought_units = self.completeness_scorer.update_thought_units(thought_units, scores)
 
@@ -341,7 +358,7 @@ class FourLayerAdapter:
         sys.stdout.flush()
 
         # Semantic + Temporal deduplication
-        self.deduplicator = SemanticDeduplicator(self.api_key)
+        self.deduplicator = SemanticDeduplicator(embedding=self._embedding)
         unique_units, clusters = self.deduplicator.deduplicate(
             thought_units,
             similarity_threshold=0.92,

@@ -7,9 +7,11 @@ This layer takes clips that have passed standalone validation and adds
 all the marketing/presentation elements needed for publishing.
 """
 
+import warnings
 from typing import List, Dict
-import json
 from .utils import extract_clip_text, format_timestamp
+from arena.providers.base import ResponseMode
+from arena.providers.retry import retry_with_backoff
 
 
 class PackagingLayer:
@@ -28,15 +30,27 @@ class PackagingLayer:
 
     MAX_TITLE_LENGTH = 60  # Platform constraint for short-form video
 
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini"):
+    def __init__(self, api_key=None, model: str = "gpt-4o-mini", *, chat=None):
         """
         Initialize packaging layer
 
         Args:
-            api_key: OpenAI API key
-            model: Model to use (default: gpt-4o-mini for cost efficiency)
+            api_key: OpenAI API key (deprecated, pass chat instead)
+            model: Model to use (default: gpt-4o-mini)
+            chat: ChatModel instance (preferred)
         """
-        self.api_key = api_key
+        warnings.warn(
+            f"{self.__class__.__name__} is deprecated. Use FourLayerAdapter instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if chat is not None:
+            self._chat = chat
+        elif api_key is not None:
+            from arena.providers.openai_adapter import OpenAIChatModel
+            self._chat = OpenAIChatModel(api_key=api_key, model=model)
+        else:
+            raise ValueError("Either chat or api_key required")
         self.model = model
         self.metrics = {
             'api_calls': 0,
@@ -78,15 +92,9 @@ class PackagingLayer:
             }
         """
         if not validated_clips:
-            print("      ⚠️  No validated clips to package")
+            print("      No validated clips to package")
             return []
 
-        try:
-            from openai import OpenAI
-        except ImportError:
-            raise ImportError("openai package required. Install with: pip install openai")
-
-        client = OpenAI(api_key=self.api_key)
         segments = transcript_data.get('segments', [])
 
         if not segments:
@@ -99,7 +107,7 @@ class PackagingLayer:
 
         for idx, clip in enumerate(validated_clips, 1):
             try:
-                packaged = self._package_single(client, clip, idx, segments)
+                packaged = self._package_single(clip, idx, segments)
 
                 if packaged:
                     packaged_clips.append(packaged)
@@ -115,7 +123,6 @@ class PackagingLayer:
 
     def _package_single(
         self,
-        client,
         clip: Dict,
         clip_id: int,
         segments: List[Dict]
@@ -124,7 +131,6 @@ class PackagingLayer:
         Package a single clip with all metadata
 
         Args:
-            client: OpenAI client
             clip: Validated clip from Layer 3
             clip_id: Numeric ID for this clip
             segments: Transcript segments
@@ -142,7 +148,7 @@ class PackagingLayer:
             return None
 
         # Generate packaging metadata
-        packaging = self._generate_packaging(client, clip_text, start_time, end_time, clip)
+        packaging = self._generate_packaging(clip_text, start_time, end_time, clip)
 
         if not packaging:
             return None
@@ -188,7 +194,6 @@ class PackagingLayer:
 
     def _generate_packaging(
         self,
-        client,
         clip_text: str,
         start_time: float,
         end_time: float,
@@ -198,7 +203,6 @@ class PackagingLayer:
         Generate title, description, hashtags, and thumbnail time
 
         Args:
-            client: OpenAI client
             clip_text: Extracted transcript text
             start_time: Clip start time
             end_time: Clip end time
@@ -209,92 +213,47 @@ class PackagingLayer:
         """
         prompt = self._create_prompt(clip_text, start_time, end_time, clip)
 
-        # Retry configuration for rate limits
-        max_retries = 5
-        base_delay = 2.0
+        response = retry_with_backoff(
+            lambda: self._chat.complete(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a social media expert creating compelling titles and descriptions for short-form video content."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.7,
+                response_mode=ResponseMode.JSON,
+            ),
+            max_retries=5,
+        )
 
-        for attempt in range(max_retries):
-            try:
-                response = client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You are a social media expert creating compelling titles and descriptions for short-form video content."
-                        },
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
-                    temperature=0.7,  # Moderate creativity for titles
-                    response_format={"type": "json_object"}
-                )
+        self.metrics['api_calls'] += 1
+        self.metrics['tokens_used'] += response.usage.total_tokens
+        if response.usage.estimated_cost_usd is not None:
+            self.metrics['cost_usd'] += float(response.usage.estimated_cost_usd)
 
-                # Track metrics
-                self.metrics['api_calls'] += 1
-                self.metrics['tokens_used'] += response.usage.total_tokens
+        result = response.parsed
 
-                # Calculate cost (GPT-4o-mini pricing)
-                input_cost = (response.usage.prompt_tokens / 1_000_000) * 0.15
-                output_cost = (response.usage.completion_tokens / 1_000_000) * 0.60
-                self.metrics['cost_usd'] += input_cost + output_cost
+        title = result['title']
+        if len(title) > self.MAX_TITLE_LENGTH:
+            title = title[:self.MAX_TITLE_LENGTH-3] + "..."
 
-                # Parse response
-                result = json.loads(response.choices[0].message.content)
+        thumbnail_time = float(result['thumbnail_time'])
+        thumbnail_time = max(start_time, min(end_time, thumbnail_time))
 
-                # Validate and truncate title if needed
-                title = result['title']
-                if len(title) > self.MAX_TITLE_LENGTH:
-                    title = title[:self.MAX_TITLE_LENGTH-3] + "..."
+        packaging = {
+            'title': title,
+            'description': result['description'],
+            'hashtags': result['hashtags'][:5],
+            'thumbnail_time': thumbnail_time,
+            'thumbnail_reasoning': result.get('thumbnail_reasoning', '')
+        }
 
-                # Ensure thumbnail is within clip bounds
-                thumbnail_time = float(result['thumbnail_time'])
-                thumbnail_time = max(start_time, min(end_time, thumbnail_time))
-
-                packaging = {
-                    'title': title,
-                    'description': result['description'],
-                    'hashtags': result['hashtags'][:5],  # Limit to 5 hashtags
-                    'thumbnail_time': thumbnail_time,
-                    'thumbnail_reasoning': result.get('thumbnail_reasoning', '')
-                }
-
-                return packaging
-
-            except (json.JSONDecodeError, KeyError, ValueError) as e:
-                print(f"      ⚠️  Failed to parse packaging response: {e}")
-                return None
-
-            except Exception as e:
-                error_str = str(e)
-
-                # Check if this is a rate limit error
-                if "rate_limit_exceeded" in error_str or "429" in error_str:
-                    # Calculate wait time
-                    wait_time = base_delay * (2 ** attempt)
-
-                    # Try to parse suggested wait time from error
-                    import re
-                    match = re.search(r'try again in (\d+\.?\d*)s', error_str)
-                    if match:
-                        wait_time = float(match.group(1)) + 1.0
-
-                    if attempt < max_retries - 1:
-                        print(f"      ⚠️  API error during packaging: {e}")
-                        print(f"      ⏳ Retrying in {wait_time:.1f}s (attempt {attempt + 2}/{max_retries})...")
-                        import time
-                        time.sleep(wait_time)
-                        continue
-                    else:
-                        print(f"      ❌ Packaging failed after {max_retries} retries")
-                        return None
-                else:
-                    # Non-rate-limit error
-                    print(f"      ⚠️  API error during packaging: {e}")
-                    return None
-
-        return None
+        return packaging
 
     def _create_prompt(
         self,
@@ -409,13 +368,6 @@ RULES:
         Returns:
             Generated title (max 60 chars)
         """
-        try:
-            from openai import OpenAI
-        except ImportError:
-            return "Untitled Clip"
-
-        client = OpenAI(api_key=self.api_key)
-
         prompt = f"""Generate a compelling title (max 60 characters) for this video clip:
 
 {transcript_segment}
@@ -428,62 +380,31 @@ Requirements:
 
 Return only the title, nothing else."""
 
-        # Retry configuration for rate limits
-        max_retries = 5
-        base_delay = 2.0
-
-        for attempt in range(max_retries):
-            try:
-                response = client.chat.completions.create(
-                    model=self.model,
+        try:
+            response = retry_with_backoff(
+                lambda: self._chat.complete(
                     messages=[
                         {"role": "system", "content": "You are a video title writer."},
                         {"role": "user", "content": prompt}
                     ],
-                    temperature=0.7
-                )
+                    temperature=0.7,
+                    response_mode=ResponseMode.TEXT,
+                ),
+                max_retries=5,
+            )
 
-                title = response.choices[0].message.content.strip()
+            title = response.content.strip()
 
-                # Remove quotes if present
-                if title.startswith('"') and title.endswith('"'):
-                    title = title[1:-1]
+            if title.startswith('"') and title.endswith('"'):
+                title = title[1:-1]
 
-                # Truncate if needed
-                if len(title) > self.MAX_TITLE_LENGTH:
-                    title = title[:self.MAX_TITLE_LENGTH-3] + "..."
+            if len(title) > self.MAX_TITLE_LENGTH:
+                title = title[:self.MAX_TITLE_LENGTH-3] + "..."
 
-                return title
+            return title
 
-            except Exception as e:
-                error_str = str(e)
-
-                # Check if this is a rate limit error
-                if "rate_limit_exceeded" in error_str or "429" in error_str:
-                    # Calculate wait time
-                    wait_time = base_delay * (2 ** attempt)
-
-                    # Try to parse suggested wait time from error
-                    import re
-                    match = re.search(r'try again in (\d+\.?\d*)s', error_str)
-                    if match:
-                        wait_time = float(match.group(1)) + 1.0
-
-                    if attempt < max_retries - 1:
-                        print(f"      ⚠️  Failed to regenerate title: {e}")
-                        print(f"      ⏳ Retrying in {wait_time:.1f}s (attempt {attempt + 2}/{max_retries})...")
-                        import time
-                        time.sleep(wait_time)
-                        continue
-                    else:
-                        print(f"      ❌ Title regeneration failed after {max_retries} retries")
-                        return "Untitled Clip"
-                else:
-                    # Non-rate-limit error, return default title
-                    print(f"      ⚠️  Failed to regenerate title: {e}")
-                    return "Untitled Clip"
-
-        return "Untitled Clip"
+        except Exception:
+            return "Untitled Clip"
 
     def get_metrics_summary(self) -> str:
         """

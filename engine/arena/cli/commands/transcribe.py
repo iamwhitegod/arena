@@ -21,13 +21,21 @@ def run_transcribe(args):
         print(f"❌ Error: File not found: {args.video}")
         return 1
 
-    # Check for API key
-    api_key = os.getenv('OPENAI_API_KEY')
-    if not api_key:
-        print("❌ Error: OPENAI_API_KEY environment variable not set")
-        print("   Get one at: https://platform.openai.com/api-keys")
-        print("   Set it with: export OPENAI_API_KEY='sk-your-key-here'")
-        return 1
+    # Resolve inference providers (speech only for transcribe)
+    if args.mode == "local":
+        # Local mode uses openai-whisper package directly, no provider needed
+        speech = None
+    else:
+        from arena.providers import resolve_inference, Capability
+        from arena.providers.base import ProviderAuthError
+        try:
+            inference = resolve_inference(required={Capability.SPEECH})
+            speech = inference.require_speech()
+        except ProviderAuthError as e:
+            print(f"❌ Error: {e}")
+            print("   Get one at: https://platform.openai.com/api-keys")
+            print("   Set it with: export OPENAI_API_KEY='sk-your-key-here'")
+            return 1
 
     # Determine output path
     if args.output:
@@ -49,7 +57,10 @@ def run_transcribe(args):
 
     try:
         progress("transcription", 5, "Preparing audio")
-        transcriber = Transcriber(api_key=api_key, mode=args.mode)
+        if speech is not None:
+            transcriber = Transcriber(speech=speech)
+        else:
+            transcriber = Transcriber(mode="local")
 
         print("⏳ Transcribing (this may take a few minutes)...")
         transcript_data = transcriber.transcribe(video_path)

@@ -18,9 +18,7 @@ from .thought_unit import (
     PRODUCTION_COMPONENT_THRESHOLD,
     ThoughtUnit,
 )
-from .retry import call_api_with_smart_retry
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import json
 import threading
 
 
@@ -49,15 +47,22 @@ class CompletenessScorer:
     Target: 0.85+ (8.5/10 average) for production quality
     """
 
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini"):
+    def __init__(self, api_key=None, model: str = "gpt-4o-mini", *, chat=None):
         """
         Initialize completeness scorer
 
         Args:
-            api_key: OpenAI API key
+            api_key: OpenAI API key (legacy, creates OpenAIChatModel internally)
             model: Model to use (default: gpt-4o-mini)
+            chat: ChatModel inference port (preferred)
         """
-        self.api_key = api_key
+        if chat is not None:
+            self._chat = chat
+        elif api_key is not None:
+            from arena.providers.openai_adapter import OpenAIChatModel
+            self._chat = OpenAIChatModel(api_key=api_key, model=model)
+        else:
+            raise ValueError("Either chat or api_key required")
         self.model = model
         self.metrics = {
             'api_calls': 0,
@@ -95,17 +100,9 @@ class CompletenessScorer:
                 'suggestions': List[str]  # How to improve
             }
         """
-        try:
-            from openai import OpenAI
-        except ImportError:
-            raise ImportError("openai package required. Install with: pip install openai")
-
-        client = OpenAI(api_key=self.api_key)
-
         # Score the thought unit
         try:
             result = self._score_completeness(
-                client,
                 thought_unit.premise_text,
                 thought_unit.claim_text,
                 thought_unit.resolution_text,
@@ -153,7 +150,6 @@ class CompletenessScorer:
 
     def _score_completeness(
         self,
-        client,
         premise_text: str,
         claim_text: str,
         resolution_text: str,
@@ -163,7 +159,6 @@ class CompletenessScorer:
         Use GPT to score completeness.
 
         Args:
-            client: OpenAI client
             premise_text: Premise text
             claim_text: Claim text
             resolution_text: Resolution text
@@ -180,10 +175,12 @@ class CompletenessScorer:
             rhetorical_type
         )
 
-        # Call GPT with retry for rate limits
-        response = call_api_with_smart_retry(
-            lambda: client.chat.completions.create(
-                model=self.model,
+        # Call with retry for rate limits
+        from arena.providers.base import ResponseMode
+        from arena.providers.retry import retry_with_backoff
+
+        response = retry_with_backoff(
+            lambda: self._chat.complete(
                 messages=[
                     {
                         "role": "system",
@@ -194,28 +191,21 @@ class CompletenessScorer:
                         "content": prompt
                     }
                 ],
-                temperature=0.3,  # Moderate temperature for consistent but nuanced scoring
-                response_format={"type": "json_object"}
-            ),
-            max_retries=4,
-            initial_delay=2.0,
-            backoff_factor=2.0,
-            verbose=True
+                temperature=0.3,
+                response_mode=ResponseMode.JSON,
+            )
         )
 
         # Track metrics (thread-safe)
         with self._metrics_lock:
             self.metrics['api_calls'] += 1
             self.metrics['tokens_used'] += response.usage.total_tokens
-
-            # Calculate cost (gpt-4o-mini pricing: $0.150/1M input, $0.600/1M output)
-            input_cost = (response.usage.prompt_tokens / 1_000_000) * 0.150
-            output_cost = (response.usage.completion_tokens / 1_000_000) * 0.600
-            self.metrics['cost_usd'] += input_cost + output_cost
+            if response.usage.estimated_cost_usd is not None:
+                self.metrics['cost_usd'] += float(response.usage.estimated_cost_usd)
 
         # Parse response
         try:
-            result = json.loads(response.choices[0].message.content)
+            result = response.parsed
 
             premise_score = float(result.get('premise_clarity', 5.0))
             claim_score = float(result.get('claim_strength', 5.0))
@@ -243,7 +233,7 @@ class CompletenessScorer:
                 'suggestions': result.get('suggestions', [])
             }
 
-        except (json.JSONDecodeError, KeyError, ValueError) as e:
+        except (KeyError, ValueError) as e:
             print(f"      ⚠️  Failed to parse scoring response: {e}")
             return {
                 'premise_clarity': 5.0,

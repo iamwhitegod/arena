@@ -17,19 +17,19 @@ Usage:
 """
 
 from .adapter import FourLayerAdapter
-from .layer1_moment_detector import MomentDetector
-from .layer2_boundary_analyzer import ThoughtBoundaryAnalyzer
-from .layer3_context_refiner import StandaloneContextRefiner
-from .layer4_packaging import PackagingLayer
+from .layer1_moment_detector import MomentDetector          # deprecated
+from .layer2_boundary_analyzer import ThoughtBoundaryAnalyzer  # deprecated
+from .layer3_context_refiner import StandaloneContextRefiner   # deprecated
+from .layer4_packaging import PackagingLayer                # deprecated
 from .checkpoint import CheckpointManager, CheckpointContext
 from .retry import call_api_with_retry, call_api_with_smart_retry, with_retry, APIRetryError
 
 __all__ = [
     'FourLayerAdapter',
-    'MomentDetector',
-    'ThoughtBoundaryAnalyzer',
-    'StandaloneContextRefiner',
-    'PackagingLayer',
+    'MomentDetector',           # deprecated
+    'ThoughtBoundaryAnalyzer',  # deprecated
+    'StandaloneContextRefiner', # deprecated
+    'PackagingLayer',           # deprecated
     'CheckpointManager',
     'CheckpointContext',
     'call_api_with_retry',

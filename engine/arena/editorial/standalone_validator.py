@@ -12,11 +12,9 @@ Checks for:
 This ensures clips work on social media where viewers have no prior context.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List
 from .thought_unit import ThoughtUnit, DependencyLevel
-from .retry import call_api_with_smart_retry
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import json
 import threading
 
 
@@ -37,15 +35,22 @@ class StandaloneValidator:
     - Mark units as STANDALONE or NEEDS_CONTEXT
     """
 
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini"):
+    def __init__(self, api_key=None, model: str = "gpt-4o-mini", *, chat=None):
         """
         Initialize standalone validator
 
         Args:
-            api_key: OpenAI API key
+            api_key: OpenAI API key (legacy, creates OpenAIChatModel internally)
             model: Model to use (default: gpt-4o-mini)
+            chat: ChatModel inference port (preferred)
         """
-        self.api_key = api_key
+        if chat is not None:
+            self._chat = chat
+        elif api_key is not None:
+            from arena.providers.openai_adapter import OpenAIChatModel
+            self._chat = OpenAIChatModel(api_key=api_key, model=model)
+        else:
+            raise ValueError("Either chat or api_key required")
         self.model = model
         self.metrics = {
             'api_calls': 0,
@@ -78,19 +83,12 @@ class StandaloneValidator:
                 'confidence': float  # Detection confidence
             }
         """
-        try:
-            from openai import OpenAI
-        except ImportError:
-            raise ImportError("openai package required. Install with: pip install openai")
-
-        client = OpenAI(api_key=self.api_key)
-
         # Analyze the full text
         full_text = thought_unit.full_text
 
         # Call GPT to analyze standalone context
         try:
-            result = self._analyze_standalone(client, full_text, thought_unit.rhetorical_type.value)
+            result = self._analyze_standalone(full_text, thought_unit.rhetorical_type.value)
 
             # Update metrics (thread-safe)
             with self._metrics_lock:
@@ -120,7 +118,6 @@ class StandaloneValidator:
 
     def _analyze_standalone(
         self,
-        client,
         text: str,
         rhetorical_type: str
     ) -> Dict:
@@ -128,7 +125,6 @@ class StandaloneValidator:
         Use GPT to analyze standalone context.
 
         Args:
-            client: OpenAI client
             text: Full text of the thought unit
             rhetorical_type: Type of rhetoric
 
@@ -138,10 +134,12 @@ class StandaloneValidator:
         # Create prompt
         prompt = self._create_standalone_prompt(text, rhetorical_type)
 
-        # Call GPT with retry for rate limits
-        response = call_api_with_smart_retry(
-            lambda: client.chat.completions.create(
-                model=self.model,
+        # Call with retry for rate limits
+        from arena.providers.base import ResponseMode
+        from arena.providers.retry import retry_with_backoff
+
+        response = retry_with_backoff(
+            lambda: self._chat.complete(
                 messages=[
                     {
                         "role": "system",
@@ -152,28 +150,21 @@ class StandaloneValidator:
                         "content": prompt
                     }
                 ],
-                temperature=0.2,  # Lower temperature for consistent analysis
-                response_format={"type": "json_object"}
-            ),
-            max_retries=4,
-            initial_delay=2.0,
-            backoff_factor=2.0,
-            verbose=True
+                temperature=0.2,
+                response_mode=ResponseMode.JSON,
+            )
         )
 
         # Track metrics (thread-safe)
         with self._metrics_lock:
             self.metrics['api_calls'] += 1
             self.metrics['tokens_used'] += response.usage.total_tokens
-
-            # Calculate cost (gpt-4o-mini pricing: $0.150/1M input, $0.600/1M output)
-            input_cost = (response.usage.prompt_tokens / 1_000_000) * 0.150
-            output_cost = (response.usage.completion_tokens / 1_000_000) * 0.600
-            self.metrics['cost_usd'] += input_cost + output_cost
+            if response.usage.estimated_cost_usd is not None:
+                self.metrics['cost_usd'] += float(response.usage.estimated_cost_usd)
 
         # Parse response
         try:
-            result = json.loads(response.choices[0].message.content)
+            result = response.parsed
 
             # Map to dependency level
             dependency_level_str = result.get('dependency_level', 'needs_context')
@@ -189,7 +180,7 @@ class StandaloneValidator:
                 'confidence': result.get('confidence', 0.5)
             }
 
-        except (json.JSONDecodeError, KeyError) as e:
+        except (KeyError, TypeError) as e:
             print(f"      ⚠️  Failed to parse standalone response: {e}")
             return {
                 'is_standalone': False,

@@ -16,7 +16,9 @@ import math
 import re
 from typing import Dict, List, Optional, Tuple
 
-from .retry import call_api_with_smart_retry
+from arena.providers.base import ResponseMode
+from arena.providers.retry import retry_with_backoff
+
 from .thought_unit import RhetoricalType
 
 # ---------------------------------------------------------------------------
@@ -78,10 +80,27 @@ class ThoughtSeedDetector:
 
     def __init__(
         self,
-        api_key: str,
+        api_key: str = None,
         model: str = "gpt-4o",
         overview_model: Optional[str] = None,
+        *,
+        chat=None,
+        overview_chat=None,
     ):
+        if chat is not None:
+            self._chat = chat
+            self._overview_chat = overview_chat or chat
+        elif api_key is not None:
+            from arena.providers.openai_adapter import OpenAIChatModel
+
+            self._chat = OpenAIChatModel(api_key=api_key, model=model)
+            self._overview_chat = (
+                OpenAIChatModel(api_key=api_key, model=overview_model)
+                if overview_model and overview_model != model
+                else self._chat
+            )
+        else:
+            raise ValueError("Either chat or api_key required")
         self.api_key = api_key
         self.model = model
         self.overview_model = overview_model or model
@@ -119,12 +138,6 @@ class ThoughtSeedDetector:
         Returns:
             List of seed dicts matching the Layer 2 contract.
         """
-        try:
-            from openai import OpenAI
-        except ImportError:
-            raise ImportError("openai package required: pip install openai")
-
-        client = OpenAI(api_key=self.api_key)
         segments = self._normalize_segments(transcript_data.get("segments", []))
 
         if not segments:
@@ -143,11 +156,11 @@ class ThoughtSeedDetector:
         detection_fits = transcript_tokens <= SAFE_DETECTION_BUDGET
 
         if overview_fits and detection_fits:
-            seeds = self._path_a(client, segments, formatted, target_seeds)
+            seeds = self._path_a(segments, formatted, target_seeds)
         elif overview_fits:
-            seeds = self._path_b(client, segments, formatted, transcript_tokens, target_seeds)
+            seeds = self._path_b(segments, formatted, transcript_tokens, target_seeds)
         else:
-            seeds = self._path_c(client, segments, formatted, transcript_tokens, target_seeds)
+            seeds = self._path_c(segments, formatted, transcript_tokens, target_seeds)
 
         self.metrics["seeds_detected"] = len(seeds)
         print(f"      Detected {len(seeds)} thought seeds")
@@ -159,7 +172,6 @@ class ThoughtSeedDetector:
 
     def _path_a(
         self,
-        client,
         segments: List[Dict],
         formatted: str,
         target_seeds: int,
@@ -168,7 +180,7 @@ class ThoughtSeedDetector:
         self.metrics["processing_path"] = "full"
         print(f"      Path A: full-context (2 calls)")
 
-        overview = self._generate_overview(client, formatted)
+        overview = self._generate_overview(formatted)
 
         # Recalculate: does the actual overview still fit detection budget?
         overview_text = json.dumps(overview, ensure_ascii=False)
@@ -180,14 +192,13 @@ class ThoughtSeedDetector:
         )
         if total_detection_tokens > MODEL_CONTEXT_CAPACITY:
             print("      Overview too large for full-context detection, switching to Path B")
-            return self._path_b_with_overview(client, segments, formatted, overview, target_seeds)
+            return self._path_b_with_overview(segments, formatted, overview, target_seeds)
 
-        raw = self._detect_with_context(client, formatted, overview, target_seeds)
+        raw = self._detect_with_context(formatted, overview, target_seeds)
         return self._finalize(raw, segments, target_seeds)
 
     def _path_b_with_overview(
         self,
-        client,
         segments: List[Dict],
         formatted: str,
         overview: Dict,
@@ -202,15 +213,14 @@ class ThoughtSeedDetector:
         chunks = self._chunk_formatted_transcript(segments, chunk_budget)
         print(f"      Chunked detection: {len(chunks)} chunks")
 
-        raw = self._detect_chunked(client, chunks, overview, target_seeds)
+        raw = self._detect_chunked(chunks, overview, target_seeds)
         seeds = self._ground_and_dedup(raw, segments)
-        reranked = self._rerank(client, overview, seeds, target_seeds)
+        reranked = self._rerank(overview, seeds, target_seeds)
         self._assign_seed_ids(reranked)
         return reranked
 
     def _path_b(
         self,
-        client,
         segments: List[Dict],
         formatted: str,
         transcript_tokens: int,
@@ -219,7 +229,7 @@ class ThoughtSeedDetector:
         """Overview fits, detection must be chunked."""
         self.metrics["processing_path"] = "chunked_detection"
 
-        overview = self._generate_overview(client, formatted)
+        overview = self._generate_overview(formatted)
 
         overview_text = json.dumps(overview, ensure_ascii=False)
         overview_tokens = self._estimate_tokens(overview_text)
@@ -227,15 +237,14 @@ class ThoughtSeedDetector:
         chunks = self._chunk_formatted_transcript(segments, chunk_budget)
         print(f"      Path B: full overview + {len(chunks)} detection chunks")
 
-        raw = self._detect_chunked(client, chunks, overview, target_seeds)
+        raw = self._detect_chunked(chunks, overview, target_seeds)
         seeds = self._ground_and_dedup(raw, segments)
-        reranked = self._rerank(client, overview, seeds, target_seeds)
+        reranked = self._rerank(overview, seeds, target_seeds)
         self._assign_seed_ids(reranked)
         return reranked
 
     def _path_c(
         self,
-        client,
         segments: List[Dict],
         formatted: str,
         transcript_tokens: int,
@@ -250,11 +259,11 @@ class ThoughtSeedDetector:
         local_overviews = []
         for i, chunk in enumerate(overview_chunks, 1):
             chunk_formatted = self._format_compact_transcript(chunk)
-            local = self._generate_overview(client, chunk_formatted, required=True)
+            local = self._generate_overview(chunk_formatted, required=True)
             local_overviews.append(local)
             self.metrics["chunks_analyzed"] += 1
 
-        overview = self._merge_overviews(client, local_overviews)
+        overview = self._merge_overviews(local_overviews)
 
         overview_text = json.dumps(overview, ensure_ascii=False)
         overview_tokens = self._estimate_tokens(overview_text)
@@ -262,9 +271,9 @@ class ThoughtSeedDetector:
         det_chunks = self._chunk_formatted_transcript(segments, chunk_budget)
         print(f" + {len(det_chunks)} detection chunks")
 
-        raw = self._detect_chunked(client, det_chunks, overview, target_seeds)
+        raw = self._detect_chunked(det_chunks, overview, target_seeds)
         seeds = self._ground_and_dedup(raw, segments)
-        reranked = self._rerank(client, overview, seeds, target_seeds)
+        reranked = self._rerank(overview, seeds, target_seeds)
         self._assign_seed_ids(reranked)
         return reranked
 
@@ -273,7 +282,7 @@ class ThoughtSeedDetector:
     # ------------------------------------------------------------------
 
     def _generate_overview(
-        self, client, formatted_transcript: str, *, required: bool = False,
+        self, formatted_transcript: str, *, required: bool = False,
     ) -> Dict:
         """Generate a content overview from the transcript.
 
@@ -339,10 +348,9 @@ RULES:
 
         try:
             overview = self._call_model(
-                client,
                 system,
                 prompt,
-                model=self.overview_model,
+                use_overview=True,
             )
             overview = self._validate_overview(overview)
             self.metrics["overview_calls"] += 1
@@ -356,7 +364,7 @@ RULES:
             return {"summary": "", "main_themes": [], "sections": [],
                     "high_interest_regions": [], "low_interest_regions": []}
 
-    def _merge_overviews(self, client, overviews: List[Dict]) -> Dict:
+    def _merge_overviews(self, overviews: List[Dict]) -> Dict:
         """Merge local chunk overviews into one global overview."""
         system = (
             "You are merging partial content maps from consecutive sections "
@@ -382,7 +390,7 @@ Merge them into a single unified content map with the same JSON schema:
 Return the merged JSON."""
 
         try:
-            merged = self._call_model(client, system, prompt, model=self.overview_model)
+            merged = self._call_model(system, prompt, use_overview=True)
             self.metrics["overview_calls"] += 1
             return self._validate_overview(merged)
         except Exception:
@@ -407,7 +415,6 @@ Return the merged JSON."""
 
     def _detect_with_context(
         self,
-        client,
         formatted_transcript: str,
         overview: Dict,
         target_seeds: int,
@@ -473,7 +480,7 @@ RULES:
 - Quality is the primary criterion; temporal diversity is secondary
 """
 
-        result = self._call_model(client, system, prompt)
+        result = self._call_model(system, prompt)
         self.metrics["detection_calls"] += 1
 
         raw_seeds = result.get("seeds", [])
@@ -482,7 +489,6 @@ RULES:
 
     def _detect_chunked(
         self,
-        client,
         chunks: List[List[Dict]],
         overview: Dict,
         target_seeds: int,
@@ -497,7 +503,7 @@ RULES:
             chunk_end = chunk[-1]["end"]
             print(f"      Detection chunk {i}/{len(chunks)} ({chunk_start:.0f}s-{chunk_end:.0f}s)...")
 
-            raw = self._detect_with_context(client, chunk_formatted, overview, per_chunk)
+            raw = self._detect_with_context(chunk_formatted, overview, per_chunk)
             all_raw.extend(raw)
             self.metrics["chunks_analyzed"] += 1
 
@@ -509,7 +515,6 @@ RULES:
 
     def _rerank(
         self,
-        client,
         overview: Dict,
         candidates: List[Dict],
         target_seeds: int,
@@ -567,7 +572,7 @@ RULES:
 """
 
         try:
-            result = self._call_model(client, system, prompt)
+            result = self._call_model(system, prompt)
             self.metrics["rerank_calls"] += 1
 
             selected_ids = set()
@@ -1050,36 +1055,29 @@ RULES:
 
     def _call_model(
         self,
-        client,
         system: str,
         prompt: str,
-        model: Optional[str] = None,
+        use_overview: bool = False,
     ) -> Dict:
-        """Call the model with structured JSON output and smart retry."""
-        use_model = model or self.model
-
-        response = call_api_with_smart_retry(
-            lambda: client.chat.completions.create(
-                model=use_model,
+        """Call the model with structured JSON output and retry."""
+        chat = self._overview_chat if use_overview else self._chat
+        response = retry_with_backoff(
+            lambda: chat.complete(
                 messages=[
                     {"role": "system", "content": system},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.3,
-                response_format={"type": "json_object"},
-            ),
-            max_retries=3,
-            backoff_factor=2.0,
-            initial_delay=1.0,
+                response_mode=ResponseMode.JSON,
+            )
         )
 
         self.metrics["api_calls"] += 1
         self.metrics["tokens_used"] += response.usage.total_tokens
-        input_cost = (response.usage.prompt_tokens / 1_000_000) * 2.50
-        output_cost = (response.usage.completion_tokens / 1_000_000) * 10.00
-        self.metrics["cost_usd"] += input_cost + output_cost
+        if response.usage.estimated_cost_usd is not None:
+            self.metrics["cost_usd"] += float(response.usage.estimated_cost_usd)
 
-        return json.loads(response.choices[0].message.content)
+        return response.parsed
 
     # ------------------------------------------------------------------
     # Deduplication (retained from original)

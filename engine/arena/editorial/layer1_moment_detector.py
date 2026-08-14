@@ -8,10 +8,12 @@ Includes chunking support for large transcripts (>21k tokens) based on the
 rate limit fix we implemented for the single-layer analyzer.
 """
 
+import warnings
 from typing import List, Dict
-import json
 import time
 from .utils import format_transcript_with_timestamps
+from arena.providers.base import ResponseMode
+from arena.providers.retry import retry_with_backoff
 
 
 class MomentDetector:
@@ -38,15 +40,27 @@ class MomentDetector:
     DEFAULT_OVERLAP_RATIO = 0.10        # 10% segment overlap
     DEDUP_THRESHOLD = 0.5               # 50% time overlap = duplicate moment
 
-    def __init__(self, api_key: str, model: str = "gpt-4o"):
+    def __init__(self, api_key=None, model: str = "gpt-4o", *, chat=None):
         """
         Initialize moment detector
 
         Args:
-            api_key: OpenAI API key
+            api_key: OpenAI API key (deprecated, pass chat instead)
             model: Model to use (default: gpt-4o)
+            chat: ChatModel instance (preferred)
         """
-        self.api_key = api_key
+        warnings.warn(
+            f"{self.__class__.__name__} is deprecated. Use FourLayerAdapter instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if chat is not None:
+            self._chat = chat
+        elif api_key is not None:
+            from arena.providers.openai_adapter import OpenAIChatModel
+            self._chat = OpenAIChatModel(api_key=api_key, model=model)
+        else:
+            raise ValueError("Either chat or api_key required")
         self.model = model
         self.metrics = {
             'api_calls': 0,
@@ -81,12 +95,6 @@ class MomentDetector:
                 'content_type': str        # "hook", "insight", "advice", "story"
             }
         """
-        try:
-            from openai import OpenAI
-        except ImportError:
-            raise ImportError("openai package required. Install with: pip install openai")
-
-        client = OpenAI(api_key=self.api_key)
         segments = transcript_data.get('segments', [])
 
         if not segments:
@@ -103,7 +111,6 @@ class MomentDetector:
             # No chunking needed
             print(f"      Transcript size: {total_tokens:,} tokens (no chunking needed)")
             moments = self._detect_single_chunk(
-                client,
                 formatted_transcript,
                 target_moments
             )
@@ -129,7 +136,6 @@ class MomentDetector:
 
                 try:
                     chunk_moments = self._detect_single_chunk(
-                        client,
                         chunk_transcript,
                         chunk_target
                     )
@@ -159,7 +165,6 @@ class MomentDetector:
 
     def _detect_single_chunk(
         self,
-        client,
         formatted_transcript: str,
         target_moments: int
     ) -> List[Dict]:
@@ -167,84 +172,40 @@ class MomentDetector:
         Detect moments in a single transcript chunk with retry logic for rate limits
 
         Args:
-            client: OpenAI client
             formatted_transcript: Formatted transcript with timestamps
             target_moments: Number of moments to find
 
         Returns:
             List of moment dicts
         """
-        # Create prompt
         prompt = self._create_prompt(formatted_transcript, target_moments)
 
-        # Retry configuration
-        max_retries = 5
-        base_delay = 2.0  # Start with 2 second delay
+        response = retry_with_backoff(
+            lambda: self._chat.complete(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a senior content analyst identifying interesting moments in video content."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.7,
+                response_mode=ResponseMode.JSON,
+            ),
+            max_retries=5,
+        )
 
-        for attempt in range(max_retries):
-            try:
-                # Call GPT-4o
-                response = client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You are a senior content analyst identifying interesting moments in video content."
-                        },
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
-                    temperature=0.7,
-                    response_format={"type": "json_object"}
-                )
+        self.metrics['api_calls'] += 1
+        self.metrics['tokens_used'] += response.usage.total_tokens
+        if response.usage.estimated_cost_usd is not None:
+            self.metrics['cost_usd'] += float(response.usage.estimated_cost_usd)
 
-                # Track metrics
-                self.metrics['api_calls'] += 1
-                self.metrics['tokens_used'] += response.usage.total_tokens
-
-                # Calculate cost (GPT-4o pricing: $2.50/1M input, $10/1M output tokens)
-                input_cost = (response.usage.prompt_tokens / 1_000_000) * 2.50
-                output_cost = (response.usage.completion_tokens / 1_000_000) * 10.00
-                self.metrics['cost_usd'] += input_cost + output_cost
-
-                # Parse response
-                try:
-                    result = json.loads(response.choices[0].message.content)
-                    moments = self._parse_moments(result)
-                    return moments
-                except (json.JSONDecodeError, KeyError) as e:
-                    print(f"      ⚠️  Failed to parse GPT response: {e}")
-                    return []
-
-            except Exception as e:
-                error_str = str(e)
-
-                # Check if this is a rate limit error (429)
-                if "rate_limit_exceeded" in error_str or "429" in error_str:
-                    # Try to extract wait time from error message
-                    wait_time = base_delay * (2 ** attempt)  # Exponential backoff
-
-                    # Try to parse suggested wait time from error
-                    import re
-                    match = re.search(r'try again in (\d+\.?\d*)s', error_str)
-                    if match:
-                        wait_time = float(match.group(1)) + 1.0  # Add 1 second buffer
-
-                    if attempt < max_retries - 1:
-                        print(f"      ⚠️  Rate limit hit. Waiting {wait_time:.1f}s before retry {attempt + 1}/{max_retries}...")
-                        time.sleep(wait_time)
-                        continue
-                    else:
-                        print(f"      ❌ Rate limit exceeded after {max_retries} retries")
-                        raise
-                else:
-                    # Non-rate-limit error, raise immediately
-                    raise
-
-        # Should not reach here, but return empty list as fallback
-        return []
+        result = response.parsed
+        moments = self._parse_moments(result)
+        return moments
 
     def _create_prompt(self, transcript: str, target_moments: int) -> str:
         """
