@@ -7,6 +7,7 @@ import path from 'path';
 import chalk from 'chalk';
 import { PythonBridge } from '../bridge/python-bridge.js';
 import { ProgressTracker } from '../ui/progress.js';
+import { ConfigManager } from '../core/config.js';
 import { runPreflightChecksWithProgress } from '../core/preflight.js';
 import { formatErrorWithHelp } from '../errors/formatter.js';
 import { isArenaError } from '../errors/index.js';
@@ -61,6 +62,10 @@ export async function transcribeCommand(
       process.exit(1);
     }
 
+    // Load config for defaults
+    const configManager = new ConfigManager();
+    const globalConfig = await configManager.getGlobalConfig();
+
     // Show progress
     progress.start(chalk.cyan('Transcribing audio with Whisper...'));
 
@@ -70,7 +75,7 @@ export async function transcribeCommand(
         videoPath: absoluteVideoPath,
         outputFile,
         noCache: options.cache === false,
-        cookiesFromBrowser: options.cookiesFromBrowser,
+        cookiesFromBrowser: options.cookiesFromBrowser || globalConfig?.cookies_from_browser,
       },
       (update) => {
         if (update.progress !== undefined) {

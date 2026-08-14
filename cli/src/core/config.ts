@@ -13,6 +13,7 @@ export interface GlobalConfig {
   whisper_mode?: 'api' | 'local';
   clip_duration?: [number, number];
   output_format?: string;
+  cookies_from_browser?: string;
   subtitle_style?: {
     font: string;
     size: number;
