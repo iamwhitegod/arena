@@ -39,7 +39,8 @@ def run_process(args):
                 'color': getattr(args, 'caption_color', None),
                 'position': getattr(args, 'caption_position', None),
             }.items() if v is not None
-        } if getattr(args, 'captions', False) else None
+        } if getattr(args, 'captions', False) else None,
+        cookies_from_browser=getattr(args, 'cookies_from_browser', None)
         )
     if exit_code == 0:
         result({"success": True, "outputDir": str(Path(args.output).resolve())})
