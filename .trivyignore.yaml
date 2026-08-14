@@ -2,6 +2,7 @@ secrets:
   - id: aws-access-key-id
     paths:
       - opt/arena-venv/lib/python3.11/site-packages/yt_dlp/extractor/shahid.py
+      - /opt/arena-venv/lib/python3.11/site-packages/yt_dlp/extractor/shahid.py
     statement: >-
       False positive in the locked yt-dlp Shahid extractor; this vendor API
       identifier is neither an Arena credential nor an AWS access key.
