@@ -7,6 +7,11 @@ import { createTestDir, cleanTestDir } from '../setup.js';
 import fs from 'fs-extra';
 import path from 'path';
 
+const { getGlobalConfigMock, runProcessMock } = vi.hoisted(() => ({
+  getGlobalConfigMock: vi.fn(),
+  runProcessMock: vi.fn(),
+}));
+
 // Mock the preflight checks to skip Python validation in tests
 vi.mock('../../src/core/preflight.js', () => ({
   runPreflightChecksWithProgress: vi.fn().mockResolvedValue({
@@ -16,6 +21,14 @@ vi.mock('../../src/core/preflight.js', () => ({
   }),
 }));
 
+vi.mock('../../src/core/config.js', () => ({
+  ConfigManager: class MockConfigManager {
+    ensureGlobalConfig = vi.fn().mockResolvedValue(undefined);
+    getGlobalConfig = getGlobalConfigMock;
+    createProjectConfig = vi.fn().mockResolvedValue(undefined);
+  },
+}));
+
 // Mock the Python bridge module
 vi.mock('../../src/bridge/python-bridge.js', () => ({
   PythonBridge: class MockPythonBridge {
@@ -23,17 +36,7 @@ vi.mock('../../src/bridge/python-bridge.js', () => ({
       return '/mock/engine/path';
     }
 
-    runProcess = vi.fn().mockResolvedValue({
-      clips: [
-        {
-          title: 'Test Clip 1',
-          duration: 45.5,
-          start_time: 10.0,
-          end_time: 55.5,
-        },
-      ],
-      success: true,
-    });
+    runProcess = runProcessMock;
 
     runAnalyze = vi.fn().mockResolvedValue({
       moments: 10,
@@ -68,6 +71,18 @@ describe('Process Command Integration', () => {
 
   beforeEach(async () => {
     testDir = await createTestDir('process-integration-test');
+    getGlobalConfigMock.mockReset().mockResolvedValue({});
+    runProcessMock.mockReset().mockResolvedValue({
+      clips: [
+        {
+          title: 'Test Clip 1',
+          duration: 45.5,
+          start_time: 10.0,
+          end_time: 55.5,
+        },
+      ],
+      success: true,
+    });
     // Set test API key
     process.env.OPENAI_API_KEY = 'sk-test1234567890abcdef1234567890abcdef12345678';
 
@@ -130,5 +145,36 @@ describe('Process Command Integration', () => {
     };
 
     await expect(processCommand(videoPath, options)).resolves.not.toThrow();
+  });
+
+  it('should use the configured browser when the command flag is absent', async () => {
+    const videoPath = path.join(testDir, 'test.mp4');
+    await fs.writeFile(videoPath, 'fake video content');
+    getGlobalConfigMock.mockResolvedValue({ cookies_from_browser: 'brave' });
+
+    await processCommand(videoPath, { output: path.join(testDir, 'output') });
+
+    expect(runProcessMock).toHaveBeenCalledWith(
+      expect.objectContaining({ cookiesFromBrowser: 'brave' }),
+      expect.any(Function),
+      expect.any(Function)
+    );
+  });
+
+  it('should prefer the command browser over the configured browser', async () => {
+    const videoPath = path.join(testDir, 'test.mp4');
+    await fs.writeFile(videoPath, 'fake video content');
+    getGlobalConfigMock.mockResolvedValue({ cookies_from_browser: 'chrome' });
+
+    await processCommand(videoPath, {
+      output: path.join(testDir, 'output'),
+      cookiesFromBrowser: 'brave',
+    });
+
+    expect(runProcessMock).toHaveBeenCalledWith(
+      expect.objectContaining({ cookiesFromBrowser: 'brave' }),
+      expect.any(Function),
+      expect.any(Function)
+    );
   });
 });

@@ -821,7 +821,7 @@ Environment:
         '--cookies-from-browser',
         type=str,
         default=None,
-        help='Browser to extract cookies from for URL downloads (chrome, firefox, safari, edge)'
+        help='Browser to extract cookies from for URL downloads (chrome, firefox, safari, brave, edge)'
     )
 
     args = parser.parse_args()

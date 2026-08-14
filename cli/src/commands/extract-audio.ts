@@ -8,6 +8,7 @@ import fs from 'fs-extra';
 import chalk from 'chalk';
 import { PythonBridge } from '../bridge/python-bridge.js';
 import { ProgressTracker } from '../ui/progress.js';
+import { ConfigManager } from '../core/config.js';
 import { formatErrorWithHelp } from '../errors/formatter.js';
 import { isArenaError, PreflightError } from '../errors/index.js';
 import { formatFileSize, formatDuration } from '../ui/formatters.js';
@@ -68,6 +69,10 @@ export async function extractAudioCommand(
       ['Output', path.resolve(outputFile)],
     ]);
 
+    // Load config for defaults
+    const configManager = new ConfigManager();
+    const globalConfig = await configManager.getGlobalConfig();
+
     // Show progress
     progress.start(chalk.cyan(`Extracting audio as ${format.toUpperCase()}...`));
 
@@ -80,7 +85,7 @@ export async function extractAudioCommand(
         bitrate: options.bitrate,
         sampleRate: options.sampleRate ? parseInt(options.sampleRate) : undefined,
         mono: options.mono || false,
-        cookiesFromBrowser: options.cookiesFromBrowser,
+        cookiesFromBrowser: options.cookiesFromBrowser || globalConfig?.cookies_from_browser,
       },
       (update) => {
         if (update.progress !== undefined) {
