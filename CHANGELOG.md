@@ -4,6 +4,18 @@ All notable user-facing changes will be documented here. Arena follows [Semantic
 
 ## [Unreleased]
 
+## [0.4.3-rc.1] - 2026-08-15
+
+### Added
+
+- Added clean source-install verification across the release-blocking Node.js, Python, and operating-system matrix.
+- Added an exact-version public npm canary that verifies registry signatures/provenance, managed setup, local processing, and uninstall before promotion.
+
+### Changed
+
+- Pre-release publication now uses the non-default npm `next` tag and cannot replace `latest`.
+- Updated installation evidence for the green Ubuntu x64, Windows x64, macOS ARM64, Docker AMD64, and Docker ARM64 release-candidate matrices.
+
 ## [0.4.2] - 2026-08-13
 
 ### Added
@@ -27,5 +39,6 @@ All notable user-facing changes will be documented here. Arena follows [Semantic
 - Current pre-hardening CLI release baseline.
 
 [Unreleased]: https://github.com/iamwhitegod/arena/compare/7f7fd269d130b918be9940175864ef6158b1f2a1...HEAD
+[0.4.3-rc.1]: https://github.com/iamwhitegod/arena/releases/tag/v0.4.3-rc.1
 [0.4.2]: https://www.npmjs.com/package/@whitegodkingsley/arena-cli/v/0.4.2
 [0.4.1]: https://github.com/iamwhitegod/arena/releases/tag/v0.4.1

@@ -1,6 +1,6 @@
 # Arena Cross-Platform Installation Verification Plan
 
-**Status:** In progress — Docker release published; native CI evidence pending
+**Status:** Release-candidate verification in progress — release-blocking hosted and Docker matrices green; public registry canary pending
 **Created:** August 13, 2026
 **Depends on:** OSS hardening checkpoint `e90873b`
 
@@ -27,20 +27,22 @@ The hardening checkpoint establishes a strong baseline:
 - Current checkpoint `6df3cd4` built for `linux/amd64` under emulation and passed non-root, read-only, network-disabled, capability-dropped runtime processing and Compose startup. This supplements but does not replace native evidence.
 - The final hardened AMD64 runtime image for `6df3cd4`, with local image ID `sha256:a95d37705d65986107c09ad318898df7b2977d0ba69501701f178470c03a7e49`, removed npm, npx, Corepack, and other build-only package-manager shims. It then passed an offline local-processing smoke test and a fixable-vulnerability scan with 0 critical, high, medium, or low findings across 657 detected packages.
 - Arena `0.4.2` from commit `7f7fd269d130b918be9940175864ef6158b1f2a1` is published at OCI index digest `sha256:b1bfbc0ca0696d550ba5520a7fbff196721af6cd8a0643ec8d08e13583495b1b`. Docker Hub exposes Linux AMD64 manifest `sha256:5ebd0354b18811650766b09bd03656bcba1831905f73e38173b264a6bca3583a` and Linux ARM64 manifest `sha256:104c90a724a05eaffa221d687e491f37beb2830084ba665b2f6fc7f5fe35a14a`, each with SBOM and provenance attestations. Both exact registry manifests ran with the hardened runtime contract and reported version `0.4.2`; the release candidates for both platforms passed deterministic local-processing checks and fixable-vulnerability scans with 0 critical, high, medium, or low findings.
+- Managed-runtime run [31828709997](https://github.com/iamwhitegod/arena/actions/runs/31828709997) passed from exact commit `2a1532560870f5f1e6d9a7b9525dd21a7b7882af` on Ubuntu x64, Windows x64, and macOS ARM64 for Node.js 22/Python 3.10 and Node.js 24/Python 3.12. All six jobs installed the same packed artifact, built an isolated runtime, passed health checks, processed local media without credentials, proved setup idempotency, and retained JSON evidence. The Linux recovery job also passed lock, stale-state, timeout rollback, and damaged-runtime repair assertions.
+- Release-candidate PR [#10](https://github.com/iamwhitegod/arena/pull/10) passed the packed-artifact consumer matrix on Ubuntu, Windows, and macOS with Node.js 22 and 24, the complete source test matrix, and container build/runtime/scan jobs for Linux AMD64 and ARM64. GitHub Dependency Graph was enabled on August 15, 2026 to make dependency review an enforceable repository gate.
 
-This evidence does not yet prove native installation on Windows, Linux AMD64, macOS Intel, macOS Apple Silicon, Node.js 24, or each supported Python boundary.
+This evidence covers the declared release-blocking hosted targets and both Docker architectures. It does not yet prove registry delivery of `0.4.3-rc.1`, the exact documented source-link workflow, or best-effort native Linux ARM64, Intel macOS, and Windows ARM64 targets.
 
 ## Next Execution Steps
 
 Execute these in order; workflow configuration alone is not verification:
 
-1. Push this checkpoint and run the source and packed-tarball pull-request matrices on Ubuntu, Windows, and macOS.
-2. Review the retained JSON evidence for artifact digest, package and engine versions, architecture, empty-cache installation, executable resolution, setup isolation, and sanitized output.
-3. Manually dispatch the managed-runtime matrix for the Node.js 22/Python 3.10 and Node.js 24/Python 3.12 boundary pairs.
-4. Review the Buildx AMD64/ARM64 workflow on native CI runners and retain its per-platform scan and runtime evidence; the published `0.4.2` index and matching release candidates are manually verified.
-5. Provision native Linux ARM64 and Intel macOS runners for evidence that hosted or emulated jobs cannot provide.
-6. Extend the implemented lock, stale-state, timeout-rollback, and repair coverage with read-only-path, insufficient-disk, and post-dependency interruption cases.
-7. After all release-blocking evidence is green, publish an explicitly approved npm canary under a non-default tag and promote that exact artifact without rebuilding it.
+1. Run the clean-source workflow for the documented `npm install`, `npm link`, setup, local-processing, and unlink path on the full release-blocking matrix.
+2. Merge the release-candidate PR and rerun packed-artifact, source, managed-runtime, security, and container gates against the exact release commit.
+3. Publish `0.4.3-rc.1` to npm under `next` and Docker Hub under exact-version and commit tags; pre-releases must not move stable tags.
+4. Dispatch the published npm canary on Ubuntu x64, Windows x64, and macOS ARM64, verify registry signatures/provenance, and retain setup and processing evidence.
+5. Review the published Docker manifest, platform digests, attestations, scans, and hardened runtime evidence for AMD64 and ARM64.
+6. Extend recovery coverage with read-only-path, insufficient-disk, symlink-escape, missing-prerequisite, and post-dependency interruption cases.
+7. Promote only the exact verified candidate to stable without rebuilding it. Provision native best-effort runners separately when reliable Linux ARM64, Intel macOS, or Windows ARM64 capacity is available.
 
 Do not check off a platform or release gate until its retained evidence has been reviewed.
 
@@ -81,13 +83,13 @@ Any manual intervention not described in the installation guide is a failure.
 
 At minimum, test the lower and upper supported Node/Python boundaries on each target. Run the complete four-way Node/Python combination on the primary Linux target and boundary pairs elsewhere to control CI cost.
 
-| Host | Architecture | Boundary pair A | Boundary pair B | Status |
-| --- | --- | --- | --- | --- |
-| Ubuntu LTS | x86_64 | Node 22 + Python 3.10 | Node 24 + Python 3.12 | Unverified |
-| Ubuntu LTS | ARM64 | Node 22 + Python 3.10 | Node 24 + Python 3.12 | Containerized Node 24 consumer and Node 22/Python 3.11 recovery verified; native boundaries pending |
-| Windows | x86_64 | Node 22 + Python 3.10 | Node 24 + Python 3.12 | Unverified |
-| macOS | Apple Silicon | Node 22 + Python 3.10 | Node 24 + Python 3.12 | Local Node 22 consumer startup verified; setup matrix pending |
-| macOS | Intel | Node 22 + Python 3.10 | Node 24 + Python 3.12 | Unverified |
+| Host       | Architecture  | Boundary pair A       | Boundary pair B       | Status                                                                                              |
+| ---------- | ------------- | --------------------- | --------------------- | --------------------------------------------------------------------------------------------------- |
+| Ubuntu LTS | x86_64        | Node 22 + Python 3.10 | Node 24 + Python 3.12 | Managed-runtime boundaries verified at `2a15325`; exact source and registry canaries pending        |
+| Ubuntu LTS | ARM64         | Node 22 + Python 3.10 | Node 24 + Python 3.12 | Containerized Node 24 consumer and Node 22/Python 3.11 recovery verified; native boundaries pending |
+| Windows    | x86_64        | Node 22 + Python 3.10 | Node 24 + Python 3.12 | Managed-runtime boundaries verified at `2a15325`; exact source and registry canaries pending        |
+| macOS      | Apple Silicon | Node 22 + Python 3.10 | Node 24 + Python 3.12 | Managed-runtime boundaries verified at `2a15325`; exact source and registry canaries pending        |
+| macOS      | Intel         | Node 22 + Python 3.10 | Node 24 + Python 3.12 | Unverified                                                                                          |
 
 Additional primary-Linux combinations:
 
@@ -98,10 +100,10 @@ If a required architecture is unavailable on hosted CI, use an ephemeral self-ho
 
 ## Required Docker Matrix
 
-| Target | Build | Runtime smoke test | Compose smoke test | Status |
-| --- | --- | --- | --- | --- |
-| `linux/amd64` | Required | Required | Required | Local emulated build/runtime/Compose and fixable-vulnerability scan verified; CI evidence pending |
-| `linux/arm64` | Required | Required | Required | Local build/start/media/Compose verified; CI scan pending |
+| Target        | Build    | Runtime smoke test | Compose smoke test | Status                                                                                            |
+| ------------- | -------- | ------------------ | ------------------ | ------------------------------------------------------------------------------------------------- |
+| `linux/amd64` | Required | Required           | Required           | Local emulated build/runtime/Compose and fixable-vulnerability scan verified; CI evidence pending |
+| `linux/arm64` | Required | Required           | Required           | Local build/start/media/Compose verified; CI scan pending                                         |
 
 Each target must prove:
 

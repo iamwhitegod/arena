@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * Install the prepared Arena npm tarball as a real consumer.
+ * Install Arena as a real consumer from a prepared tarball, an exact registry
+ * version, or the documented source checkout workflow.
  *
  * This script intentionally uses only Node.js APIs so the same assertions run
  * on Windows, macOS, and Linux. It does not read files from the source checkout
- * after resolving the tarball argument.
+ * after resolving the requested installation input.
  */
 
 const crypto = require('node:crypto');
@@ -18,6 +19,8 @@ const PACKAGE_NAME = '@whitegodkingsley/arena-cli';
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const MAX_CAPTURE_CHARS = 24_000;
 const REDACTED_PATHS = new Set([os.homedir()]);
+const EXACT_SEMVER_PATTERN =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
 function directNodeCommand(script, displayName) {
   return {
@@ -96,9 +99,10 @@ function packageBinEntry(packageMetadata, name) {
 
 function usage() {
   return [
-    'Usage: node scripts/consumer-install-smoke.cjs --tarball <file-or-directory>',
+    'Usage: node scripts/consumer-install-smoke.cjs (--tarball <file-or-directory>',
+    '       | --package-spec <exact-package-version> | --source-dir <directory>)',
     '       [--evidence <json-file>] [--setup] [--setup-recovery]',
-    '       [--expected-python <major.minor>]',
+    '       [--expected-python <major.minor>] [--expected-version <version>]',
     '       [--keep] [--timeout-ms <milliseconds>]',
   ].join('\n');
 }
@@ -123,8 +127,11 @@ function parseArgs(argv) {
       options.setup = true;
     } else if (
       argument === '--tarball' ||
+      argument === '--package-spec' ||
+      argument === '--source-dir' ||
       argument === '--evidence' ||
       argument === '--expected-python' ||
+      argument === '--expected-version' ||
       argument === '--timeout-ms'
     ) {
       const value = argv[index + 1];
@@ -133,8 +140,11 @@ function parseArgs(argv) {
       }
       index += 1;
       if (argument === '--tarball') options.tarball = value;
+      if (argument === '--package-spec') options.packageSpec = value;
+      if (argument === '--source-dir') options.sourceDir = value;
       if (argument === '--evidence') options.evidence = path.resolve(value);
       if (argument === '--expected-python') options.expectedPython = value;
+      if (argument === '--expected-version') options.expectedVersion = value;
       if (argument === '--timeout-ms') options.timeoutMs = Number.parseInt(value, 10);
     } else if (argument === '--help' || argument === '-h') {
       console.log(usage());
@@ -144,8 +154,24 @@ function parseArgs(argv) {
     }
   }
 
-  if (!options.tarball) {
-    throw new Error(`--tarball is required\n${usage()}`);
+  const inputs = [options.tarball, options.packageSpec, options.sourceDir].filter(Boolean);
+  if (inputs.length !== 1) {
+    throw new Error(
+      `Exactly one of --tarball, --package-spec, or --source-dir is required\n${usage()}`
+    );
+  }
+  if (options.packageSpec) {
+    if (!options.expectedVersion) {
+      throw new Error('--expected-version is required with --package-spec');
+    }
+    if (options.packageSpec !== `${PACKAGE_NAME}@${options.expectedVersion}`) {
+      throw new Error(`--package-spec must be the exact Arena version ${PACKAGE_NAME}@<version>`);
+    }
+  }
+  if (options.expectedVersion && !EXACT_SEMVER_PATTERN.test(options.expectedVersion)) {
+    throw new Error(
+      '--expected-version must be an exact semantic version, not a dist-tag or range'
+    );
   }
   if (!Number.isInteger(options.timeoutMs) || options.timeoutMs < 1000) {
     throw new Error('--timeout-ms must be an integer of at least 1000');
@@ -331,12 +357,18 @@ function runSetupRecoverySmoke(
   ) {
     throw new Error('Timed-out setup did not preserve the previous managed runtime cleanly');
   }
-  runCommand(evidence, 'check preserved runtime after setup failure', arenaCommand, ['setup', '--check'], {
-    cwd: workspace,
-    env: childEnv,
-    shell,
-    timeoutMs: 60_000,
-  });
+  runCommand(
+    evidence,
+    'check preserved runtime after setup failure',
+    arenaCommand,
+    ['setup', '--check'],
+    {
+      cwd: workspace,
+      env: childEnv,
+      shell,
+      timeoutMs: 60_000,
+    }
+  );
   evidence.assertions.failedSetupPreservesWorkingRuntime = true;
 
   const arenaPackage = managedArenaPackage(originalManifest.pythonPath);
@@ -404,7 +436,12 @@ function writeEvidence(filename, evidence) {
 
 function pathIsInside(parent, candidate) {
   const relative = path.relative(path.resolve(parent), path.resolve(candidate));
-  return relative !== '' && !relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative);
+  return (
+    relative !== '' &&
+    !relative.startsWith(`..${path.sep}`) &&
+    relative !== '..' &&
+    !path.isAbsolute(relative)
+  );
 }
 
 function runLocalProcessingSmoke(evidence, arenaCommand, workspace, childEnv, timeoutMs, shell) {
@@ -458,16 +495,7 @@ function runLocalProcessingSmoke(evidence, arenaCommand, workspace, childEnv, ti
     evidence,
     'detect local scenes',
     arenaCommand,
-    [
-      'detect-scenes',
-      fixture,
-      '--output',
-      scenes,
-      '--threshold',
-      '0.15',
-      '--min-duration',
-      '0.2',
-    ],
+    ['detect-scenes', fixture, '--output', scenes, '--threshold', '0.15', '--min-duration', '0.2'],
     { cwd: workspace, env: childEnv, shell, timeoutMs }
   );
 
@@ -495,11 +523,16 @@ function runLocalProcessingSmoke(evidence, arenaCommand, workspace, childEnv, ti
 
 function main() {
   const options = parseArgs(process.argv.slice(2));
-  const tarball = resolveTarball(options.tarball);
-  const metadataPath = path.join(path.dirname(tarball), 'artifact-metadata.json');
-  const artifactMetadata = fs.existsSync(metadataPath)
-    ? JSON.parse(fs.readFileSync(metadataPath, 'utf8'))
-    : null;
+  const tarball = options.tarball ? resolveTarball(options.tarball) : null;
+  const sourceDir = options.sourceDir ? fs.realpathSync(path.resolve(options.sourceDir)) : null;
+  if (sourceDir && !fs.existsSync(path.join(sourceDir, 'package.json'))) {
+    throw new Error(`Source directory does not contain package.json: ${sourceDir}`);
+  }
+  const metadataPath = tarball ? path.join(path.dirname(tarball), 'artifact-metadata.json') : null;
+  const artifactMetadata =
+    metadataPath && fs.existsSync(metadataPath)
+      ? JSON.parse(fs.readFileSync(metadataPath, 'utf8'))
+      : null;
   const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'arena consumer smoke '));
   REDACTED_PATHS.add(temporaryRoot);
   REDACTED_PATHS.add(fs.realpathSync(temporaryRoot));
@@ -549,7 +582,9 @@ function main() {
       ? path.join(prefix, 'node_modules', ...PACKAGE_NAME.split('/'))
       : path.join(prefix, 'lib', 'node_modules', ...PACKAGE_NAME.split('/'));
   const arenaShim =
-    process.platform === 'win32' ? path.join(prefix, 'arena.cmd') : path.join(prefix, 'bin', 'arena');
+    process.platform === 'win32'
+      ? path.join(prefix, 'arena.cmd')
+      : path.join(prefix, 'bin', 'arena');
 
   const evidence = {
     schemaVersion: 1,
@@ -566,8 +601,10 @@ function main() {
       ffmpeg: null,
     },
     artifact: {
-      filename: path.basename(tarball),
-      sha256: sha256(tarball),
+      installKind: sourceDir ? 'source' : options.packageSpec ? 'registry' : 'tarball',
+      requestedSpec: options.packageSpec ?? null,
+      filename: tarball ? path.basename(tarball) : null,
+      sha256: tarball ? sha256(tarball) : null,
       packageName: null,
       packageVersion: null,
       engineVersion: null,
@@ -576,7 +613,9 @@ function main() {
     isolation: {
       outsideSourceCheckout: (() => {
         const relative = path.relative(path.resolve(__dirname, '..', '..'), workspace);
-        return relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+        return (
+          relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)
+        );
       })(),
       pathWithSpaces: workspace.includes(' '),
       pathWithUnicode: /[^\x00-\x7F]/.test(workspace),
@@ -613,50 +652,68 @@ function main() {
       ['-version'],
       childEnv
     );
-    const installFfmpeg = probeVersion(
-      evidence,
-      'confirm FFmpeg absent during postinstall',
-      'ffmpeg',
-      ['-version'],
-      installEnv
-    );
-    const installPython =
-      probeVersion(
+    if (!sourceDir) {
+      const installFfmpeg = probeVersion(
         evidence,
-        'confirm python3 absent during postinstall',
-        'python3',
-        ['--version'],
-        installEnv
-      ) ??
-      probeVersion(
-        evidence,
-        'confirm python absent during postinstall',
-        'python',
-        ['--version'],
+        'confirm FFmpeg absent during postinstall',
+        'ffmpeg',
+        ['-version'],
         installEnv
       );
-    evidence.assertions.postinstallPrerequisitesWereAbsent =
-      installFfmpeg === null && installPython === null;
-    if (!evidence.assertions.postinstallPrerequisitesWereAbsent) {
-      throw new Error('Could not isolate FFmpeg and Python from the npm postinstall environment');
+      const installPython =
+        probeVersion(
+          evidence,
+          'confirm python3 absent during postinstall',
+          'python3',
+          ['--version'],
+          installEnv
+        ) ??
+        probeVersion(
+          evidence,
+          'confirm python absent during postinstall',
+          'python',
+          ['--version'],
+          installEnv
+        );
+      evidence.assertions.postinstallPrerequisitesWereAbsent =
+        installFfmpeg === null && installPython === null;
+      if (!evidence.assertions.postinstallPrerequisitesWereAbsent) {
+        throw new Error('Could not isolate FFmpeg and Python from the npm postinstall environment');
+      }
     }
 
-    const install = runCommand(
-      evidence,
-      'install packed tarball',
-      npmCommand,
-      [
-        'install',
-        '--global',
-        '--foreground-scripts',
-        '--no-audit',
-        '--no-fund',
-        '--prefix',
-        prefix,
-        tarball,
-      ],
-      { cwd: workspace, env: installEnv, timeoutMs: options.timeoutMs }
-    );
+    let install;
+    if (sourceDir) {
+      install = runCommand(
+        evidence,
+        'install source dependencies',
+        npmCommand,
+        ['install', '--foreground-scripts', '--no-audit', '--no-fund'],
+        { cwd: sourceDir, env: childEnv, timeoutMs: options.timeoutMs }
+      );
+      runCommand(evidence, 'link source package', npmCommand, ['link'], {
+        cwd: sourceDir,
+        env: childEnv,
+        timeoutMs: options.timeoutMs,
+      });
+    } else {
+      install = runCommand(
+        evidence,
+        options.packageSpec ? 'install exact registry package' : 'install packed tarball',
+        npmCommand,
+        [
+          'install',
+          '--global',
+          '--foreground-scripts',
+          '--no-audit',
+          '--no-fund',
+          '--prefix',
+          prefix,
+          options.packageSpec ?? tarball,
+        ],
+        { cwd: workspace, env: installEnv, timeoutMs: options.timeoutMs }
+      );
+    }
     evidence.assertions.postinstallAdvisoryRan = install.stdout.includes('Arena CLI installed.');
     if (!evidence.assertions.postinstallAdvisoryRan) {
       throw new Error('npm install did not show the Arena read-only postinstall advisory');
@@ -673,13 +730,26 @@ function main() {
     evidence.artifact.packageName = installedPackage.name;
     evidence.artifact.packageVersion = installedPackage.version;
     evidence.artifact.prepared = installedPackage.arenaPreparedArtifact === true;
+    const engineRoot = sourceDir
+      ? path.resolve(sourceDir, '..', 'engine')
+      : path.join(packageRoot, 'engine');
     const engineInit = fs.readFileSync(
-      path.join(packageRoot, 'engine', 'arena', 'cli', '__init__.py'),
+      path.join(engineRoot, 'arena', 'cli', '__init__.py'),
       'utf8'
     );
     evidence.artifact.engineVersion =
       /__version__\s*=\s*['"]([^'"]+)['"]/.exec(engineInit)?.[1] ?? null;
-    if (installedPackage.name !== PACKAGE_NAME || installedPackage.arenaPreparedArtifact !== true) {
+    if (installedPackage.name !== PACKAGE_NAME) {
+      throw new Error('Installed package identity does not match Arena');
+    }
+    if (sourceDir) {
+      if (fs.realpathSync(packageRoot) !== sourceDir) {
+        throw new Error(
+          'npm link did not resolve the global package to the requested source directory'
+        );
+      }
+      evidence.assertions.exactSourcePackageLinked = true;
+    } else if (installedPackage.arenaPreparedArtifact !== true) {
       throw new Error('Installed package identity does not match the prepared Arena artifact');
     }
     if (
@@ -689,16 +759,27 @@ function main() {
     ) {
       throw new Error('Installed package identity does not match artifact-metadata.json');
     }
-    evidence.assertions.exactPreparedPackageInstalled = true;
+    if (options.expectedVersion && installedPackage.version !== options.expectedVersion) {
+      throw new Error(
+        `Installed package version ${installedPackage.version} does not match ${options.expectedVersion}`
+      );
+    }
 
-    runCommand(
-      evidence,
-      'verify installed artifact',
-      process.execPath,
-      [path.join(packageRoot, 'scripts', 'verify-package.cjs'), '--engine-only'],
-      { cwd: workspace, env: childEnv, timeoutMs: 60_000 }
-    );
-    evidence.assertions.engineManifestVerified = true;
+    if (sourceDir) {
+      evidence.assertions.sourcePackageBuiltAndLinked = fs.existsSync(
+        path.join(packageRoot, packageBinEntry(installedPackage, 'arena'))
+      );
+    } else {
+      evidence.assertions.exactPreparedPackageInstalled = true;
+      runCommand(
+        evidence,
+        'verify installed artifact',
+        process.execPath,
+        [path.join(packageRoot, 'scripts', 'verify-package.cjs'), '--engine-only'],
+        { cwd: workspace, env: childEnv, timeoutMs: 60_000 }
+      );
+      evidence.assertions.engineManifestVerified = true;
+    }
 
     const arenaCommand =
       process.platform === 'win32'
@@ -743,7 +824,10 @@ function main() {
 
       const manifestPath = path.join(arenaHome, 'runtime', 'install.json');
       const runtimeManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-      if (!pathIsInside(arenaHome, runtimeManifest.pythonPath) || !fs.existsSync(runtimeManifest.pythonPath)) {
+      if (
+        !pathIsInside(arenaHome, runtimeManifest.pythonPath) ||
+        !fs.existsSync(runtimeManifest.pythonPath)
+      ) {
         throw new Error('Managed Python is missing or outside the isolated ARENA_HOME');
       }
       evidence.managedRuntime = {
@@ -845,6 +929,7 @@ function main() {
 module.exports = {
   npmCliCandidates,
   npmCliFromPath,
+  parseArgs,
   packageBinEntry,
   resolveInvocation,
 };

@@ -35,10 +35,29 @@ jobs:
           cache: npm
           cache-dependency-path: cli/package-lock.json
 
+      - name: Verify release version and npm tag
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          set -euo pipefail
+          package_version="$(node --print "require('./cli/package.json').version")"
+          if [ "$RELEASE_TAG" != "v$package_version" ]; then
+            echo "Release tag $RELEASE_TAG must exactly match CLI version v$package_version." >&2
+            exit 1
+          fi
+          if [ "$RELEASE_PRERELEASE" = "true" ]; then
+            npm_tag="next"
+          else
+            npm_tag="latest"
+          fi
+          echo "npm_tag=$npm_tag" >> "$GITHUB_OUTPUT"
+
       - name: Setup Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: '3.12'
+          python-version: "3.12"
           cache: pip
           cache-dependency-path: engine/requirements-dev.lock
 
@@ -95,6 +114,7 @@ jobs:
 
       - name: Publish to npm
         working-directory: cli
-        run: npm publish .package --provenance --access public
+        run: npm publish .package --provenance --access public --tag "$NPM_TAG"
         env:
+          NPM_TAG: ${{ steps.release.outputs.npm_tag }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
