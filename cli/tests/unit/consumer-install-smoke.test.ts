@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 const require = createRequire(import.meta.url);
 const {
   npmCliCandidates,
+  parseArgs,
   packageBinEntry,
   resolveInvocation,
 } = require('../../scripts/consumer-install-smoke.cjs');
@@ -60,5 +61,31 @@ describe('consumer install smoke command resolution', () => {
     expect(() => packageBinEntry({ bin: { arena: '../launcher.js' } }, 'arena')).toThrow(
       'does not define a valid arena executable'
     );
+  });
+
+  it('requires one installation input and an exact registry version', () => {
+    expect(() => parseArgs([])).toThrow('Exactly one of');
+    expect(() => parseArgs(['--tarball', 'arena.tgz', '--source-dir', 'cli'])).toThrow(
+      'Exactly one of'
+    );
+    expect(() =>
+      parseArgs([
+        '--package-spec',
+        '@whitegodkingsley/arena-cli@next',
+        '--expected-version',
+        'next',
+      ])
+    ).toThrow('must be an exact semantic version');
+    expect(
+      parseArgs([
+        '--package-spec',
+        '@whitegodkingsley/arena-cli@0.4.3-rc.1',
+        '--expected-version',
+        '0.4.3-rc.1',
+      ])
+    ).toMatchObject({
+      packageSpec: '@whitegodkingsley/arena-cli@0.4.3-rc.1',
+      expectedVersion: '0.4.3-rc.1',
+    });
   });
 });

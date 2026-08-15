@@ -4,7 +4,7 @@ Arena uses Semantic Versioning. Before 1.0, breaking changes increment the minor
 
 ## Maintainer checklist
 
-1. Confirm `main` is green in Test and Security workflows.
+1. Confirm `main` is green in Test, Security, source-install, managed-runtime, packed-artifact, and container workflows.
 2. Review dependency updates, action SHAs, Python lockfile headers, and audit results.
 3. Update package versions and `CHANGELOG.md` in one pull request.
 4. Run `npm run package:inspect` from `cli/` and inspect the tarball allowlist.
@@ -14,8 +14,10 @@ Arena uses Semantic Versioning. Before 1.0, breaking changes increment the minor
 8. Publish the GitHub release from that tag.
 9. Let the protected `npm` and `container` environments publish; do not publish either artifact from a developer workstation.
 10. Retain and inspect the npm tarball, CycloneDX SBOMs, container SBOM/provenance, and publication evidence.
-11. Verify the npm package and `arena setup --check` on a clean machine, then verify the versioned Docker image manifest and runtime on AMD64 and ARM64.
+11. Dispatch `registry-smoke.yml` with the exact published version. Require its npm signature/provenance job and clean Ubuntu, Windows, and macOS installation jobs to pass.
+12. Verify the versioned Docker image manifest and hardened runtime on AMD64 and ARM64.
+13. Promote only the exact tested candidate; never rebuild between canary verification and promotion.
 
 The publication workflow must not be bypassed when a gate fails. A security hotfix may reduce the normal announcement window, but it still requires tests, artifact inspection, audits, SBOMs, and provenance.
 
-The public container contract is `docker.io/whitegodkingsley/arena`. Stable releases publish immutable `X.Y.Z` and commit tags plus moving `X.Y`, `X`, and `latest` tags. Pre-releases publish only the exact version and commit tags, so they cannot replace `latest`. The release workflow rejects a Git tag that does not match the CLI package version, publishes one multi-architecture manifest for Linux AMD64 and ARM64, and verifies the registry digest before completion.
+The public container contract is `docker.io/whitegodkingsley/arena`. Stable releases publish immutable `X.Y.Z` and commit tags plus moving `X.Y`, `X`, and `latest` tags. Pre-releases publish only the exact version and commit tags, so they cannot replace `latest`. The npm workflow applies the same rule by publishing pre-releases under `next` and stable releases under `latest`. Both publication workflows reject a Git tag that does not match `cli/package.json`. The container workflow publishes one multi-architecture manifest for Linux AMD64 and ARM64 and verifies the registry digest before completion.

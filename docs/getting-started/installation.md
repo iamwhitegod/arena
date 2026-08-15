@@ -4,12 +4,12 @@ Arena is an AI-powered, open-source, local-first video clipping engine for the t
 
 ## Supported environment
 
-| Dependency | Supported | Purpose |
-| --- | --- | --- |
-| Node.js | 22–24 | Arena CLI and the JavaScript runtime used by yt-dlp |
-| Python | 3.10–3.12 | Creates Arena's private processing environment |
-| FFmpeg and ffprobe | Available on `PATH` | Local video and audio processing |
-| macOS, Linux, Windows | Current supported releases | Host operating system |
+| Dependency            | Supported                  | Purpose                                             |
+| --------------------- | -------------------------- | --------------------------------------------------- |
+| Node.js               | 22–24                      | Arena CLI and the JavaScript runtime used by yt-dlp |
+| Python                | 3.10–3.12                  | Creates Arena's private processing environment      |
+| FFmpeg and ffprobe    | Available on `PATH`        | Local video and audio processing                    |
+| macOS, Linux, Windows | Current supported releases | Host operating system                               |
 
 Python 3.13 is not supported yet because Arena's current scientific-processing dependency set targets Python 3.10–3.12. Deno is not required; Arena already runs on Node.js.
 
@@ -17,15 +17,15 @@ When multiple supported Python installations exist, set `ARENA_PYTHON` to the ex
 
 ## Verification status
 
-Installation verification is active but not yet complete across every supported target.
+Release-candidate verification is active. The release-blocking hosted matrix is green; the remaining gate is verification of the exact npm and Docker artifacts after public registry publication.
 
-| Path | Verified progress | Remaining release evidence |
-| --- | --- | --- |
-| npm | npm `latest` resolves to Arena `0.4.2`. On August 13, 2026, a clean isolated registry install of `@whitegodkingsley/arena-cli@0.4.2` completed on macOS ARM64 with Node.js 24, and the installed binary passed version (`0.4.2`) and help startup checks. The exact staged tarball from checkpoint `6df3cd4` also passed an empty-cache non-root Linux ARM64 install with Python/FFmpeg absent during postinstall, CLI startup, and uninstall. Installer-equivalent evidence covers managed setup on Node.js 22/Python 3.11, idempotency, lock/stale-state recovery, timeout rollback, damaged-runtime repair, credential-free local processing, and uninstall. | Clean registry installs on native Ubuntu and Windows; Python 3.10/3.12 setup boundaries; npm provenance review; and retained matrix evidence |
-| Source | The TypeScript suite passed 145 tests with one intentional skip. The Python suite passed 106 tests with four intentional live-provider skips. | Clean source builds on the complete Windows, macOS, and Linux Node/Python boundary matrix |
-| Docker | Arena `0.4.2` is published as one attested OCI index for Linux AMD64 and ARM64 at digest `sha256:b1bfbc0ca0696d550ba5520a7fbff196721af6cd8a0643ec8d08e13583495b1b`. Both exact registry manifests passed non-root, read-only, network-disabled, capability-dropped startup and reported `0.4.2`. The matching release candidates also passed deterministic local processing and fixable-vulnerability scans with 0 critical, high, medium, or low findings. | Native/matrix CI evidence, retained CI artifacts, and an image-size regression budget |
+| Path   | Verified progress                                                                                                                                                                                                                                                                                                                                                                                                                          | Remaining release evidence                                                                                                                                   |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| npm    | The exact packed release artifact passes clean installation and CLI startup on Ubuntu x64, Windows x64, and macOS ARM64 with Node.js 22 and 24. Managed-runtime run [31828709997](https://github.com/iamwhitegod/arena/actions/runs/31828709997) passed Node.js 22/Python 3.10 and Node.js 24/Python 3.12 on all three OS families, including isolated setup, health checks, idempotency, credential-free local processing, and uninstall. | Publish `0.4.3-rc.1` under the non-default `next` tag, verify npm signatures/provenance, and rerun the same installation contract from the public registry   |
+| Source | The complete TypeScript/Python source matrix is green. The source-install workflow now exercises the documented `npm install`, `npm link`, setup, health-check, local-processing, and unlink path at every release-blocking Node/Python boundary.                                                                                                                                                                                          | Retain a green source-install workflow run from the exact release commit                                                                                     |
+| Docker | Arena `0.4.2` remains published as one attested OCI index for Linux AMD64 and ARM64 at digest `sha256:b1bfbc0ca0696d550ba5520a7fbff196721af6cd8a0643ec8d08e13583495b1b`. Both exact registry manifests passed non-root, read-only, network-disabled, capability-dropped startup. Release-candidate builds for both architectures pass local processing and high/critical vulnerability scans.                                              | Publish the exact `0.4.3-rc.1` multi-architecture index and verify its registry digest, platform manifests, SBOM/provenance attestations, scans, and runtime |
 
-These results mean Arena is hardened and verified on selected installation paths. Do not describe installation as universally flawless until the remaining release-blocking jobs in the [installation verification plan](../development/plans/installation-verification.md) are green.
+These results mean Arena is hardened across the declared release-blocking platforms. Do not describe the release candidate as registry-verified until the public npm and Docker canaries in the [installation verification plan](../development/plans/installation-verification.md) are green.
 
 The production container intentionally excludes npm, npx, Corepack, and their package-manager shims. They are used in the builder stage only; the runtime executes the already-built `arena` CLI. This removes build-only tooling and its transitive advisories from the image without changing the user-facing container command.
 
@@ -178,11 +178,11 @@ Do not use global `pip install` as a repair step. Arena setup owns and verifies 
 
 ## Maintainer next steps
 
-1. Require the source, packed-tarball, managed-runtime, and container workflows on pull requests and release commits.
-2. Retain evidence from native Ubuntu, Windows, macOS, Node.js 22/24, and Python 3.10/3.12 rather than treating workflow configuration or emulation as proof.
-3. Confirm setup, idempotency, timeout rollback, repair, stale-state recovery, and concurrency behavior on the full native matrix.
-4. Add native Linux ARM64 and Intel macOS runners where hosted runners cannot supply the required architecture.
-5. For the next npm release, publish a canary under a non-default tag and promote that exact tested artifact without rebuilding it.
+1. Require the source, packed-tarball, managed-runtime, security, and container workflows on pull requests and release commits.
+2. Publish the approved release candidate under non-default npm and Docker tags and dispatch the public-registry canary.
+3. Retain provenance, registry metadata, setup, processing, recovery, and per-platform container evidence for the exact release commit.
+4. Promote the exact verified candidate without rebuilding it; keep stable tags unchanged when any canary fails.
+5. Add native Linux ARM64, Intel macOS, and Windows ARM64 runners if those best-effort platforms move into the release-blocking support tier.
 
 Publishing or changing npm distribution tags remains an explicit maintainer action.
 
