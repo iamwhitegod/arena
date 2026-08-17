@@ -96,14 +96,11 @@ export async function generateCommand(
         padding: options.padding ? parseFloat(options.padding) : undefined,
       },
       (update) => {
-        if (update.progress !== undefined) {
+        if (update.progress !== null) {
           progress.showDeterminate(update.progress, update.message);
         } else {
           progress.showIndeterminate(update.message);
         }
-      },
-      (error) => {
-        console.error(chalk.red(error));
       }
     );
 

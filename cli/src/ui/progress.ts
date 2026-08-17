@@ -14,8 +14,10 @@ export interface Stage {
   icon: string;
   status: 'pending' | 'in_progress' | 'completed' | 'failed';
   progress?: number;
+  progressMode?: 'determinate' | 'indeterminate';
   message?: string;
   startTime?: number;
+  stateStartTime?: number;
   endTime?: number;
 }
 
@@ -24,18 +26,28 @@ export class ProgressTracker {
   private stages: Map<string, Stage>;
   private currentStage: string | null;
   private overallProgress: number;
+  private elapsedTimer: ReturnType<typeof setInterval> | null;
+  private simpleElapsedTimer: ReturnType<typeof setInterval> | null;
+  private simpleIndeterminateMessage: string | null;
+  private simpleIndeterminateStartTime: number | null;
 
   constructor() {
     this.spinner = ora();
     this.stages = new Map();
     this.currentStage = null;
     this.overallProgress = 0;
+    this.elapsedTimer = null;
+    this.simpleElapsedTimer = null;
+    this.simpleIndeterminateMessage = null;
+    this.simpleIndeterminateStartTime = null;
   }
 
   /**
    * Initialize stages for the pipeline
    */
   initializeStages(stageConfigs: Array<{ id: string; name: string; icon?: string }>): void {
+    this.clearElapsedTimer();
+    this.clearSimpleElapsedTimer();
     this.stages.clear();
 
     stageConfigs.forEach((config) => {
@@ -45,17 +57,23 @@ export class ProgressTracker {
         icon: config.icon || '▪',
         status: 'pending',
         progress: 0,
+        progressMode: 'determinate',
       });
     });
   }
 
   /**
-   * Start a stage
+   * Activate a stage without rendering it.
+   *
+   * Keeping activation separate from rendering lets updateStageProgress apply
+   * the first progress value before the terminal is redrawn. Previously the
+   * first event only started the stage and returned, so a real 5% update was
+   * displayed as 0% until the next event arrived.
    */
-  startStage(stageId: string, message?: string): void {
+  private activateStage(stageId: string, message?: string): Stage | undefined {
     const stage = this.stages.get(stageId);
     if (!stage) {
-      return;
+      return undefined;
     }
 
     // Mark previous stage as complete
@@ -70,8 +88,23 @@ export class ProgressTracker {
 
     stage.status = 'in_progress';
     stage.startTime = Date.now();
+    stage.stateStartTime = stage.startTime;
     stage.message = message;
     this.currentStage = stageId;
+
+    return stage;
+  }
+
+  /**
+   * Start a stage
+   */
+  startStage(stageId: string, message?: string): void {
+    const stage = this.activateStage(stageId, message);
+    if (!stage) {
+      return;
+    }
+
+    stage.progressMode = 'determinate';
 
     this.updateDisplay();
   }
@@ -90,6 +123,7 @@ export class ProgressTracker {
     }
 
     stage.progress = Math.min(100, Math.max(0, progress));
+    stage.progressMode = 'determinate';
     if (message) {
       stage.message = message;
     }
@@ -100,25 +134,48 @@ export class ProgressTracker {
   /**
    * Update progress for a specific stage
    */
-  updateStageProgress(stageId: string, progress: number, message?: string): void {
-    const stage = this.stages.get(stageId);
+  updateStageProgress(stageId: string, progress: number | null, message?: string): void {
+    let stage = this.stages.get(stageId);
     if (!stage) {
       return;
     }
 
-    // Auto-start stage if not started
-    if (stage.status === 'pending') {
-      this.startStage(stageId, message);
+    if (stage.status === 'completed' || stage.status === 'failed') {
       return;
     }
 
-    stage.progress = Math.min(100, Math.max(0, progress));
+    // Auto-start the stage, but render only after applying this first update.
+    if (stage.status === 'pending') {
+      stage = this.activateStage(stageId, message);
+      if (!stage) {
+        return;
+      }
+    }
+
+    if (progress === null) {
+      const stateChanged = stage.progressMode !== 'indeterminate' || stage.message !== message;
+      stage.progressMode = 'indeterminate';
+      if (message) {
+        stage.message = message;
+      }
+      if (stateChanged) {
+        stage.stateStartTime = Date.now();
+      }
+      this.updateDisplay();
+      return;
+    }
+
+    // Progress events can arrive from multiple output streams. Never let a
+    // delayed event move a stage backwards.
+    const nextProgress = Math.min(100, Math.max(0, progress));
+    stage.progress = Math.max(stage.progress ?? 0, nextProgress);
+    stage.progressMode = 'determinate';
     if (message) {
       stage.message = message;
     }
 
     // Auto-complete if progress reaches 100
-    if (progress >= 100) {
+    if (stage.progress >= 100) {
       stage.status = 'completed';
       stage.endTime = Date.now();
     }
@@ -141,6 +198,7 @@ export class ProgressTracker {
 
     stage.status = 'completed';
     stage.progress = 100;
+    stage.progressMode = 'determinate';
     stage.endTime = Date.now();
     if (message) {
       stage.message = message;
@@ -170,6 +228,49 @@ export class ProgressTracker {
     }
 
     this.spinner.fail(chalk.red(`${stage.icon} ${stage.name}: ${message || 'Failed'}`));
+    this.clearElapsedTimer();
+  }
+
+  private clearElapsedTimer(): void {
+    if (this.elapsedTimer) {
+      clearInterval(this.elapsedTimer);
+      this.elapsedTimer = null;
+    }
+  }
+
+  private clearSimpleElapsedTimer(): void {
+    if (this.simpleElapsedTimer) {
+      clearInterval(this.simpleElapsedTimer);
+      this.simpleElapsedTimer = null;
+    }
+    this.simpleIndeterminateMessage = null;
+    this.simpleIndeterminateStartTime = null;
+  }
+
+  private renderSimpleIndeterminate(): void {
+    if (!this.simpleIndeterminateMessage || this.simpleIndeterminateStartTime === null) {
+      return;
+    }
+    const elapsed = formatDuration((Date.now() - this.simpleIndeterminateStartTime) / 1000);
+    this.spinner.text = chalk.cyan(
+      `${this.simpleIndeterminateMessage} ${chalk.gray(`· ${elapsed} elapsed`)}`
+    );
+  }
+
+  private syncElapsedTimer(stageList: Stage[]): void {
+    const hasIndeterminateStage = stageList.some(
+      (stage) => stage.status === 'in_progress' && stage.progressMode === 'indeterminate'
+    );
+
+    if (!hasIndeterminateStage) {
+      this.clearElapsedTimer();
+      return;
+    }
+
+    if (!this.elapsedTimer) {
+      this.elapsedTimer = setInterval(() => this.updateDisplay(), 1000);
+      this.elapsedTimer.unref?.();
+    }
   }
 
   /**
@@ -181,11 +282,17 @@ export class ProgressTracker {
     }
 
     const stageList = Array.from(this.stages.values());
-    const completedCount = stageList.filter((s) => s.status === 'completed').length;
-    this.overallProgress = (completedCount / stageList.length) * 100;
+    const verifiedProgress = stageList.reduce(
+      (total, stage) => total + (stage.status === 'completed' ? 100 : (stage.progress ?? 0)),
+      0
+    );
+    this.overallProgress = verifiedProgress / stageList.length;
 
     // Build multi-line display
-    const lines: string[] = [];
+    const overallBar = formatProgressBar(this.overallProgress / 100, 16);
+    const lines: string[] = [
+      `${chalk.gray('Overall')} ${chalk.cyan(overallBar)} ${chalk.gray('(verified)')}`,
+    ];
 
     stageList.forEach((stage, index) => {
       const stageNumber = `[${index + 1}/${stageList.length}]`;
@@ -194,11 +301,19 @@ export class ProgressTracker {
         lines.push(chalk.gray(`${stageNumber} ⏳ ${stage.name} - Pending`));
       } else if (stage.status === 'in_progress') {
         const progress = stage.progress || 0;
-        const bar = formatProgressBar(progress / 100, 16);
-        const message = stage.message ? chalk.gray(` - ${stage.message}`) : '';
-        lines.push(
-          `${chalk.cyan(stageNumber)} ${chalk.bold(chalk.white(stage.name))}\n     ${chalk.cyan(bar)}${message}`
-        );
+        const stageHeader = `${chalk.cyan(stageNumber)} ${chalk.bold(chalk.white(stage.name))}`;
+        if (stage.progressMode === 'indeterminate') {
+          const stateStartedAt = stage.stateStartTime || stage.startTime || Date.now();
+          const elapsed = formatDuration((Date.now() - stateStartedAt) / 1000);
+          const message = stage.message || 'Working';
+          lines.push(
+            `${stageHeader}\n     ${chalk.cyan('◐')} ${chalk.gray(`${message} · ${elapsed} elapsed`)}`
+          );
+        } else {
+          const bar = formatProgressBar(progress / 100, 16);
+          const message = stage.message ? chalk.gray(` - ${stage.message}`) : '';
+          lines.push(`${stageHeader}\n     ${chalk.cyan(bar)}${message}`);
+        }
       } else if (stage.status === 'completed') {
         const elapsed =
           stage.endTime && stage.startTime
@@ -222,6 +337,7 @@ export class ProgressTracker {
     if (!this.spinner.isSpinning) {
       this.spinner.start();
     }
+    this.syncElapsedTimer(stageList);
   }
 
   /**
@@ -246,6 +362,7 @@ export class ProgressTracker {
    * Simple start method (backward compatible)
    */
   start(message: string): void {
+    this.clearSimpleElapsedTimer();
     this.spinner.start(chalk.cyan(message));
   }
 
@@ -253,6 +370,7 @@ export class ProgressTracker {
    * Simple succeed method (backward compatible)
    */
   succeed(message: string): void {
+    this.clearSimpleElapsedTimer();
     this.spinner.succeed(chalk.green(message));
   }
 
@@ -260,6 +378,7 @@ export class ProgressTracker {
    * Simple fail method (backward compatible)
    */
   fail(message: string): void {
+    this.clearSimpleElapsedTimer();
     this.spinner.fail(chalk.red(message));
   }
 
@@ -267,6 +386,7 @@ export class ProgressTracker {
    * Info message
    */
   info(message: string): void {
+    this.clearSimpleElapsedTimer();
     this.spinner.info(chalk.blue(message));
   }
 
@@ -274,6 +394,7 @@ export class ProgressTracker {
    * Warning message
    */
   warn(message: string): void {
+    this.clearSimpleElapsedTimer();
     this.spinner.warn(chalk.yellow(message));
   }
 
@@ -281,6 +402,8 @@ export class ProgressTracker {
    * Stop spinner
    */
   stop(): void {
+    this.clearElapsedTimer();
+    this.clearSimpleElapsedTimer();
     this.spinner.stop();
   }
 
@@ -295,7 +418,7 @@ export class ProgressTracker {
   /**
    * Update stage by name or ID
    */
-  updateStage(stageId: string, progress: number, message: string): void {
+  updateStage(stageId: string, progress: number | null, message: string): void {
     this.updateStageProgress(stageId, progress, message);
   }
 
@@ -303,9 +426,17 @@ export class ProgressTracker {
    * Show indeterminate progress
    */
   showIndeterminate(message: string): void {
-    this.spinner.text = chalk.cyan(message);
+    if (this.simpleIndeterminateMessage !== message) {
+      this.simpleIndeterminateMessage = message;
+      this.simpleIndeterminateStartTime = Date.now();
+    }
+    this.renderSimpleIndeterminate();
     if (!this.spinner.isSpinning) {
       this.spinner.start();
+    }
+    if (!this.simpleElapsedTimer) {
+      this.simpleElapsedTimer = setInterval(() => this.renderSimpleIndeterminate(), 1000);
+      this.simpleElapsedTimer.unref?.();
     }
   }
 
@@ -313,6 +444,7 @@ export class ProgressTracker {
    * Show determinate progress
    */
   showDeterminate(percent: number, message: string): void {
+    this.clearSimpleElapsedTimer();
     const bar = formatProgressBar(percent / 100, 20);
     this.spinner.text = `${bar} ${chalk.cyan(message)}`;
     if (!this.spinner.isSpinning) {

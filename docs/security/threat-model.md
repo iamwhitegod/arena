@@ -24,6 +24,8 @@ Arena does not protect data from an administrator/root user, a fully compromised
 | Source media and transcripts | User workspace and `.arena/` cache | Local by default, private modes, explicit output paths |
 | Downloaded media | Network to yt-dlp/FFmpeg process | User-selected URL, subprocess argument arrays, timeouts |
 | Python runtime | PyPI to private virtual environment | Universal lockfiles, SHA-256 hashes, isolated runtime |
+| Local model data | Hugging Face to `~/.arena/models` | Allowlisted immutable revisions, exact sizes, SHA-256 verification, atomic private installation |
+| Native inference | Local model data to llama.cpp/CTranslate2 | Hash-locked builds, non-pickle formats, resource preflight, bounded context/threads/time, cooperative cancellation |
 | npm release | GitHub Actions to npm registry | Tests, allowlisted staging, audits, SBOMs, provenance |
 | Container | Host mounts to non-root process | Pinned base, read-only root, dropped capabilities, explicit writable mounts |
 
@@ -55,6 +57,14 @@ Paths and symlinks can redirect writes or cleanup outside the intended workspace
 
 When AI features are enabled, Arena sends audio or transcript content to the provider selected by the user. Media text may contain adversarial instructions; model output is untrusted data and must not be treated as shell commands, code, credentials, or authorization. Provider calls must be documented and secrets must never be included in prompts.
 
+### Local model and native-runtime compromise
+
+Local inference loads complex model data through native llama.cpp and CTranslate2 code. Arena installs only registry entries pinned to immutable revisions, exact byte counts, and SHA-256 digests beneath a private model root. Downloads reject unapproved redirects, traversal, symlinks, partial files, and insufficient disk. GGUF and CTranslate2 data are loaded from verified local paths; repository scripts, pickle artifacts, `trust_remote_code`, and implicit model aliases are not allowed.
+
+Native inference can exhaust CPU, RAM, VRAM, disk, or time. Arena applies one OS-independent minimum specification, detects Linux container memory limits, selects unknown hardware conservatively, bounds context and threads, preflights model memory and full GPU offload, limits outputs, enables cooperative timeout/cancellation, and runs only one local model call concurrently by default. Hard termination still belongs at an operating-system or worker-process boundary.
+
+Faster-whisper's bundled data-only Silero VAD is enabled with bounded parameters. Pyannote is excluded from this phase because it would add a separate PyTorch and gated-model trust boundary.
+
 ## Security assumptions
 
 - The user controls the local machine and chooses inputs and providers.
@@ -64,4 +74,4 @@ When AI features are enabled, Arena sends audio or transcript content to the pro
 
 ## Review triggers
 
-Update this model when Arena adds telemetry, plugins, local model execution, automatic publishing, a daemon, shared workspaces, remote job execution, new executable downloads, or any Arena Cloud data path.
+Update this model when Arena adds telemetry, plugins, a new local runtime or model format, automatic publishing, a daemon, shared workspaces, remote job execution, new executable downloads, or any Arena Cloud data path.

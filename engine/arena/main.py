@@ -89,7 +89,7 @@ def process_video(args):
         enhance_audio = os.getenv("ARENA_ENHANCE_AUDIO", "false").lower() == "true"
         if whisper_mode == "local":
             speech_binding_fingerprint = hashlib.sha256(
-                b"arena-transcription-v1:local:openai-whisper:base"
+                b"arena-transcription-v1:local:faster-whisper-base:verified"
             ).hexdigest()[:20]
         else:
             speech_binding_fingerprint = runtime_profile.fingerprint(
@@ -121,7 +121,7 @@ def process_video(args):
             reporter.report("Transcription", 0, "Starting transcription...")
 
             if whisper_mode == "local":
-                reporter.report("Transcription", 10, "Using local Whisper model (first run downloads model)...")
+                reporter.report("Transcription", 10, "Using verified local Whisper model...")
                 try:
                     transcriber = Transcriber(mode="local")
                 except ValueError as e:
@@ -138,7 +138,8 @@ def process_video(args):
                     reporter.error(
                         f"{e}\n"
                         "Option 1: Set API key: export OPENAI_API_KEY='sk-...'\n"
-                        "Option 2: Use local Whisper: export ARENA_WHISPER_MODE='local'"
+                        "Option 2: Install the verified local model and set "
+                        "ARENA_WHISPER_MODE='local'"
                     )
                     return 1
                 except ValueError as e:
@@ -174,7 +175,8 @@ def process_video(args):
                     video_path = enhanced_cache_path
 
                 except Exception as e:
-                    reporter.error(f"Audio enhancement failed: {str(e)}\nFalling back to original audio")
+                    from arena.cli.public_errors import format_public_error
+                    reporter.error(format_public_error(e, "Audio enhancement failed"))
                     enhance_audio = False
 
             if not enhance_audio:
@@ -189,7 +191,8 @@ def process_video(args):
                     json.dump(transcript, f, indent=2)
                 reporter.report("Transcription", 100, "Cached for future use")
             except Exception as e:
-                reporter.error(f"Transcription failed: {str(e)}")
+                from arena.cli.public_errors import format_public_error
+                reporter.error(format_public_error(e, "Transcription failed"))
                 return 1
 
         # Stage 3: AI Analysis
@@ -213,7 +216,8 @@ def process_video(args):
             )
             reporter.report("Analysis", 100, f"Identified {len(ai_segments)} interesting segments")
         except Exception as e:
-            reporter.error(f"AI analysis failed: {str(e)}")
+            from arena.cli.public_errors import format_public_error
+            reporter.error(format_public_error(e, "AI analysis failed"))
             return 1
 
         # Stage 4: Scoring
@@ -275,11 +279,8 @@ def process_video(args):
         return 0
 
     except Exception as e:
-        reporter.error(str(e))
-        from arena.providers.base import ProviderError
-        if not isinstance(e, ProviderError):
-            import traceback
-            traceback.print_exc(file=sys.stderr)
+        from arena.cli.public_errors import format_public_error
+        reporter.error(format_public_error(e))
         return 1
 
 
@@ -301,23 +302,15 @@ def main():
                                 help='Maximum clip duration in seconds')
     process_parser.add_argument('--clip-count', type=int, default=10,
                                 help='Target number of clips to generate')
-    process_parser.add_argument('--provider', choices=['openai'], default=None)
-    process_parser.add_argument('--chat-provider', choices=['openai'], default=None)
-    process_parser.add_argument(
-        '--chat-model', choices=['gpt-4o', 'gpt-4o-mini'], default='gpt-4o'
-    )
-    process_parser.add_argument('--overview-chat-provider', choices=['openai'], default=None)
-    process_parser.add_argument(
-        '--overview-chat-model', choices=['gpt-4o', 'gpt-4o-mini'], default=None
-    )
-    process_parser.add_argument('--embedding-provider', choices=['openai'], default=None)
-    process_parser.add_argument(
-        '--embedding-model',
-        choices=['text-embedding-3-small', 'text-embedding-3-large'],
-        default=None,
-    )
-    process_parser.add_argument('--transcription-provider', choices=['openai'], default=None)
-    process_parser.add_argument('--transcription-model', choices=['whisper-1'], default=None)
+    process_parser.add_argument('--provider', choices=['openai', 'local', 'ollama'], default=None)
+    process_parser.add_argument('--chat-provider', choices=['openai', 'local', 'ollama'], default=None)
+    process_parser.add_argument('--chat-model', default=None)
+    process_parser.add_argument('--overview-chat-provider', choices=['openai', 'local', 'ollama'], default=None)
+    process_parser.add_argument('--overview-chat-model', default=None)
+    process_parser.add_argument('--embedding-provider', choices=['openai', 'local', 'ollama'], default=None)
+    process_parser.add_argument('--embedding-model', default=None)
+    process_parser.add_argument('--transcription-provider', choices=['openai', 'local', 'ollama'], default=None)
+    process_parser.add_argument('--transcription-model', default=None)
 
     args = parser.parse_args()
 

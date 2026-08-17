@@ -90,6 +90,8 @@ async function copyArtifact() {
     'setup.py',
     'requirements.txt',
     'requirements.lock',
+    'requirements-local.txt',
+    'requirements-local.lock',
     'build-requirements.txt',
     'build-requirements.lock',
     'arena-cli',
@@ -120,7 +122,7 @@ async function verifyArtifact() {
     /^(package\.json|README\.md|LICENSE)$/,
     /^dist\//,
     /^scripts\/(postinstall|verify-package)\.cjs$/,
-    /^engine\/(setup\.py|requirements\.txt|requirements\.lock|build-requirements\.txt|build-requirements\.lock|arena-cli|MANIFEST\.sha256)$/,
+    /^engine\/(setup\.py|requirements\.txt|requirements\.lock|requirements-local\.txt|requirements-local\.lock|build-requirements\.txt|build-requirements\.lock|arena-cli|MANIFEST\.sha256)$/,
     /^engine\/arena\//,
   ];
   const forbidden = [
@@ -153,6 +155,8 @@ async function verifyArtifact() {
     'engine/setup.py',
     'engine/requirements.txt',
     'engine/requirements.lock',
+    'engine/requirements-local.txt',
+    'engine/requirements-local.lock',
     'engine/build-requirements.lock',
     'engine/arena/__init__.py',
     'engine/arena/cli/main.py',

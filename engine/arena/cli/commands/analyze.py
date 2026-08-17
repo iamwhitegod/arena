@@ -42,10 +42,12 @@ def run_analyze(args):
             transcription_model=getattr(args, 'transcription_model', None),
         )
     except ProviderAuthError as e:
-        print(f"❌ Error: {e}")
+        from arena.cli.public_errors import format_public_error
+        print(format_public_error(e))
         return 1
     except ValueError as e:
-        print(f"❌ Provider configuration failed: {e}")
+        from arena.cli.public_errors import format_public_error
+        print(format_public_error(e, "Provider configuration failed"))
         return 1
 
     print(f"\n🧠 Analyzing: {video_path.name}\n")
@@ -64,7 +66,8 @@ def run_analyze(args):
     else:
         print("🎤 Transcribing video...")
         transcriber = Transcriber(speech=inference.require_speech())
-        progress("transcription", 5, "Transcribing audio")
+        progress("transcription", 5, "Preparing audio")
+        progress("transcription", None, "Transcribing audio")
         transcript_data = transcriber.transcribe(video_path)
         progress("transcription", 100, "Transcription complete")
 
@@ -84,6 +87,7 @@ def run_analyze(args):
         # Run analysis
         print("⚡ Running hybrid analysis...\n")
         progress("analysis", 10, "Scoring candidate moments")
+        progress("analysis", None, "Analyzing transcript with AI")
         results = hybrid.analyze_video(
             video_path=video_path,
             transcript_data=transcript_data,
@@ -109,11 +113,6 @@ def run_analyze(args):
         return 0
 
     except Exception as e:
-        from arena.providers.base import ProviderError
-        if isinstance(e, ProviderError):
-            print(f"\n❌ Analysis failed: {e}")
-        else:
-            print(f"\n❌ Analysis failed: {e}")
-            import traceback
-            traceback.print_exc()
+        from arena.cli.public_errors import format_public_error
+        print(f"\n{format_public_error(e, 'Analysis failed')}")
         return 1

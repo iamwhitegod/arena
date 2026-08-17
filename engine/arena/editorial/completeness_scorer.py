@@ -17,6 +17,8 @@ from .thought_unit import (
     PRODUCTION_COMPLETENESS_THRESHOLD,
     PRODUCTION_COMPONENT_THRESHOLD,
     ThoughtUnit,
+    safe_float,
+    safe_string_list,
 )
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
@@ -206,10 +208,12 @@ class CompletenessScorer:
         # Parse response
         try:
             result = response.parsed
+            if not isinstance(result, dict):
+                raise TypeError("Scoring response must be an object")
 
-            premise_score = float(result.get('premise_clarity', 5.0))
-            claim_score = float(result.get('claim_strength', 5.0))
-            resolution_score = float(result.get('resolution_closure', 5.0))
+            premise_score = safe_float(result.get('premise_clarity'), 5.0, 0.0, 10.0)
+            claim_score = safe_float(result.get('claim_strength'), 5.0, 0.0, 10.0)
+            resolution_score = safe_float(result.get('resolution_closure'), 5.0, 0.0, 10.0)
 
             # Calculate completeness score
             completeness_score = (premise_score + claim_score + resolution_score) / 30.0
@@ -229,19 +233,20 @@ class CompletenessScorer:
                 'resolution_closure': resolution_score,
                 'completeness_score': completeness_score,
                 'meets_production_standard': meets_production,
-                'reasoning': result.get('reasoning', {}),
-                'suggestions': result.get('suggestions', [])
+                'reasoning': result.get('reasoning', {})
+                if isinstance(result.get('reasoning', {}), dict) else {},
+                'suggestions': safe_string_list(result.get('suggestions')),
             }
 
-        except (KeyError, ValueError) as e:
-            print(f"      ⚠️  Failed to parse scoring response: {e}")
+        except (KeyError, TypeError, ValueError):
+            print("      ⚠️  Failed to parse scoring response")
             return {
                 'premise_clarity': 5.0,
                 'claim_strength': 5.0,
                 'resolution_closure': 5.0,
                 'completeness_score': 0.5,
                 'meets_production_standard': False,
-                'reasoning': {'error': f'Parse error: {e}'},
+                'reasoning': {'error': 'Parse error'},
                 'suggestions': []
             }
 

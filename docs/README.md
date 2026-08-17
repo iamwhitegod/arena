@@ -4,7 +4,7 @@ Arena is an AI-powered, open-source, local-first video clipping engine for the t
 
 ## Why local-first?
 
-Arena starts processing from the terminal without requiring an upfront cloud upload, saving time and bandwidth—especially on unreliable connections. Source videos, transcripts, analysis results, and generated clips remain on the user's machine unless they explicitly use an external provider or Arena Cloud. This architecture also supports a future path for optional local AI models while keeping Arena useful to both creators and developers.
+Arena starts processing from the terminal without requiring an upfront cloud upload, saving time and bandwidth—especially on unreliable connections. Source videos, transcripts, analysis results, and generated clips remain on the user's machine unless they explicitly use an external provider or Arena Cloud. Optional verified local chat, embedding, and transcription models are available on Linux, macOS, and Windows; see [Local inference](guides/local-inference.md).
 
 ## Start here
 
@@ -64,6 +64,7 @@ Cloud documents describe proposed product boundaries and are not commitments for
 
 - [Contributing](../CONTRIBUTING.md)
 - [Release process](./development/release-process.md)
+- [Cross-platform installation readiness work plan](./development/plans/installation-readiness-workplan.md)
 - [Installation verification plan](./development/plans/installation-verification.md)
 - [OSS hardening plan](./development/plans/oss-hardening.md)
 - [Repository boundary implementation plan](./development/plans/repository-boundary-implementation.md)

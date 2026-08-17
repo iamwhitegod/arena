@@ -55,25 +55,22 @@ def _format_download_error(error_msg: str, url: str, command: str, cookies_from_
     if 'n challenge' in error_msg or 'page needs to be reloaded' in error_msg:
         if cookies_from_browser:
             return (
-                f"yt-dlp failed (YouTube challenge — cookies from {cookies_from_browser} didn't help):\n{error_msg}\n\n"
-                f"URL: {url}\n\n"
+                f"yt-dlp failed (YouTube challenge — cookies from {cookies_from_browser} didn't help).\n\n"
                 f"Fixes to try:\n"
                 f"  1. Fully quit {cookies_from_browser} (not just close — quit the app) and retry\n"
                 f"  2. Update yt-dlp:  pip install -U yt-dlp\n"
                 f"  3. Try a different browser:  --cookies-from-browser chrome"
             )
         return (
-            f"yt-dlp failed (YouTube challenge solving failed):\n{error_msg}\n\n"
-            f"URL: {url}\n\n"
+            "yt-dlp failed (YouTube challenge solving failed).\n\n"
             f"Fixes to try:\n"
             f"  1. Update yt-dlp:  pip install -U yt-dlp\n"
-            f"  2. Use cookies:    arena {command} \"{url}\" --cookies-from-browser chrome"
+                f"  2. Retry the same arena {command} command with --cookies-from-browser chrome"
         )
     if 'Sign in to confirm' in error_msg or 'HTTP Error 429' in error_msg:
         if cookies_from_browser:
             return (
-                f"yt-dlp failed (auth required — cookies from {cookies_from_browser} didn't help):\n{error_msg}\n\n"
-                f"URL: {url}\n\n"
+                f"yt-dlp failed (auth required — cookies from {cookies_from_browser} didn't help).\n\n"
                 f"Fixes to try:\n"
                 f"  1. Fully quit {cookies_from_browser} (not just close — quit the app) and retry\n"
                 f"  2. Update yt-dlp:  pip install -U yt-dlp\n"
@@ -81,12 +78,11 @@ def _format_download_error(error_msg: str, url: str, command: str, cookies_from_
                 f"  4. Set a default:  arena config set cookies_from_browser {cookies_from_browser}"
             )
         return (
-            f"yt-dlp failed (authentication required):\n{error_msg}\n\n"
-            f"URL: {url}\n\n"
+            "yt-dlp failed (authentication required).\n\n"
             f"Fix: Use --cookies-from-browser to authenticate:\n"
-            f"  arena {command} \"{url}\" --cookies-from-browser chrome"
+            f"  Retry the same arena {command} command with --cookies-from-browser chrome"
         )
-    return f"yt-dlp failed to download:\n{error_msg}\n\nURL: {url}"
+    return "yt-dlp failed to download the requested media."
 
 
 def _url_cache_key(url: str) -> str:

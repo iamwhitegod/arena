@@ -88,14 +88,11 @@ export async function extractAudioCommand(
         cookiesFromBrowser: options.cookiesFromBrowser || globalConfig?.cookies_from_browser,
       },
       (update) => {
-        if (update.progress !== undefined) {
+        if (update.progress !== null) {
           progress.showDeterminate(update.progress, update.message);
         } else {
           progress.showIndeterminate(update.message);
         }
-      },
-      (error) => {
-        console.error(chalk.red(error));
       }
     );
 

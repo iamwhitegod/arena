@@ -46,6 +46,8 @@ class FakeChatModel(ChatModel):
         responses: Optional[list[ChatResponse]] = None,
         default_response: Optional[ChatResponse] = None,
         concurrency: int = 1,
+        context_window_tokens: int = 128_000,
+        max_output_tokens: int = 8_192,
     ):
         self._responses = list(responses or [])
         self._default = default_response or ChatResponse(
@@ -61,6 +63,8 @@ class FakeChatModel(ChatModel):
         self._call_index = 0
         self._calls: list[dict] = []
         self._concurrency = concurrency
+        self._context_window_tokens = context_window_tokens
+        self._max_output_tokens = max_output_tokens
 
     def complete(
         self,
@@ -68,12 +72,14 @@ class FakeChatModel(ChatModel):
         temperature: float = 0.3,
         response_mode: ResponseMode = ResponseMode.TEXT,
         json_schema: Optional[dict] = None,
+        max_output_tokens: Optional[int] = None,
     ) -> ChatResponse:
         self._calls.append({
             "messages": messages,
             "temperature": temperature,
             "response_mode": response_mode,
             "json_schema": json_schema,
+            "max_output_tokens": max_output_tokens,
         })
         if self._call_index < len(self._responses):
             response = self._responses[self._call_index]
@@ -87,6 +93,14 @@ class FakeChatModel(ChatModel):
     @property
     def concurrency_hint(self) -> int:
         return self._concurrency
+
+    @property
+    def context_window_tokens(self) -> int:
+        return self._context_window_tokens
+
+    @property
+    def max_output_tokens(self) -> int:
+        return self._max_output_tokens
 
     @property
     def calls(self) -> list[dict]:

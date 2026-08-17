@@ -1,0 +1,7 @@
+# Local inference dependencies. Compile together with the core requirements so
+# one hash-verified environment has a single, compatible resolution.
+-r requirements.txt
+
+llama-cpp-python==0.3.34
+faster-whisper==1.2.1
+ctranslate2==4.8.1

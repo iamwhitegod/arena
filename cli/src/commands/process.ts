@@ -9,14 +9,18 @@ import { formatErrorWithHelp } from '../errors/formatter.js';
 import { isArenaError } from '../errors/index.js';
 import { isUrl } from '../utils/url.js';
 import { commandHeader } from '../ui/output.js';
-import { requiredProviders, type ProviderSelectors } from '../core/providers.js';
+import {
+  requiredProviders,
+  resolveProviderSelectors,
+  type ProviderSelectors,
+} from '../core/providers.js';
 
 interface ProcessOptions extends ProviderSelectors {
   output?: string;
   numClips?: string;
   min?: string;
   max?: string;
-  editorialModel?: 'gpt-4o' | 'gpt-4o-mini';
+  editorialModel?: string;
   exportLayers?: boolean;
   fast?: boolean;
   cache?: boolean; // Note: commander negates --no-cache to cache: false
@@ -46,17 +50,20 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
     const configManager = new ConfigManager();
     await configManager.ensureGlobalConfig();
     const globalConfig = await configManager.getGlobalConfig();
-    const selectors: ProviderSelectors = {
-      provider: options.provider || globalConfig.provider,
-      chatProvider: options.chatProvider || globalConfig.chat_provider,
-      chatModel: options.chatModel || options.editorialModel || globalConfig.chat_model || 'gpt-4o',
-      overviewChatProvider: options.overviewChatProvider || globalConfig.overview_chat_provider,
-      overviewChatModel: options.overviewChatModel || globalConfig.overview_chat_model,
-      embeddingProvider: options.embeddingProvider || globalConfig.embedding_provider,
-      embeddingModel: options.embeddingModel || globalConfig.embedding_model,
-      transcriptionProvider: options.transcriptionProvider || globalConfig.transcription_provider,
-      transcriptionModel: options.transcriptionModel || globalConfig.transcription_model,
-    };
+    const selectors = resolveProviderSelectors(
+      {
+        ...options,
+        chatModel: options.chatModel || options.editorialModel,
+      },
+      globalConfig
+    );
+    const providerNames = requiredProviders(selectors, [
+      'chat',
+      'overviewChat',
+      'embedding',
+      'transcription',
+    ]);
+    await configManager.populateRequiredProviderCredentials(providerNames);
 
     commandHeader('Arena', [
       ['Input', isUrl(videoPath) ? videoPath : path.basename(absoluteVideoPath)],
@@ -74,12 +81,7 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
       minDuration: options.min,
       maxDuration: options.max,
       padding: options.padding,
-      requiredProviders: requiredProviders(selectors, [
-        'chat',
-        'overviewChat',
-        'embedding',
-        'transcription',
-      ]),
+      requiredProviders: providerNames,
       enginePath: bridge.getEnginePath(),
     });
 
@@ -134,9 +136,6 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
       },
       (update) => {
         progress.updateStage(update.stage, update.progress, update.message);
-      },
-      (error) => {
-        console.error(chalk.red(error));
       }
     );
 

@@ -598,7 +598,7 @@ TypeScript passes only non-secret selectors to Python. Existing owner-only crede
 
 ## Phase 2: Local Inference Backends
 
-Model/runtime recommendations (Qwen, llama.cpp, faster-whisper, Silero, pyannote) belong here, not in Phase 1 contracts.
+Model/runtime recommendations (Qwen, llama.cpp, faster-whisper, and faster-whisper's bundled Silero VAD) belong here, not in Phase 1 contracts. Pyannote is explicitly deferred: speaker diarization needs a speaker-aware application contract, a separate PyTorch trust boundary, and model-license/credential review; it is never downloaded implicitly by Phase 2.
 
 ### 2.1 Local adapters
 
@@ -618,15 +618,14 @@ Model/runtime recommendations (Qwen, llama.cpp, faster-whisper, Silero, pyannote
 | `models/manager.py` | Download, validate, locate in `~/.arena/models/` |
 | `models/hardware.py` | GPU/RAM detection, quantization recommendation |
 
+The hardware policy is operating-system independent: 4 logical CPU cores, 8 GiB RAM, and 8 GiB free disk are the minimum supported capacity; 8 logical cores, 16 GiB RAM, and 16 GiB free disk are recommended for best results. GPU acceleration is optional and selected only when both hardware capacity and runtime support are detected.
+
 ### 2.3 Dependencies
 
-```python
-# setup.py extras_require
-extras_require={
-    "local": ["llama-cpp-python>=0.3.0", "faster-whisper>=1.0.0"],
-    "ollama": ["requests>=2.28.0"],  # not a current direct dep
-}
-```
+`setup.py` exposes the optional `local` and `ollama` extras. The npm-managed
+setup path installs the complete local graph from `requirements-local.lock`
+with hashes and no build isolation; native build tooling is independently
+hash-locked in `build-requirements.lock`.
 
 ---
 
@@ -680,6 +679,8 @@ CLI commands: `arena models install <pack>`, `arena models list`, `arena models 
 6. Manual: `arena transcribe test.mp4` proves chat/embedding adapters are not constructed
 7. (Phase 2+) `arena process test.mp4 --provider local` produces clips
 8. (Phase 3) `arena process test.mp4 --offline` works with network access denied at the process boundary
+
+Phase 2 release candidates additionally run `tests/integration/test_local_runtime_smoke.py` with `ARENA_RUN_LOCAL_INFERENCE_TESTS=1` and an installed verified pack. The ordinary suite keeps this multi-gigabyte native-runtime gate disabled.
 
 ---
 

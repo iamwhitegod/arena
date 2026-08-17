@@ -89,6 +89,7 @@ def run_extract_audio(args):
 
         # Run FFmpeg
         progress("extraction", 10, "Extracting audio")
+        progress("extraction", None, "Extracting audio")
         result = subprocess.run(
             command,
             stdout=subprocess.PIPE,
@@ -112,5 +113,6 @@ def run_extract_audio(args):
         print(f"\n❌ FFmpeg error: {e.stderr.decode('utf-8')}")
         return 1
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        from arena.cli.public_errors import format_public_error
+        print(f"\n{format_public_error(e)}")
         return 1

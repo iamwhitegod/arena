@@ -1,6 +1,7 @@
 """Tests for ProviderRegistry, InferenceBundle, and capability-aware resolution."""
 
 import unittest
+from unittest.mock import MagicMock
 
 from arena.providers.base import ChatModel, EmbeddingModel, ProviderAuthError, SpeechModel
 from arena.providers.credentials import EnvironmentCredentialResolver
@@ -54,6 +55,23 @@ class TestInferenceBundle(unittest.TestCase):
         profile = RuntimeProfile.default_openai()
         bundle = InferenceBundle(profile=profile, chat=FakeChatModel())
         self.assertIs(bundle.profile, profile)
+
+    def test_close_releases_each_shared_model_once(self):
+        shared_chat = MagicMock()
+        speech = MagicMock()
+        bundle = InferenceBundle(
+            chat=shared_chat,
+            overview_chat=shared_chat,
+            speech=speech,
+        )
+
+        bundle.close()
+
+        shared_chat.close.assert_called_once_with()
+        speech.close.assert_called_once_with()
+        self.assertIsNone(bundle.chat)
+        self.assertIsNone(bundle.overview_chat)
+        self.assertIsNone(bundle.speech)
 
 
 class TestProviderRegistry(unittest.TestCase):

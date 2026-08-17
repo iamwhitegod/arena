@@ -76,7 +76,67 @@ describe('PythonBridge', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
+  });
+
+  describe('child environment isolation', () => {
+    it('passes only required provider credentials to inference commands', async () => {
+      vi.stubEnv('OPENAI_API_KEY', 'openai-canary');
+      vi.stubEnv('AWS_SECRET_ACCESS_KEY', 'aws-canary');
+      vi.stubEnv('DATABASE_URL', 'postgres://secret');
+      const mockProc = createMockProcess();
+      mockSpawn.mockReturnValue(mockProc);
+
+      const promise = bridge.runProcess({
+        videoPath: '/test.mp4',
+        outputDir: '/out',
+        provider: 'openai',
+      });
+
+      const env = mockSpawn.mock.calls[0][2].env as NodeJS.ProcessEnv;
+      expect(env.OPENAI_API_KEY).toBe('openai-canary');
+      expect(env.ARENA_MODEL_ROOT).toBe('/tmp/arena/models');
+      expect(env.AWS_SECRET_ACCESS_KEY).toBeUndefined();
+      expect(env.DATABASE_URL).toBeUndefined();
+      mockProc.emit('close', 0);
+      await promise;
+    });
+
+    it('does not pass provider credentials to non-inference commands', async () => {
+      vi.stubEnv('OPENAI_API_KEY', 'openai-canary');
+      const mockProc = createMockProcess();
+      mockSpawn.mockReturnValue(mockProc);
+
+      const promise = bridge.runGenerate({
+        videoPath: '/test.mp4',
+        analysisPath: '/analysis.json',
+        outputDir: '/out',
+      });
+
+      const env = mockSpawn.mock.calls[0][2].env as NodeJS.ProcessEnv;
+      expect(env.OPENAI_API_KEY).toBeUndefined();
+      expect(env.PYTHONUNBUFFERED).toBe('1');
+      mockProc.emit('close', 0);
+      await promise;
+    });
+
+    it('isolates dependency checks from credentials', async () => {
+      vi.stubEnv('OPENAI_API_KEY', 'openai-canary');
+      vi.stubEnv('SERVICE_TOKEN', 'service-canary');
+      const mockProc = createMockProcess();
+      mockSpawn.mockReturnValue(mockProc);
+
+      const promise = bridge.checkDependencies();
+
+      const env = mockSpawn.mock.calls[0][2].env as NodeJS.ProcessEnv;
+      expect(env.OPENAI_API_KEY).toBeUndefined();
+      expect(env.SERVICE_TOKEN).toBeUndefined();
+      expect(env.PYTHONPATH).toBe('/test/engine');
+      mockProc.stdout.emit('data', Buffer.from('ok'));
+      mockProc.emit('close', 0);
+      await promise;
+    });
   });
 
   describe('stdout JSON parsing', () => {
@@ -179,6 +239,30 @@ describe('PythonBridge', () => {
       });
     });
 
+    it('should preserve indeterminate progress updates', async () => {
+      const mockProc = createMockProcess();
+      mockSpawn.mockReturnValue(mockProc);
+
+      const onProgress = vi.fn();
+      const promise = bridge.runProcess({ videoPath: '/test.mp4', outputDir: '/out' }, onProgress);
+
+      mockProc.stdout.emit(
+        'data',
+        Buffer.from(
+          '{"type":"progress","stage":"transcription","progress":null,"message":"Transcribing audio"}\n'
+        )
+      );
+      mockProc.emit('close', 0);
+
+      await promise;
+
+      expect(onProgress).toHaveBeenCalledWith({
+        stage: 'transcription',
+        progress: null,
+        message: 'Transcribing audio',
+      });
+    });
+
     it('should resolve with data for result updates', async () => {
       const mockProc = createMockProcess();
       mockSpawn.mockReturnValue(mockProc);
@@ -257,6 +341,84 @@ describe('PythonBridge', () => {
 
       await expect(promise).rejects.toThrow(ProcessingError);
       expect(onError).toHaveBeenCalledWith('RuntimeError: processing failed');
+    });
+
+    it('should prefer the public error over native diagnostics and progress output', async () => {
+      const mockProc = createMockProcess();
+      mockSpawn.mockReturnValue(mockProc);
+      const onError = vi.fn();
+      const promise = bridge.runProcess(
+        { videoPath: '/test.mp4', outputDir: '/out' },
+        undefined,
+        onError
+      );
+
+      mockProc.stderr.emit(
+        'data',
+        Buffer.from(
+          'ggml_metal_device_init: GPU name: MTL0\n' + '🎤 Transcribing:  20%|██        | 06:04\r'
+        )
+      );
+      mockProc.stdout.emit(
+        'data',
+        Buffer.from(
+          "❌ Transcription failed [timeout; retryable=true; ref=bb7b08805307]: Local transcription exceeded Arena's time limit.\n"
+        )
+      );
+      mockProc.emit('close', 1);
+
+      await expect(promise).rejects.toMatchObject({
+        code: 'TIMEOUT',
+        message:
+          "Transcription failed [timeout; retryable=true; ref=bb7b08805307]: Local transcription exceeded Arena's time limit.",
+      });
+      expect(onError).toHaveBeenCalledWith(
+        "Transcription failed [timeout; retryable=true; ref=bb7b08805307]: Local transcription exceeded Arena's time limit."
+      );
+    });
+
+    it('should classify local resource failures with actionable help', async () => {
+      const mockProc = createMockProcess();
+      mockSpawn.mockReturnValue(mockProc);
+      const promise = bridge.runProcess({ videoPath: '/test.mp4', outputDir: '/out' });
+
+      mockProc.stdout.emit(
+        'data',
+        Buffer.from(
+          '❌ Provider setup failed [local_resource_limit; retryable=false; ref=df578bae02d4]: Local model needs about 2.6 GiB but only 2.3 GiB RAM is available\n'
+        )
+      );
+      mockProc.emit('close', 1);
+
+      await expect(promise).rejects.toMatchObject({
+        code: 'LOCAL_RESOURCE_LIMIT',
+        suggestion:
+          'Close memory-intensive apps, use the lite model pack, or move one capability to a cloud provider',
+      });
+    });
+
+    it('should give analysis-specific timeout guidance', async () => {
+      const mockProc = createMockProcess();
+      mockSpawn.mockReturnValue(mockProc);
+      const promise = bridge.runProcess({
+        videoPath: '/test.mp4',
+        outputDir: '/out',
+        provider: 'local',
+      });
+
+      mockProc.stdout.emit(
+        'data',
+        Buffer.from(
+          "❌ Analysis failed [timeout; retryable=false; ref=test]: Local inference exceeded Arena's time limit.\n"
+        )
+      );
+      mockProc.emit('close', 1);
+
+      await expect(promise).rejects.toMatchObject({
+        code: 'TIMEOUT',
+        suggestion:
+          'Retry with fewer clips, install a faster local model pack, or use --chat-provider openai',
+      });
     });
   });
 

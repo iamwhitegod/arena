@@ -13,7 +13,13 @@ This ensures clips work on social media where viewers have no prior context.
 """
 
 from typing import Dict, List
-from .thought_unit import ThoughtUnit, DependencyLevel
+from .thought_unit import (
+    ThoughtUnit,
+    DependencyLevel,
+    safe_float,
+    safe_string_list,
+    safe_text,
+)
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
@@ -165,30 +171,41 @@ class StandaloneValidator:
         # Parse response
         try:
             result = response.parsed
+            if not isinstance(result, dict):
+                raise TypeError("Standalone response must be an object")
 
             # Map to dependency level
             dependency_level_str = result.get('dependency_level', 'needs_context')
+            if not isinstance(dependency_level_str, str):
+                dependency_level_str = 'needs_context'
             dependency_level = self._map_dependency_level(dependency_level_str)
+            standalone_score = safe_float(result.get('standalone_score'), 0.5)
+            reported_standalone = result.get('is_standalone')
+            is_standalone = (
+                reported_standalone is True
+                and dependency_level == DependencyLevel.STANDALONE
+                and standalone_score >= 0.55
+            )
 
             return {
-                'is_standalone': result.get('is_standalone', False),
+                'is_standalone': is_standalone,
                 'dependency_level': dependency_level,
-                'standalone_score': result.get('standalone_score', 0.5),
-                'issues': result.get('issues', []),
-                'unresolved_refs': result.get('unresolved_refs', []),
-                'reasoning': result.get('reasoning', ''),
-                'confidence': result.get('confidence', 0.5)
+                'standalone_score': standalone_score,
+                'issues': safe_string_list(result.get('issues')),
+                'unresolved_refs': safe_string_list(result.get('unresolved_refs')),
+                'reasoning': safe_text(result.get('reasoning')),
+                'confidence': safe_float(result.get('confidence'), 0.5),
             }
 
-        except (KeyError, TypeError) as e:
-            print(f"      ⚠️  Failed to parse standalone response: {e}")
+        except (KeyError, TypeError):
+            print("      ⚠️  Failed to parse standalone response")
             return {
                 'is_standalone': False,
                 'dependency_level': DependencyLevel.NEEDS_CONTEXT,
                 'standalone_score': 0.5,
                 'issues': ['Parse error'],
                 'unresolved_refs': [],
-                'reasoning': f'Parse error: {e}',
+                'reasoning': 'Parse error',
                 'confidence': 0.0
             }
 

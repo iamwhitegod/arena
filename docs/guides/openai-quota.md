@@ -1,136 +1,48 @@
-# OpenAI API Quota Solutions
+# OpenAI API Quota Options
 
-You exceeded your OpenAI API quota. Here are your options:
+If OpenAI reports `insufficient_quota`, either add provider credits or move one or more capabilities to a verified local model. Arena never falls back from local inference to OpenAI automatically.
 
-## Option 1: Use Local Whisper (Free Transcription!)
+## Use verified local transcription
 
-Local Whisper is **FREE** but uses your CPU/GPU instead of the API.
-
-### Setup (in progress):
+Install the hash-locked local runtime dependencies and a verified model pack:
 
 ```bash
-# Installing now... wait for completion
-cd engine
-pip install openai-whisper  # Running in background
+arena setup --local --model-pack lite
 ```
 
-### Once installed, use local mode:
+Then keep OpenAI for editorial analysis while transcribing locally:
 
 ```bash
-# Set environment variable to use local Whisper
-export ARENA_WHISPER_MODE="local"
-
-# You still need OpenAI API key for GPT-4 analysis
-# But it costs much less (~$0.05-0.15 per video vs $0.36-0.51 total)
-export OPENAI_API_KEY="sk-your-key"  # Keep for AI analysis
-
-# Process video
-cd cli
-npm run dev process /path/to/video.mp4
+export OPENAI_API_KEY="your-key"
+arena process video.mp4 --transcription-provider local
 ```
 
-### Cost Comparison:
+The legacy `ARENA_WHISPER_MODE=local` selector also uses this verified faster-whisper installation. It no longer installs or downloads `openai-whisper` implicitly.
 
-| Mode | Transcription Cost | AI Analysis Cost | Total (60min video) |
-|------|-------------------|------------------|---------------------|
-| **API Mode** | $0.36 | $0.10 | **$0.46** |
-| **Local Mode** | FREE | $0.10 | **$0.10** ⭐ |
+## Add OpenAI credits
 
-## Option 2: Add Credits to OpenAI
-
-1. Go to: https://platform.openai.com/settings/organization/billing
-2. Click "Add payment method"
-3. Add $5-10 in credits (plenty for many videos)
-4. Wait a few minutes for activation
-5. Run Arena normally
-
-### API Mode (default):
+Add or update billing in the [OpenAI platform settings](https://platform.openai.com/settings/organization/billing), then run Arena with its default OpenAI profile:
 
 ```bash
-export OPENAI_API_KEY="sk-your-key-with-credits"
-# No need to set ARENA_WHISPER_MODE
-
-cd cli
-npm run dev process /path/to/video.mp4
+export OPENAI_API_KEY="your-key"
+arena process video.mp4
 ```
 
-## Option 3: Hybrid Mode
+## Fully local inference
 
-**Best of both worlds**: Free transcription + AI analysis
+After installing a verified Arena model pack, select the local provider for every capability:
 
 ```bash
-# Use local Whisper (free) but OpenAI for AI analysis
-export ARENA_WHISPER_MODE="local"
-export OPENAI_API_KEY="sk-your-key"  # Need for GPT-4 analysis
-
-cd cli
-npm run dev process /path/to/video.mp4
+arena process video.mp4 --provider local
 ```
 
-This costs ~$0.10 per video instead of $0.46!
+Local inference uses your machine's CPU, GPU, RAM, and storage. Arena validates model hashes and applies bounded context, thread, output, response, and transcription limits before use.
 
-## What Requires OpenAI API?
-
-- ✅ **Whisper transcription** - Can use local mode (free)
-- ❌ **GPT-4 analysis** - REQUIRES OpenAI API (no local alternative yet)
-
-**Bottom line**: You need at least some OpenAI credits for the AI analysis part. But using local Whisper saves ~75% on costs!
-
-## Checking Your Status
-
-Check if local Whisper is installed:
-
-```bash
-cd engine
-python3 -c "import whisper; print('✓ Local Whisper ready!')"
-```
-
-Check OpenAI credits:
-- Visit: https://platform.openai.com/usage
-- Need at least $0.10-0.20 for one video analysis
+See [Local inference](local-inference.md) for Linux, macOS, and Windows requirements, model tiers, Silero VAD behavior, and provenance.
 
 ## Troubleshooting
 
-### "insufficient_quota" error
-
-Your OpenAI account has no credits. Options:
-1. Add payment method at platform.openai.com
-2. Use local Whisper to reduce costs (still need $0.10+ for AI)
-
-### Local Whisper is slow
-
-First run downloads the model (~100MB). After that:
-- Base model: ~2-3x realtime (10min video = 20-30min processing)
-- Tiny model: ~1x realtime (faster but less accurate)
-
-To use tiny model, edit `engine/arena/audio/transcriber.py` line 77:
-```python
-model = whisper.load_model("tiny")  # Change from "base"
-```
-
-### "ImportError: No module named 'whisper'"
-
-Wait for pip install to complete, or run:
-```bash
-cd engine
-pip install openai-whisper
-```
-
-## Recommended Setup for Cost Savings
-
-```bash
-# ~/.zshrc or ~/.bashrc
-export ARENA_WHISPER_MODE="local"  # Free transcription
-export OPENAI_API_KEY="sk-your-key"  # For AI analysis only
-
-# Add $5-10 credits for ~50-100 video analyses
-```
-
-Then just run:
-```bash
-arena process video.mp4  # Uses local Whisper + OpenAI AI
-```
-
----
-
-**Next Steps**: Once the pip install completes, try local mode!
+- `local_no_model` means the selected verified model is not installed beneath `~/.arena/models` (or `ARENA_MODEL_ROOT`).
+- `local_unavailable` means the hash-locked local runtime dependencies are not installed in the Python environment running Arena.
+- `model_hash_mismatch` means an artifact is corrupt or differs from Arena's pinned registry metadata; remove that artifact and reinstall it rather than bypassing verification.
+- `insufficient_quota` still applies to any capability that remains bound to OpenAI.

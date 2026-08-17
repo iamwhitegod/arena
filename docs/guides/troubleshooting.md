@@ -336,23 +336,27 @@ arena process video.mp4 -n 3  # Instead of default 5
 
 **Solution**: Check internet connection speed
 
-### "Memory error" or "Out of memory"
+### "Not enough memory for local inference"
 
-**Symptoms**: Process crashes with memory-related error
+**Symptoms**: Arena reports `local_resource_limit` while loading a local speech, chat, or embedding model.
 
-**Cause**: Video file is too large or system has insufficient RAM
+**Cause**: The selected model's bounded memory estimate exceeds the memory that the operating system currently reports as available. Arena explicitly unloads local speech weights before loading analysis models and uses the macOS system-pressure estimate for reclaimable unified memory.
 
-**Solution 1**: Use fast mode (stream copy)
+**Solution 1**: Close memory-intensive applications, then retry. Existing transcription work is cached and should be reused.
+
+**Solution 2**: Install or select the lite model pack:
+
 ```bash
-arena process video.mp4 --fast
+arena setup --local --model-pack lite
 ```
 
-**Solution 2**: Reduce video resolution before processing
+**Solution 3**: Keep transcription local but move analysis to the configured cloud provider:
+
 ```bash
-# Scale video to 720p
-ffmpeg -i video.mp4 -vf scale=-1:720 -c:a copy video_720p.mp4
-arena process video_720p.mp4
+arena process video.mp4 --transcription-provider local
 ```
+
+`--fast` and reducing video resolution can reduce encoding work, but they do not reduce the memory required to load an inference model.
 
 ---
 
@@ -416,10 +420,10 @@ arena process video.mp4 --debug
 This will show:
 - Full error stack traces
 - The failing command and stage
-- Buffered engine diagnostics when processing fails
-- Additional CLI error context
+- Arena's public error code and correlation reference
+- Additional CLI error context without dumping native runtime chatter
 
-Successful runs intentionally suppress raw Python library warnings and subsystem logs. Arena retains those diagnostics for failures so they do not overwrite the live progress display. See [CLI output and states](../reference/cli-output.md) for the output contract.
+Arena intentionally suppresses raw Python library warnings and subsystem logs so they do not overwrite the live progress display or displace the actionable failure reason. See [CLI output and states](../reference/cli-output.md) for the output contract.
 
 ---
 

@@ -24,8 +24,8 @@ _SENSITIVE_OPTION_RE = re.compile(
 _PROVIDER_OPTION_ALLOWLIST: dict[str, frozenset[str]] = {
     "openai": frozenset(),
     "local": frozenset({
-        "compute_type", "concurrency", "device", "n_ctx", "n_gpu_layers",
-        "n_threads", "threads",
+        "compute_type", "device", "n_ctx", "n_gpu_layers",
+        "n_threads", "threads", "timeout_seconds",
     }),
     "ollama": frozenset({"concurrency", "timeout_seconds"}),
     "fake": frozenset(),
@@ -67,6 +67,32 @@ def _json_safe(value):
     if isinstance(value, tuple):
         return [_json_safe(item) for item in value]
     return value
+
+
+_PROVIDER_DEFAULT_MODELS: dict[str, dict[str, str]] = {
+    "local": {
+        "chat": "qwen3.5-4b-q4_k_m",
+        "embedding": "nomic-embed-text-v1.5-q4_k_m",
+        "transcription": "faster-whisper-small",
+    },
+    "ollama": {
+        "chat": "llama3.2",
+        "embedding": "nomic-embed-text",
+    },
+}
+
+
+def _provider_default_model(provider: str, capability: str, openai_default: str) -> str:
+    """Return the default model for a provider/capability, falling back to the OpenAI default."""
+    provider_defaults = _PROVIDER_DEFAULT_MODELS.get(provider)
+    if provider_defaults and capability in provider_defaults:
+        if provider == "local":
+            from arena.models.selection import active_model_for_capability
+
+            model_capability = "speech" if capability == "transcription" else capability
+            return active_model_for_capability(model_capability)
+        return provider_defaults[capability]
+    return openai_default
 
 
 class Capability(str, Enum):
@@ -165,6 +191,16 @@ class RuntimeProfile:
                     f"Unsupported OpenAI {capability} model: '{binding.model}'"
                 )
 
+        # Providers that lack certain capabilities
+        _unsupported = {"ollama": {"transcription"}}
+        for capability, binding in bindings.items():
+            blocked = _unsupported.get(binding.provider, set())
+            if capability in blocked:
+                raise ValueError(
+                    f"Provider '{binding.provider}' does not support {capability}. "
+                    f"Use --transcription-provider to select a different provider."
+                )
+
     def binding_for(self, capability: Capability) -> ModelBinding:
         """Look up the binding for a capability."""
         if capability == Capability.CHAT:
@@ -224,16 +260,23 @@ class RuntimeProfile:
         emb_prov = embedding_provider or provider or defaults.embedding.provider
         trans_prov = transcription_provider or provider or defaults.transcription.provider
 
-        # Resolve models: per-capability > default for that provider
-        chat_mod = chat_model or defaults.chat.model
-        emb_mod = embedding_model or defaults.embedding.model
-        trans_mod = transcription_model or defaults.transcription.model
+        # Resolve models: per-capability > provider default > openai default
+        chat_mod = chat_model or _provider_default_model(chat_prov, "chat", defaults.chat.model)
+        emb_mod = embedding_model or _provider_default_model(emb_prov, "embedding", defaults.embedding.model)
+        trans_mod = transcription_model or _provider_default_model(trans_prov, "transcription", defaults.transcription.model)
 
         # Overview chat: only set if explicitly specified
         overview = None
         if overview_chat_provider or overview_chat_model:
             ov_prov = overview_chat_provider or chat_prov
-            ov_mod = overview_chat_model or chat_mod
+            if overview_chat_model:
+                ov_mod = overview_chat_model
+            elif ov_prov == chat_prov:
+                ov_mod = chat_mod
+            else:
+                ov_mod = _provider_default_model(
+                    ov_prov, "chat", defaults.chat.model
+                )
             overview = ModelBinding(provider=ov_prov, model=ov_mod)
 
         return cls(

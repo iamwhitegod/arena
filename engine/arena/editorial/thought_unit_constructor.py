@@ -53,6 +53,9 @@ class ThoughtUnitConstructor:
             raise ValueError("Either chat or api_key required")
         self.model = model
         self.verbose = verbose
+        self._compact_mode = (
+            getattr(self._chat, "context_window_tokens", 128_000) <= 16_384
+        )
 
         # Initialize detectors
         self.premise_detector = PremiseDetector(chat=self._chat)
@@ -91,31 +94,42 @@ class ThoughtUnitConstructor:
             print(f"\n🏗️  Constructing thought units from {len(seeds)} seeds...")
             print("=" * 70)
 
-        # Step 1: Detect all premises
-        if self.verbose:
-            print(f"\n📍 STEP 1: Premise Detection (backward search)")
-            print("-" * 70)
+        if self._compact_mode:
+            premises, resolutions = self._construct_compact_boundaries(
+                seeds, transcript_segments
+            )
+            self.metrics['premises_found'] = sum(
+                1 for premise in premises if premise is not None
+            )
+            self.metrics['resolutions_found'] = sum(
+                1 for resolution in resolutions if resolution is not None
+            )
+        else:
+            # Step 1: Detect all premises
+            if self.verbose:
+                print(f"\n📍 STEP 1: Premise Detection (backward search)")
+                print("-" * 70)
 
-        premises = self.premise_detector.detect_premises_batch(
-            seeds,
-            transcript_segments,
-            verbose=self.verbose
-        )
+            premises = self.premise_detector.detect_premises_batch(
+                seeds,
+                transcript_segments,
+                verbose=self.verbose
+            )
 
-        self.metrics['premises_found'] = sum(1 for p in premises if p is not None)
+            self.metrics['premises_found'] = sum(1 for p in premises if p is not None)
 
-        # Step 2: Detect all resolutions
-        if self.verbose:
-            print(f"\n📍 STEP 2: Resolution Detection (forward search)")
-            print("-" * 70)
+            # Step 2: Detect all resolutions
+            if self.verbose:
+                print(f"\n📍 STEP 2: Resolution Detection (forward search)")
+                print("-" * 70)
 
-        resolutions = self.resolution_detector.detect_resolutions_batch(
-            seeds,
-            transcript_segments,
-            verbose=self.verbose
-        )
+            resolutions = self.resolution_detector.detect_resolutions_batch(
+                seeds,
+                transcript_segments,
+                verbose=self.verbose
+            )
 
-        self.metrics['resolutions_found'] = sum(1 for r in resolutions if r is not None)
+            self.metrics['resolutions_found'] = sum(1 for r in resolutions if r is not None)
 
         # Step 3: Construct ThoughtUnit instances
         if self.verbose:
@@ -182,6 +196,89 @@ class ThoughtUnitConstructor:
             print(f"Total cost: ${self.metrics['total_cost_usd']:.3f}")
 
         return thought_units
+
+    def _construct_compact_boundaries(
+        self,
+        seeds: List[Dict],
+        transcript_segments: List[Dict],
+    ) -> tuple[List[Optional[Dict]], List[Optional[Dict]]]:
+        """Expand local-model seeds with deterministic transcript boundaries."""
+        segments = [
+            segment
+            for segment in transcript_segments
+            if (
+                isinstance(segment, dict)
+                and isinstance(segment.get('text'), str)
+                and isinstance(segment.get('start'), (int, float))
+                and isinstance(segment.get('end'), (int, float))
+                and segment['end'] > segment['start']
+            )
+        ]
+        segments.sort(key=lambda segment: (segment['start'], segment['end']))
+        premises: List[Optional[Dict]] = []
+        resolutions: List[Optional[Dict]] = []
+
+        for seed in seeds:
+            timestamp = seed.get('timestamp')
+            if not segments or not isinstance(timestamp, (int, float)):
+                premises.append(None)
+                resolutions.append(None)
+                continue
+
+            seed_index = min(
+                range(len(segments)),
+                key=lambda index: (
+                    (0, 0.0)
+                    if segments[index]['start'] <= timestamp < segments[index]['end']
+                    else (
+                        1,
+                        min(
+                            abs(segments[index]['start'] - timestamp),
+                            abs(segments[index]['end'] - timestamp),
+                        ),
+                    )
+                ),
+            )
+            premise_index = max(0, seed_index - 3)
+            premise_segments = segments[premise_index:seed_index + 1]
+
+            resolution_index = seed_index
+            target_end = segments[premise_index]['start'] + 35.0
+            hard_end = segments[premise_index]['start'] + 60.0
+            while resolution_index + 1 < len(segments):
+                current_end = segments[resolution_index]['end']
+                if current_end >= target_end:
+                    break
+                if segments[resolution_index + 1]['end'] > hard_end:
+                    break
+                resolution_index += 1
+            resolution_segments = segments[seed_index:resolution_index + 1]
+
+            premises.append({
+                'premise_start': premise_segments[0]['start'],
+                'premise_end': segments[seed_index]['start'],
+                'premise_text': ' '.join(
+                    segment['text'].strip() for segment in premise_segments
+                ),
+                'premise_type': 'transcript_context',
+                'reasoning': 'Bounded local transcript context',
+                'confidence': 0.75,
+                'sentences_back': len(premise_segments),
+            })
+            resolutions.append({
+                'resolution_start': segments[seed_index]['start'],
+                'resolution_end': resolution_segments[-1]['end'],
+                'resolution_text': ' '.join(
+                    segment['text'].strip() for segment in resolution_segments
+                ),
+                'completion_type': 'bounded_context',
+                'is_complete': True,
+                'reasoning': 'Bounded local transcript context',
+                'confidence': 0.75,
+                'sentences_forward': len(resolution_segments),
+            })
+
+        return premises, resolutions
 
     def _construct_unit(
         self,

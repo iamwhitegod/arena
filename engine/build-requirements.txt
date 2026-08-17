@@ -1,3 +1,9 @@
 # Build tooling is installed from build-requirements.lock with hash verification.
 setuptools>=75,<83
 wheel>=0.45,<0.47
+# llama-cpp-python is distributed as an sdist on PyPI. Keep its native build
+# backend and cross-platform CMake/Ninja tools hash-locked so --no-build-isolation
+# never downloads executable build dependencies implicitly.
+scikit-build-core[pyproject]>=0.9.2,<0.12
+cmake>=3.21,<5
+ninja>=1.11,<2

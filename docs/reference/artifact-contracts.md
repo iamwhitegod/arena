@@ -134,7 +134,7 @@ The inventory covers durable local state, output files, caches that cross proces
 }
 ```
 
-- **Producer:** `Transcriber._transcribe_with_api()`, `_transcribe_chunked()`, and `_transcribe_local()` normalize provider responses to this Arena subset. Command and pipeline functions perform the JSON writes.
+- **Producer:** `Transcriber._transcribe_with_provider()` and `_transcribe_chunked()` normalize provider responses to this Arena subset. Command and pipeline functions perform the JSON writes.
 - **Consumer:** hybrid/editorial analysis, subtitle generation, cache reuse, and users.
 - **Locations:** command-selected transcript path; active process cache `<output>/.cache/<source-stem>_transcript.json`; copied output `<output>/transcript.json`; the legacy engine uses `<output-parent>/cache/transcript.json` and `Exporter.export_transcript()`.
 - **Current stability:** internal and unversioned.

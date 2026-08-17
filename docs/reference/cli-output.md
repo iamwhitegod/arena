@@ -28,15 +28,18 @@ Output  /Users/you/output
 Target  8 clips · 30–90s · tiktok
 
 ✓ Preflight passed
-[1/5] ✓ Transcription — Transcription complete
-[2/5] ◐ Analysis
-      [████████████░░░░░░░░] 62% · Scoring candidate moments
-[3/5] ○ Clip Alignment
-[4/5] ○ Clip Generation
-[5/5] ○ Platform Formatting
+Overall [█░░░░░░░░░░░░░░░] 8% (verified)
+[1/5] Transcription
+      ◐ Transcribing chunk 1 of 1 · 6m 4s elapsed
+[2/5] ⏳ Analysis - Pending
+[3/5] ⏳ Clip Alignment - Pending
+[4/5] ⏳ Clip Generation - Pending
+[5/5] ⏳ Platform Formatting - Pending
 ```
 
 The formatting stage appears only when `--platform` is supplied. A cached transcript is reported as `Using cached transcript`; internal cache paths and download implementation details are not printed.
+
+Arena reports a percentage only when the engine exposes measurable work, such as audio preparation, completed chunks, generated clips, or formatted clips. Opaque model inference uses a running symbol and elapsed time. The UI does not animate invented `1%` through `99%` values, and a stage never moves backwards when events arrive from different output streams. The overall bar is labeled `verified` because it is calculated only from observed stage checkpoints.
 
 Successful completion is compact:
 
@@ -67,13 +70,16 @@ If some independent outputs fail, Arena reports partial success instead of prese
 
 ## Warnings and failures
 
-Known third-party warnings are hidden when a command succeeds. They are retained as diagnostics and included when processing fails. This keeps successful output readable without losing failure evidence.
+Known third-party warnings and native runtime startup logs are kept out of the normal terminal display. On failure, Arena prefers its sanitized public error contract over a native log or a terminal progress line. The public line includes a stable error code, retryability, and a reference suitable for an issue report.
 
 ```text
-✗ Analysis failed
+✗ Processing timed out
 
-Reason  OpenAI request timed out
-Resume  The transcript was preserved
+  Transcription failed [timeout; retryable=true; ref=bb7b08805307]:
+  Local transcription exceeded Arena's time limit.
+
+  → Retry once; if it repeats, use a faster local transcription model or
+    --transcription-provider openai
 ```
 
 Preflight errors are actionable and stop the engine before expensive work begins:
@@ -95,7 +101,7 @@ The Python engine writes newline-delimited JSON events to stdout when invoked by
 {"type":"result","data":{"success":true,"outputDir":"/Users/you/output"}}
 ```
 
-Stdout is a protocol channel. Human-readable presentation belongs in the TypeScript CLI. Stderr and unstructured engine output are buffered for failure diagnostics instead of being interleaved with progress.
+Stdout is a protocol channel. Human-readable presentation belongs in the TypeScript CLI. Stderr and unstructured engine output are buffered while the command runs instead of being interleaved with progress. Normal failure output uses the sanitized public error selected from those buffers; native library chatter is not mistaken for the failure reason.
 
 The supported stage IDs are:
 

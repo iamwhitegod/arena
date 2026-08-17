@@ -36,5 +36,6 @@ def run_info(args):
         return 0
 
     except Exception as e:
-        print(f"❌ Error: {e}")
+        from arena.cli.public_errors import format_public_error
+        print(format_public_error(e))
         return 1

@@ -14,7 +14,11 @@ import { isArenaError } from '../errors/index.js';
 import { displayTranscriptionSummary } from '../ui/summary.js';
 import { isUrl } from '../utils/url.js';
 import { commandHeader } from '../ui/output.js';
-import { requiredProviders, type ProviderSelectors } from '../core/providers.js';
+import {
+  requiredProviders,
+  resolveProviderSelectors,
+  type ProviderSelectors,
+} from '../core/providers.js';
 
 interface TranscribeOptions extends ProviderSelectors {
   output?: string;
@@ -48,11 +52,9 @@ export async function transcribeCommand(
 
     const configManager = new ConfigManager();
     const globalConfig = await configManager.getGlobalConfig();
-    const selectors: ProviderSelectors = {
-      provider: options.provider || globalConfig.provider,
-      transcriptionProvider: options.transcriptionProvider || globalConfig.transcription_provider,
-      transcriptionModel: options.transcriptionModel || globalConfig.transcription_model,
-    };
+    const selectors = resolveProviderSelectors(options, globalConfig);
+    const providerNames = requiredProviders(selectors, ['transcription']);
+    await configManager.populateRequiredProviderCredentials(providerNames);
 
     commandHeader('Transcribe media', [
       ['Input', isUrl(videoPath) ? videoPath : path.basename(absoluteVideoPath)],
@@ -62,7 +64,7 @@ export async function transcribeCommand(
     const preflightResult = await runPreflightChecksWithProgress({
       videoPath: absoluteVideoPath,
       outputDir: path.dirname(outputFile),
-      requiredProviders: requiredProviders(selectors, ['transcription']),
+      requiredProviders: providerNames,
       enginePath: bridge.getEnginePath(),
     });
 
@@ -84,14 +86,11 @@ export async function transcribeCommand(
         ...selectors,
       },
       (update) => {
-        if (update.progress !== undefined) {
+        if (update.progress !== null) {
           progress.showDeterminate(update.progress, update.message);
         } else {
           progress.showIndeterminate(update.message);
         }
-      },
-      (error) => {
-        console.error(chalk.red(error));
       }
     );
 

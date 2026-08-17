@@ -51,11 +51,7 @@ describe('Error Classes', () => {
 
   describe('SystemError', () => {
     it('should create system error', () => {
-      const error = new SystemError(
-        'DISK_FULL',
-        'Not enough disk space',
-        'Free up some space'
-      );
+      const error = new SystemError('DISK_FULL', 'Not enough disk space', 'Free up some space');
 
       expect(error.code).toBe('DISK_FULL');
       expect(error.message).toBe('Not enough disk space');
@@ -151,6 +147,19 @@ describe('Error Formatter', () => {
       expect(formatted).toContain('Check the error message above');
     });
 
+    it('should title local resource failures clearly', () => {
+      const error = new ProcessingError(
+        'LOCAL_RESOURCE_LIMIT',
+        'Local model needs more available memory',
+        'Close memory-intensive apps'
+      );
+
+      const formatted = formatErrorWithHelp(error);
+
+      expect(formatted).toContain('Not enough memory for local inference');
+      expect(formatted).toContain('Close memory-intensive apps');
+    });
+
     it('should handle system errors', () => {
       const error = new SystemError(
         'INTERRUPTED',
@@ -166,10 +175,7 @@ describe('Error Formatter', () => {
     });
 
     it('should add contextual help for API_KEY_MISSING', () => {
-      const error = new PreflightError(
-        'API_KEY_MISSING',
-        'OpenAI API key not found'
-      );
+      const error = new PreflightError('API_KEY_MISSING', 'OpenAI API key not found');
 
       const formatted = formatErrorWithHelp(error);
 

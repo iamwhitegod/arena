@@ -96,7 +96,8 @@ def run_detect_scenes(args):
         return 0
 
     except Exception as e:
-        logger.error(f"Scene detection failed: {str(e)}")
+        from arena.cli.public_errors import format_public_error
+        logger.error(format_public_error(e, "Scene detection failed"))
         raise
 
 

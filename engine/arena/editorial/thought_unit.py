@@ -14,6 +14,64 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional, List, Dict, Any
 import json
+import math
+import re
+
+
+_ANSI_RE = re.compile(
+    r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))"
+)
+_UNSAFE_CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
+
+
+def safe_float(value, default: float, lo: float = 0.0, hi: float = 1.0) -> float:
+    """Coerce a value to a clamped float or return a default. Never raises.
+
+    Rejects booleans. Accepts numeric strings like "0.9". Clamps to [lo, hi].
+    """
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, (int, float)):
+        try:
+            f = float(value)
+            if math.isfinite(f):
+                return max(lo, min(hi, f))
+        except (OverflowError, TypeError, ValueError):
+            pass
+        return default
+    if isinstance(value, str):
+        try:
+            f = float(value)
+            if math.isfinite(f):
+                return max(lo, min(hi, f))
+        except (ValueError, OverflowError):
+            pass
+    return default
+
+
+def safe_text(value, default: str = "", max_length: int = 10_000) -> str:
+    """Return bounded model text or a conservative default."""
+    if not isinstance(value, str):
+        return default
+    sanitized = _ANSI_RE.sub("", value)
+    sanitized = _UNSAFE_CONTROL_RE.sub("", sanitized)
+    return sanitized[:max_length]
+
+
+def safe_string_list(
+    value,
+    *,
+    max_items: int = 50,
+    max_item_length: int = 1_000,
+) -> List[str]:
+    """Return a bounded list containing only strings."""
+    if not isinstance(value, list):
+        return []
+    return [
+        safe_text(item, max_length=max_item_length)
+        for item in value[:max_items]
+        if isinstance(item, str)
+    ]
 
 
 PRODUCTION_COMPLETENESS_THRESHOLD = 0.85

@@ -1,6 +1,7 @@
 """Audio transcription using OpenAI Whisper"""
 from pathlib import Path
 from typing import Dict, List, Optional
+import math
 import os
 import subprocess
 import tempfile
@@ -27,8 +28,15 @@ class Transcriber:
             self._speech = speech
             self.mode = "provider"
         elif mode == "local":
-            self._speech = None
-            self.mode = "local"
+            # Preserve the legacy mode selector, but route it through Arena's
+            # verified faster-whisper model path. Never let a runtime alias
+            # trigger an implicit model download.
+            from arena.models.locator import ModelLocator
+            from arena.providers.local_speech import LocalSpeechModel
+
+            model_path = ModelLocator().resolve_speech_model("auto")
+            self._speech = LocalSpeechModel(model_size_or_path=model_path)
+            self.mode = "provider"
         elif api_key is not None or os.getenv("OPENAI_API_KEY"):
             api_key = api_key or os.getenv("OPENAI_API_KEY")
             from arena.providers.openai_adapter import OpenAISpeechModel
@@ -76,11 +84,7 @@ class Transcriber:
             self.extract_audio(video_path, audio_path)
             is_direct_audio = False
 
-        # Transcribe based on mode
-        if self.mode == "local":
-            result = self._transcribe_local(audio_path)
-        else:
-            result = self._transcribe_with_provider(audio_path)
+        result = self._transcribe_with_provider(audio_path)
 
         # Clean up temporary file if not cached (don't delete user's audio file)
         if not is_direct_audio and not cache_dir and audio_path.exists():
@@ -122,8 +126,14 @@ class Transcriber:
         """Transcribe using the injected SpeechModel."""
         file_size_mb = audio_path.stat().st_size / (1024 * 1024)
         limit = self._speech.max_file_size_mb
+        duration_limit = self._speech.max_audio_duration_seconds
+        duration = None
+        if math.isfinite(duration_limit):
+            duration = self._get_audio_duration(audio_path)
 
-        if file_size_mb > limit:
+        if file_size_mb > limit or (
+            duration is not None and duration > duration_limit
+        ):
             print(f"⚠️  Audio file is {file_size_mb:.1f}MB (limit: {limit:.0f}MB)")
             print(f"   Chunking audio into smaller segments...")
             return self._transcribe_chunked(audio_path)
@@ -155,7 +165,12 @@ class Transcriber:
         # Chunks are encoded as 64 kbps mono MP3. Reserve 10% for container
         # overhead and bitrate variation, then verify the actual output size.
         encoded_bytes_per_second = 64_000 / 8
-        chunk_duration = min(600.0, (limit_bytes * 0.9) / encoded_bytes_per_second)
+        provider_duration_limit = self._speech.max_audio_duration_seconds
+        chunk_duration = min(
+            600.0,
+            provider_duration_limit,
+            (limit_bytes * 0.9) / encoded_bytes_per_second,
+        )
         minimum_chunk_duration = 0.25
         if chunk_duration < minimum_chunk_duration:
             raise ValueError("Speech provider file-size limit is too small for audio chunks")
@@ -289,60 +304,6 @@ class Transcriber:
             check=True,
             env=scrubbed_env(),
         )
-
-    def _transcribe_local(self, audio_path: Path) -> Dict:
-        """Transcribe using local Whisper model"""
-        try:
-            import whisper
-        except ImportError:
-            raise ImportError(
-                "whisper package is required for local mode. "
-                "Install with: pip install openai-whisper"
-            )
-
-        # Load model (base is a good balance of speed and accuracy)
-        model = whisper.load_model("base")
-
-        # Transcribe with word timestamps
-        result = model.transcribe(
-            str(audio_path),
-            word_timestamps=True,
-            verbose=False
-        )
-
-        # Convert to our format
-        formatted_result = {
-            "text": result["text"],
-            "language": result["language"],
-            "duration": 0,  # Will be calculated from segments
-            "words": [],
-            "segments": []
-        }
-
-        # Extract segments
-        if "segments" in result:
-            for segment in result["segments"]:
-                formatted_result["segments"].append({
-                    "id": segment["id"],
-                    "start": segment["start"],
-                    "end": segment["end"],
-                    "text": segment["text"]
-                })
-
-                # Extract words from segment if available
-                if "words" in segment:
-                    for word in segment["words"]:
-                        formatted_result["words"].append({
-                            "word": word["word"],
-                            "start": word["start"],
-                            "end": word["end"]
-                        })
-
-            # Calculate total duration from last segment
-            if formatted_result["segments"]:
-                formatted_result["duration"] = formatted_result["segments"][-1]["end"]
-
-        return formatted_result
 
     def extract_audio(self, video_path: Path, output_path: Path) -> Path:
         """

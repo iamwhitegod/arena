@@ -19,10 +19,11 @@ from typing import Dict, List, Optional, Tuple
 from arena.providers.base import ResponseMode
 from arena.providers.retry import retry_with_backoff
 
-from .thought_unit import RhetoricalType
+from .thought_unit import RhetoricalType, safe_float as _safe_float
 
 # ---------------------------------------------------------------------------
-# Context-budget constants (128k model)
+# Default context budgets used by cloud-scale adapters. Smaller adapters expose
+# their actual limits through ChatModel and receive proportionally bounded jobs.
 # ---------------------------------------------------------------------------
 MODEL_CONTEXT_CAPACITY = 128_000
 SYSTEM_PROMPT_RESERVE = 4_000
@@ -51,28 +52,6 @@ _SEGMENT_ID_RE = re.compile(r"S(0|[1-9][0-9]*)")
 VALID_RHETORICAL_TYPES = {
     "argument", "teaching", "story", "advice", "qa", "comparison", "insight",
 }
-
-
-def _safe_float(value, default: float, lo: float = 0.0, hi: float = 1.0) -> float:
-    """Coerce a value to a clamped float or return a default. Never raises.
-
-    Rejects booleans. Accepts numeric strings like "0.9". Clamps to [lo, hi].
-    """
-    if isinstance(value, bool):
-        return default
-    if isinstance(value, (int, float)):
-        f = float(value)
-        if math.isfinite(f):
-            return max(lo, min(hi, f))
-        return default
-    if isinstance(value, str):
-        try:
-            f = float(value)
-            if math.isfinite(f):
-                return max(lo, min(hi, f))
-        except (ValueError, OverflowError):
-            pass
-    return default
 
 
 class ThoughtSeedDetector:
@@ -104,6 +83,73 @@ class ThoughtSeedDetector:
         self.api_key = api_key
         self.model = model
         self.overview_model = overview_model or model
+        self._detection_context_capacity = self._positive_capability(
+            self._chat, "context_window_tokens", MODEL_CONTEXT_CAPACITY
+        )
+        self._overview_context_capacity = self._positive_capability(
+            self._overview_chat, "context_window_tokens", MODEL_CONTEXT_CAPACITY
+        )
+        self._compact_generation = self._detection_context_capacity <= 16_384
+
+        if self._compact_generation:
+            self._system_prompt_reserve = min(
+                1_536, max(1_024, self._detection_context_capacity // 8)
+            )
+            if self._detection_context_capacity <= 4_096:
+                overview_limit = 384
+                detection_limit = 512
+                rerank_limit = 512
+            else:
+                overview_limit = 768
+                detection_limit = 1_536
+                rerank_limit = 768
+            self._overview_response_reserve = min(
+                self._positive_capability(
+                    self._overview_chat, "max_output_tokens", 4_096
+                ),
+                overview_limit,
+            )
+            self._detection_response_reserve = min(
+                self._positive_capability(self._chat, "max_output_tokens", 4_096),
+                detection_limit,
+            )
+            self._rerank_response_reserve = min(
+                self._positive_capability(self._chat, "max_output_tokens", 4_096),
+                rerank_limit,
+            )
+        else:
+            self._system_prompt_reserve = SYSTEM_PROMPT_RESERVE
+            self._overview_response_reserve = min(
+                self._positive_capability(
+                    self._overview_chat, "max_output_tokens", OVERVIEW_RESPONSE_RESERVE
+                ),
+                OVERVIEW_RESPONSE_RESERVE,
+            )
+            self._detection_response_reserve = min(
+                self._positive_capability(
+                    self._chat, "max_output_tokens", DETECTION_RESPONSE_RESERVE
+                ),
+                DETECTION_RESPONSE_RESERVE,
+            )
+            self._rerank_response_reserve = min(
+                self._positive_capability(
+                    self._chat, "max_output_tokens", RERANK_RESPONSE_RESERVE
+                ),
+                RERANK_RESPONSE_RESERVE,
+            )
+
+        self._safe_overview_budget = max(
+            self.MIN_CHUNK_BUDGET,
+            self._overview_context_capacity
+            - self._system_prompt_reserve
+            - self._overview_response_reserve,
+        )
+        self._safe_detection_budget = max(
+            self.MIN_CHUNK_BUDGET,
+            self._detection_context_capacity
+            - self._system_prompt_reserve
+            - self._detection_response_reserve,
+        )
         self.metrics: Dict = {
             "api_calls": 0,
             "tokens_used": 0,
@@ -133,7 +179,8 @@ class ThoughtSeedDetector:
 
         Args:
             transcript_data: Transcript dict with 'segments', 'text', 'duration'
-            target_count: Target number of final clips (detects ~4x this)
+            target_count: Target number of final clips. Candidate breadth is
+                scaled to the selected model's context and output capacity.
 
         Returns:
             List of seed dicts matching the Layer 2 contract.
@@ -144,23 +191,33 @@ class ThoughtSeedDetector:
             print("      No usable transcript segments")
             return []
 
-        target_seeds = target_count * 4
         formatted = self._format_compact_transcript(segments)
         transcript_tokens = self._estimate_tokens(formatted)
         duration = segments[-1]["end"]
+        target_seeds = self._candidate_target(target_count)
 
         print(f"      Transcript: {len(segments)} segments, ~{transcript_tokens:,} tokens, {duration:.0f}s")
 
-        # Choose processing path
-        overview_fits = transcript_tokens <= SAFE_OVERVIEW_BUDGET
-        detection_fits = transcript_tokens <= SAFE_DETECTION_BUDGET
-
-        if overview_fits and detection_fits:
-            seeds = self._path_a(segments, formatted, target_seeds)
-        elif overview_fits:
-            seeds = self._path_b(segments, formatted, transcript_tokens, target_seeds)
+        # Compact models use bounded chunk discovery without spending scarce
+        # context/output tokens on a second model-generated overview.
+        if self._compact_generation:
+            seeds = self._path_compact(segments, target_seeds)
         else:
-            seeds = self._path_c(segments, formatted, transcript_tokens, target_seeds)
+            overview_fits = transcript_tokens <= self._safe_overview_budget
+            detection_fits = transcript_tokens <= (
+                self._safe_detection_budget - self._overview_response_reserve
+            )
+
+            if overview_fits and detection_fits:
+                seeds = self._path_a(segments, formatted, target_seeds)
+            elif overview_fits:
+                seeds = self._path_b(
+                    segments, formatted, transcript_tokens, target_seeds
+                )
+            else:
+                seeds = self._path_c(
+                    segments, formatted, transcript_tokens, target_seeds
+                )
 
         self.metrics["seeds_detected"] = len(seeds)
         print(f"      Detected {len(seeds)} thought seeds")
@@ -169,6 +226,35 @@ class ThoughtSeedDetector:
     # ------------------------------------------------------------------
     # Processing paths
     # ------------------------------------------------------------------
+
+    def _path_compact(
+        self,
+        segments: List[Dict],
+        target_seeds: int,
+    ) -> List[Dict]:
+        """Bounded seed discovery for compact local and self-hosted models."""
+        overview = {
+            "summary": "",
+            "main_themes": [],
+            "sections": [],
+            "high_interest_regions": [],
+            "low_interest_regions": [],
+        }
+        overview_tokens = self._estimate_tokens(
+            json.dumps(overview, ensure_ascii=False)
+        )
+        chunk_budget = self._safe_detection_budget - overview_tokens
+        chunks = self._chunk_formatted_transcript(segments, chunk_budget)
+        self.metrics["processing_path"] = (
+            "compact_full" if len(chunks) == 1 else "compact_chunked"
+        )
+        print(
+            f"      Compact path: {len(chunks)} bounded detection "
+            f"call{'s' if len(chunks) != 1 else ''}"
+        )
+
+        raw = self._detect_chunked(chunks, overview, target_seeds)
+        return self._finalize(raw, segments, target_seeds)
 
     def _path_a(
         self,
@@ -187,10 +273,10 @@ class ThoughtSeedDetector:
         total_detection_tokens = (
             self._estimate_tokens(formatted)
             + self._estimate_tokens(overview_text)
-            + SYSTEM_PROMPT_RESERVE
-            + DETECTION_RESPONSE_RESERVE
+            + self._system_prompt_reserve
+            + self._detection_response_reserve
         )
-        if total_detection_tokens > MODEL_CONTEXT_CAPACITY:
+        if total_detection_tokens > self._detection_context_capacity:
             print("      Overview too large for full-context detection, switching to Path B")
             return self._path_b_with_overview(segments, formatted, overview, target_seeds)
 
@@ -209,7 +295,7 @@ class ThoughtSeedDetector:
 
         overview_text = json.dumps(overview, ensure_ascii=False)
         overview_tokens = self._estimate_tokens(overview_text)
-        chunk_budget = SAFE_DETECTION_BUDGET - overview_tokens
+        chunk_budget = self._safe_detection_budget - overview_tokens
         chunks = self._chunk_formatted_transcript(segments, chunk_budget)
         print(f"      Chunked detection: {len(chunks)} chunks")
 
@@ -233,7 +319,7 @@ class ThoughtSeedDetector:
 
         overview_text = json.dumps(overview, ensure_ascii=False)
         overview_tokens = self._estimate_tokens(overview_text)
-        chunk_budget = SAFE_DETECTION_BUDGET - overview_tokens
+        chunk_budget = self._safe_detection_budget - overview_tokens
         chunks = self._chunk_formatted_transcript(segments, chunk_budget)
         print(f"      Path B: full overview + {len(chunks)} detection chunks")
 
@@ -253,7 +339,9 @@ class ThoughtSeedDetector:
         """Transcript exceeds overview budget. Hierarchical map/merge."""
         self.metrics["processing_path"] = "hierarchical"
 
-        overview_chunks = self._chunk_formatted_transcript(segments, SAFE_OVERVIEW_BUDGET)
+        overview_chunks = self._chunk_formatted_transcript(
+            segments, self._safe_overview_budget
+        )
         print(f"      Path C: {len(overview_chunks)} overview chunks", end="")
 
         local_overviews = []
@@ -267,7 +355,7 @@ class ThoughtSeedDetector:
 
         overview_text = json.dumps(overview, ensure_ascii=False)
         overview_tokens = self._estimate_tokens(overview_text)
-        chunk_budget = SAFE_DETECTION_BUDGET - overview_tokens
+        chunk_budget = self._safe_detection_budget - overview_tokens
         det_chunks = self._chunk_formatted_transcript(segments, chunk_budget)
         print(f" + {len(det_chunks)} detection chunks")
 
@@ -341,7 +429,9 @@ RETURN JSON:
 RULES:
 - Use segment IDs from the transcript (e.g. S0, S10, S50)
 - importance and priority are 0.0-1.0
-- Report as many or as few high_interest_regions as genuinely exist
+- Keep the summary under 60 words
+- Return at most 4 main themes, 8 sections, 6 high-interest regions, and 4 low-interest regions
+- Keep each theme name, section summary, and region reason under 18 words
 - Quality may be concentrated in one section — do not manufacture strong regions
 - A recording that is mostly filler should have mostly low_interest_regions
 """
@@ -351,6 +441,7 @@ RULES:
                 system,
                 prompt,
                 use_overview=True,
+                max_output_tokens=self._overview_response_reserve,
             )
             overview = self._validate_overview(overview)
             self.metrics["overview_calls"] += 1
@@ -390,7 +481,12 @@ Merge them into a single unified content map with the same JSON schema:
 Return the merged JSON."""
 
         try:
-            merged = self._call_model(system, prompt, use_overview=True)
+            merged = self._call_model(
+                system,
+                prompt,
+                use_overview=True,
+                max_output_tokens=self._overview_response_reserve,
+            )
             self.metrics["overview_calls"] += 1
             return self._validate_overview(merged)
         except Exception:
@@ -433,6 +529,37 @@ Return the merged JSON."""
 
         regions_text = self._format_region_guidance(overview)
 
+        if self._compact_generation:
+            return_shape = """{
+  "seeds": [
+    {
+      "segment_id": "S45",
+      "text": "Shortest exact phrase from that segment",
+      "rhetorical_type": "argument",
+      "interest_score": 0.85
+    }
+  ]
+}"""
+            compact_rules = (
+                "- Return only the four fields shown for each seed\n"
+                "- Keep text under 18 words"
+            )
+        else:
+            return_shape = """{
+  "seeds": [
+    {
+      "segment_id": "S45",
+      "text": "The exact sentence or phrase from the transcript",
+      "rhetorical_type": "argument",
+      "interest_score": 0.85,
+      "reasoning": "Why this matters relative to the whole video",
+      "likely_has_premise": true,
+      "likely_has_resolution": true
+    }
+  ]
+}"""
+            compact_rules = "- Keep reasoning under 12 words"
+
         prompt = f"""CONTENT OVERVIEW:
 {overview_text}
 
@@ -456,19 +583,7 @@ SCORING:
 - Avoid greetings, housekeeping, sponsor reads, and generic statements
 
 RETURN JSON:
-{{
-  "seeds": [
-    {{
-      "segment_id": "S45",
-      "text": "The exact sentence or phrase from the transcript",
-      "rhetorical_type": "argument",
-      "interest_score": 0.85,
-      "reasoning": "Why this matters relative to the whole video",
-      "likely_has_premise": true,
-      "likely_has_resolution": true
-    }}
-  ]
-}}
+{return_shape}
 
 RHETORICAL TYPES: argument, teaching, story, advice, qa, comparison, insight
 
@@ -476,11 +591,22 @@ RULES:
 - segment_id must be a real ID from the transcript (e.g. S45)
 - text must be an EXACT phrase from that segment, not a paraphrase
 - interest_score 0.0-1.0 calibrated across the whole video
+- Keep text to the shortest exact phrase that identifies the moment
+{compact_rules}
 - Return fewer seeds if the recording lacks {target_seeds} strong moments
 - Quality is the primary criterion; temporal diversity is secondary
 """
 
-        result = self._call_model(system, prompt)
+        result = self._call_model(
+            system,
+            prompt,
+            max_output_tokens=self._detection_response_reserve,
+            json_schema=(
+                self._compact_seed_schema(target_seeds)
+                if self._compact_generation
+                else None
+            ),
+        )
         self.metrics["detection_calls"] += 1
 
         raw_seeds = result.get("seeds", [])
@@ -494,7 +620,10 @@ RULES:
         target_seeds: int,
     ) -> List[Dict]:
         """Detect seeds across multiple transcript chunks."""
-        per_chunk = max(3, math.ceil(1.5 * target_seeds / len(chunks)))
+        if self._compact_generation:
+            per_chunk = max(3, math.ceil(target_seeds / len(chunks)) + 2)
+        else:
+            per_chunk = max(3, math.ceil(1.5 * target_seeds / len(chunks)))
         all_raw: List[Dict] = []
 
         for i, chunk in enumerate(chunks, 1):
@@ -567,12 +696,17 @@ RETURN JSON:
 RULES:
 - Select at most {target_seeds} candidates
 - Recalibrate interest_score across the full pool (0.0-1.0)
+- Keep updated reasoning under 10 words
 - Prefer quality and diversity over clustering in one section
 - Do NOT invent new candidates — only return IDs from the pool
 """
 
         try:
-            result = self._call_model(system, prompt)
+            result = self._call_model(
+                system,
+                prompt,
+                max_output_tokens=self._rerank_response_reserve,
+            )
             self.metrics["rerank_calls"] += 1
 
             selected_ids = set()
@@ -705,6 +839,9 @@ RULES:
         # Validate booleans strictly — reject string "false" etc.
         premise_val = raw.get("likely_has_premise")
         resolution_val = raw.get("likely_has_resolution")
+        if self._compact_generation:
+            premise_val = True if premise_val is None else premise_val
+            resolution_val = True if resolution_val is None else resolution_val
         if not isinstance(premise_val, bool) or not isinstance(resolution_val, bool):
             return None
 
@@ -826,7 +963,7 @@ RULES:
                 lines.append(f"[S{idx}|{start:.1f}] {text}")
         return "\n".join(lines)
 
-    MIN_CHUNK_BUDGET = 2_000  # absolute floor for a usable chunk
+    MIN_CHUNK_BUDGET = 1_024  # absolute floor for a usable compact-model chunk
 
     NEWLINE_TOKEN_COST = 1  # conservative cost for the \n between lines
 
@@ -907,6 +1044,70 @@ RULES:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _positive_capability(model, name: str, fallback: int) -> int:
+        """Read a positive integer model capability without trusting adapters."""
+        value = getattr(model, name, fallback)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            return fallback
+        return value
+
+    def _candidate_target(self, target_count: int) -> int:
+        """Scale candidate breadth to model generation capacity."""
+        requested = max(1, int(target_count))
+        multiplier = 2 if self._compact_generation else 4
+        tokens_per_seed = 32 if self._compact_generation else 48
+        output_limited = max(
+            requested, self._detection_response_reserve // tokens_per_seed
+        )
+        return min(requested * multiplier, output_limited)
+
+    @staticmethod
+    def _compact_seed_schema(max_items: int) -> Dict:
+        """Strict compact response contract for constrained local models."""
+        return {
+            "$id": "arena://schemas/compact-seeds-v1",
+            "type": "object",
+            "required": ["seeds"],
+            "additionalProperties": False,
+            "properties": {
+                "seeds": {
+                    "type": "array",
+                    "maxItems": max(1, max_items),
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "segment_id",
+                            "text",
+                            "rhetorical_type",
+                            "interest_score",
+                        ],
+                        "additionalProperties": False,
+                        "properties": {
+                            "segment_id": {
+                                "type": "string",
+                                "pattern": "^S(0|[1-9][0-9]{0,5})$",
+                            },
+                            "text": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 180,
+                            },
+                            "rhetorical_type": {
+                                "type": "string",
+                                "enum": sorted(VALID_RHETORICAL_TYPES),
+                            },
+                            "interest_score": {
+                                "type": "number",
+                                "minimum": 0.0,
+                                "maximum": 1.0,
+                            },
+                        },
+                    },
+                }
+            },
+        }
 
     def _normalize_segments(self, segments) -> List[Dict]:
         """Validate segments and add stable indices.
@@ -990,7 +1191,7 @@ RULES:
         downstream code never crashes on a bad model response.
         """
         validated: Dict = {
-            "summary": str(raw.get("summary", "")),
+            "summary": str(raw.get("summary", ""))[:1_000],
             "main_themes": [],
             "sections": [],
             "high_interest_regions": [],
@@ -999,7 +1200,7 @@ RULES:
 
         vr = ThoughtSeedDetector._valid_segment_range
 
-        for theme in raw.get("main_themes") or []:
+        for theme in (raw.get("main_themes") or [])[:4]:
             if (
                 isinstance(theme, dict)
                 and isinstance(theme.get("name"), str)
@@ -1009,7 +1210,7 @@ RULES:
                 theme["importance"] = _safe_float(theme.get("importance"), 0.5)
                 validated["main_themes"].append(theme)
 
-        for section in raw.get("sections") or []:
+        for section in (raw.get("sections") or [])[:8]:
             if (
                 isinstance(section, dict)
                 and isinstance(section.get("summary"), str)
@@ -1017,7 +1218,7 @@ RULES:
             ):
                 validated["sections"].append(section)
 
-        for region in raw.get("high_interest_regions") or []:
+        for region in (raw.get("high_interest_regions") or [])[:6]:
             if (
                 isinstance(region, dict)
                 and isinstance(region.get("reason"), str)
@@ -1027,7 +1228,7 @@ RULES:
                 region["priority"] = _safe_float(region.get("priority"), 0.5)
                 validated["high_interest_regions"].append(region)
 
-        for region in raw.get("low_interest_regions") or []:
+        for region in (raw.get("low_interest_regions") or [])[:4]:
             if (
                 isinstance(region, dict)
                 and isinstance(region.get("reason"), str)
@@ -1058,6 +1259,8 @@ RULES:
         system: str,
         prompt: str,
         use_overview: bool = False,
+        max_output_tokens: Optional[int] = None,
+        json_schema: Optional[Dict] = None,
     ) -> Dict:
         """Call the model with structured JSON output and retry."""
         chat = self._overview_chat if use_overview else self._chat
@@ -1069,6 +1272,8 @@ RULES:
                 ],
                 temperature=0.3,
                 response_mode=ResponseMode.JSON,
+                max_output_tokens=max_output_tokens,
+                json_schema=json_schema,
             )
         )
 

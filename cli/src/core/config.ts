@@ -1,12 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { getArenaHome } from './runtime.js';
-import type {
-  ChatModelName,
-  EmbeddingModelName,
-  ProviderName,
-  TranscriptionModelName,
-} from './providers.js';
+import type { ProviderName } from './providers.js';
 
 const PRIVATE_DIRECTORY_MODE = 0o700;
 const PRIVATE_FILE_MODE = 0o600;
@@ -22,13 +17,13 @@ export interface GlobalConfig {
   cookies_from_browser?: string;
   provider?: ProviderName;
   chat_provider?: ProviderName;
-  chat_model?: ChatModelName;
+  chat_model?: string;
   overview_chat_provider?: ProviderName;
-  overview_chat_model?: ChatModelName;
+  overview_chat_model?: string;
   embedding_provider?: ProviderName;
-  embedding_model?: EmbeddingModelName;
+  embedding_model?: string;
   transcription_provider?: ProviderName;
-  transcription_model?: TranscriptionModelName;
+  transcription_model?: string;
   subtitle_style?: {
     font: string;
     size: number;
@@ -174,6 +169,13 @@ export class ConfigManager {
       { code: 'ARENA_CREDENTIAL_MIGRATED' }
     );
     return legacyKey;
+  }
+
+  async populateRequiredProviderCredentials(providerNames: readonly string[]): Promise<void> {
+    if (providerNames.includes('openai') && !process.env.OPENAI_API_KEY) {
+      const apiKey = await this.resolveOpenAIApiKey();
+      if (apiKey) process.env.OPENAI_API_KEY = apiKey;
+    }
   }
 
   async createProjectConfig(videoPath: string): Promise<void> {

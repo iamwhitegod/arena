@@ -9,6 +9,7 @@ sys.path.insert(0, '../')
 
 from arena.editorial.thought_seed_detector import ThoughtSeedDetector
 from arena.editorial.thought_unit import RhetoricalType
+from arena.providers.fake import FakeChatModel
 import unittest
 
 
@@ -232,6 +233,37 @@ class TestThoughtSeedDetector(unittest.TestCase):
         seeds = detector.detect_seeds(empty_transcript)
         self.assertEqual(len(seeds), 0)
         self.assertEqual(detector.metrics['api_calls'], 0)
+
+    def test_compact_chat_scales_context_and_candidate_breadth(self):
+        chat = FakeChatModel(
+            context_window_tokens=4096,
+            max_output_tokens=4096,
+        )
+        detector = ThoughtSeedDetector(chat=chat)
+
+        self.assertEqual(detector._detection_context_capacity, 4096)
+        self.assertEqual(detector._candidate_target(10), 16)
+        self.assertLess(detector._safe_detection_budget, 4096)
+        self.assertEqual(detector._detection_response_reserve, 512)
+
+    def test_compact_chat_receives_bounded_generation_calls(self):
+        chat = FakeChatModel(
+            context_window_tokens=4096,
+            max_output_tokens=4096,
+        )
+        detector = ThoughtSeedDetector(chat=chat)
+
+        seeds = detector.detect_seeds(self.sample_transcript, target_count=10)
+
+        self.assertEqual(seeds, [])
+        self.assertEqual(chat.call_count, 1)
+        self.assertEqual(chat.calls[0]['max_output_tokens'], 512)
+        self.assertIn('top 18 thought seeds', chat.calls[0]['messages'][1]['content'])
+        schema = chat.calls[0]['json_schema']
+        self.assertFalse(schema['additionalProperties'])
+        self.assertFalse(
+            schema['properties']['seeds']['items']['additionalProperties']
+        )
 
 
 class TestSegmentIdParser(unittest.TestCase):

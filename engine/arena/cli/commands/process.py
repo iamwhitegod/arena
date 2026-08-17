@@ -1,7 +1,6 @@
 """arena process - Run full pipeline"""
 
 import sys
-from contextlib import redirect_stdout
 from pathlib import Path
 from arena.cli.protocol import PipelineEventStream, result
 
@@ -13,7 +12,7 @@ from arena_process import run_arena_pipeline
 def run_process(args):
     """Run the process command (supports URLs)"""
     event_stream = PipelineEventStream()
-    with redirect_stdout(event_stream):
+    with event_stream.capture():
         exit_code = run_arena_pipeline(
         video_path=args.video,
         output_dir=args.output,
@@ -27,7 +26,7 @@ def run_process(args):
         enhance_audio=not args.no_enhance,
         use_scene_detection=args.scene_detection,
         export_editorial_layers=getattr(args, 'export_editorial_layers', False),
-        editorial_model=getattr(args, 'editorial_model', 'gpt-4o'),
+        editorial_model=getattr(args, 'editorial_model', None),
         platform=getattr(args, 'platform', None),
         crop_strategy=getattr(args, 'crop', 'center'),
         pad_strategy=getattr(args, 'pad', 'blur'),

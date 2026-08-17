@@ -15,14 +15,8 @@ import { extractAudioCommand } from './commands/extract-audio.js';
 import { formatCommand } from './commands/format.js';
 import { detectScenesCommand } from './commands/detect-scenes.js';
 import { diagnoseCommand } from './commands/diagnose.js';
-import { ConfigManager } from './core/config.js';
 import { unsupportedNodeVersionMessage } from './core/node-version.js';
-import {
-  CHAT_MODELS,
-  EMBEDDING_MODELS,
-  SUPPORTED_PROVIDERS,
-  TRANSCRIPTION_MODELS,
-} from './core/providers.js';
+import { SUPPORTED_PROVIDERS } from './core/providers.js';
 
 const nodeVersionError = unsupportedNodeVersionMessage();
 if (nodeVersionError) {
@@ -35,27 +29,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const packageJson = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8'));
 
-// Load the API key from the environment or Arena's owner-only credential store.
-try {
-  const configManager = new ConfigManager();
-  const apiKey = await configManager.resolveOpenAIApiKey();
-  if (apiKey && !process.env.OPENAI_API_KEY) {
-    process.env.OPENAI_API_KEY = apiKey;
-  }
-} catch {
-  // Ignore config loading errors at startup
-}
-
 const program = new Command();
 
 const providerOption = (flags: string, description: string) =>
   new Option(flags, description).choices([...SUPPORTED_PROVIDERS]);
-const chatModelOption = (flags: string, description: string) =>
-  new Option(flags, description).choices([...CHAT_MODELS]);
-const embeddingModelOption = (flags: string, description: string) =>
-  new Option(flags, description).choices([...EMBEDDING_MODELS]);
+const modelOption = (flags: string, description: string) => new Option(flags, description);
 const transcriptionModelOption = (flags: string, description: string) =>
-  new Option(flags, description).choices([...TRANSCRIPTION_MODELS]);
+  new Option(flags, description);
 
 program
   .name('arena')
@@ -71,6 +51,14 @@ program
   .description('Install or repair Arena processing dependencies')
   .option('--check', 'check installation health without changing anything')
   .option('--force', 'rebuild the Arena-managed Python runtime')
+  .option('--local', 'include hash-locked llama.cpp and faster-whisper runtimes')
+  .addOption(
+    new Option('--model-pack <pack>', 'install a verified local model pack').choices([
+      'lite',
+      'default',
+      'pro',
+    ])
+  )
   .option('-y, --yes', 'approve supported system dependency installation')
   .action(setupCommand);
 
@@ -83,9 +71,7 @@ program
   .option('-n, --num-clips <number>', 'target number of clips to generate', '8')
   .option('--min <seconds>', 'minimum clip duration', '30')
   .option('--max <seconds>', 'maximum clip duration', '90')
-  .addOption(
-    chatModelOption('--editorial-model <model>', 'backward-compatible alias for --chat-model')
-  )
+  .addOption(modelOption('--editorial-model <model>', 'backward-compatible alias for --chat-model'))
   .option('--export-layers', 'export intermediate layer results for debugging')
   .option('--fast', 'fast mode - stream copy (10x faster)')
   .option('--no-cache', 'force re-transcription, ignore cached transcript')
@@ -116,11 +102,11 @@ program
   .option('--caption-position <position>', 'caption position: bottom, top, middle')
   .addOption(providerOption('--provider <provider>', 'provider shorthand for all capabilities'))
   .addOption(providerOption('--chat-provider <provider>', 'chat inference provider'))
-  .addOption(chatModelOption('--chat-model <model>', 'chat inference model'))
+  .addOption(modelOption('--chat-model <model>', 'chat inference model'))
   .addOption(providerOption('--overview-chat-provider <provider>', 'overview chat provider'))
-  .addOption(chatModelOption('--overview-chat-model <model>', 'overview chat model'))
+  .addOption(modelOption('--overview-chat-model <model>', 'overview chat model'))
   .addOption(providerOption('--embedding-provider <provider>', 'embedding provider'))
-  .addOption(embeddingModelOption('--embedding-model <model>', 'embedding model'))
+  .addOption(modelOption('--embedding-model <model>', 'embedding model'))
   .addOption(providerOption('--transcription-provider <provider>', 'transcription provider'))
   .addOption(transcriptionModelOption('--transcription-model <model>', 'transcription model'))
   .option('--debug', 'show debug information')
@@ -152,18 +138,16 @@ program
   .option('-n, --num-clips <number>', 'target number of clips to analyze')
   .option('--min <seconds>', 'minimum clip duration')
   .option('--max <seconds>', 'maximum clip duration')
-  .addOption(
-    chatModelOption('--editorial-model <model>', 'backward-compatible alias for --chat-model')
-  )
+  .addOption(modelOption('--editorial-model <model>', 'backward-compatible alias for --chat-model'))
   .option('--transcript <file>', 'use existing transcript file')
   .option('--scene-detection', 'enable scene detection for better clip boundaries')
   .addOption(providerOption('--provider <provider>', 'provider shorthand for all capabilities'))
   .addOption(providerOption('--chat-provider <provider>', 'chat inference provider'))
-  .addOption(chatModelOption('--chat-model <model>', 'chat inference model'))
+  .addOption(modelOption('--chat-model <model>', 'chat inference model'))
   .addOption(providerOption('--overview-chat-provider <provider>', 'overview chat provider'))
-  .addOption(chatModelOption('--overview-chat-model <model>', 'overview chat model'))
+  .addOption(modelOption('--overview-chat-model <model>', 'overview chat model'))
   .addOption(providerOption('--embedding-provider <provider>', 'embedding provider'))
-  .addOption(embeddingModelOption('--embedding-model <model>', 'embedding model'))
+  .addOption(modelOption('--embedding-model <model>', 'embedding model'))
   .addOption(providerOption('--transcription-provider <provider>', 'transcription provider'))
   .addOption(transcriptionModelOption('--transcription-model <model>', 'transcription model'))
   .option('--debug', 'show debug information')

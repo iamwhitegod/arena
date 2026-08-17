@@ -5,6 +5,7 @@ on:
     types: [created]
 
 permissions:
+  actions: read
   contents: read
   id-token: write
   attestations: write
@@ -26,6 +27,29 @@ jobs:
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Require successful local inference verification for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --method GET \
+            "/repos/$GITHUB_REPOSITORY/actions/workflows/local-inference-smoke.yml/runs" \
+            -f "head_sha=$GITHUB_SHA" \
+            -f status=success \
+            -f per_page=100 > /tmp/arena-local-inference-runs.json
+          node <<'NODE'
+          const runs = require('/tmp/arena-local-inference-runs.json').workflow_runs ?? [];
+          const verified = runs.find((run) =>
+            ['schedule', 'workflow_dispatch'].includes(run.event) && run.conclusion === 'success'
+          );
+          if (!verified) {
+            throw new Error(
+              `No successful local inference smoke run exists for ${process.env.GITHUB_SHA}`
+            );
+          }
+          console.log(`Using local inference verification: ${verified.html_url}`);
+          NODE
 
       - name: Setup Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -66,6 +90,7 @@ jobs:
         run: |
           npm audit --prefix cli --omit=dev --audit-level=high
           python -m pip_audit --require-hashes -r engine/requirements.lock
+          python -m pip_audit --require-hashes -r engine/requirements-local.lock
 
       - name: Build and inspect minimal package artifact
         working-directory: cli
@@ -79,6 +104,7 @@ jobs:
         run: |
           npm sbom --prefix cli --omit=dev --sbom-format cyclonedx > cli/release-artifacts/arena-cli.cdx.json
           python -m pip_audit --require-hashes -r engine/requirements.lock --format cyclonedx-json --output cli/release-artifacts/arena-engine.cdx.json
+          python -m pip_audit --require-hashes -r engine/requirements-local.lock --format cyclonedx-json --output cli/release-artifacts/arena-engine-local.cdx.json
 
       - name: Attest release artifacts
         uses: actions/attest-build-provenance@8beda2b7ed98355c0e97c0a63bec38ae472e66c4 # v4

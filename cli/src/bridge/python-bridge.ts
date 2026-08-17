@@ -11,7 +11,64 @@ import {
   prependPath,
   resolveEnginePath,
 } from '../core/runtime.js';
-import type { ProviderSelectors } from '../core/providers.js';
+import {
+  requiredProviders,
+  type ProviderCapability,
+  type ProviderSelectors,
+} from '../core/providers.js';
+
+const PYTHON_ENV_ALLOWLIST = [
+  'APPDATA',
+  'COMSPEC',
+  'HOME',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  'LOCALAPPDATA',
+  'PATHEXT',
+  'SSL_CERT_DIR',
+  'SSL_CERT_FILE',
+  'SYSTEMROOT',
+  'TEMP',
+  'TMP',
+  'TMPDIR',
+  'TZ',
+  'USERPROFILE',
+  'WINDIR',
+  'XDG_CACHE_HOME',
+  'XDG_CONFIG_HOME',
+] as const;
+
+const PROVIDER_CREDENTIAL_ENV: Readonly<Record<string, readonly string[]>> = {
+  openai: ['OPENAI_API_KEY'],
+};
+
+function pythonChildEnvironment(
+  pathValue: string,
+  providerNames: readonly string[] = [],
+  extra: NodeJS.ProcessEnv = {}
+): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    ARENA_MODEL_ROOT: path.join(getArenaHome(), 'models'),
+    PATH: pathValue,
+    PYTHONIOENCODING: 'utf-8',
+    PYTHONUNBUFFERED: '1',
+    PYTHONUTF8: '1',
+  };
+  for (const key of PYTHON_ENV_ALLOWLIST) {
+    if (process.env[key] !== undefined) env[key] = process.env[key];
+  }
+  for (const provider of new Set(providerNames)) {
+    for (const key of PROVIDER_CREDENTIAL_ENV[provider] || []) {
+      if (process.env[key] !== undefined) env[key] = process.env[key];
+    }
+  }
+  return { ...env, ...extra };
+}
+
+function providersFor(selectors: ProviderSelectors, capabilities: ProviderCapability[]): string[] {
+  return requiredProviders(selectors, capabilities);
+}
 
 export interface ProcessOptions extends ProviderSelectors {
   videoPath: string;
@@ -19,7 +76,7 @@ export interface ProcessOptions extends ProviderSelectors {
   minDuration?: number;
   maxDuration?: number;
   clipCount?: number;
-  editorialModel?: 'gpt-4o' | 'gpt-4o-mini';
+  editorialModel?: string;
   exportLayers?: boolean;
   fast?: boolean;
   noCache?: boolean;
@@ -42,7 +99,7 @@ export interface AnalyzeOptions extends ProviderSelectors {
   minDuration?: number;
   maxDuration?: number;
   clipCount?: number;
-  editorialModel?: 'gpt-4o' | 'gpt-4o-mini';
+  editorialModel?: string;
   transcriptPath?: string;
   sceneDetection?: boolean;
 }
@@ -98,7 +155,7 @@ export interface DetectScenesOptions {
 
 export interface ProgressUpdate {
   stage: string;
-  progress: number;
+  progress: number | null;
   message: string;
 }
 
@@ -341,7 +398,15 @@ export class PythonBridge {
       }
 
       const { command, args } = this.getArenaCommand('process', cmdArgs);
-      this.runCommand(command, args, resolve, reject, onProgress, onError);
+      this.runCommand(
+        command,
+        args,
+        resolve,
+        reject,
+        onProgress,
+        onError,
+        providersFor(options, ['chat', 'overviewChat', 'embedding', 'transcription'])
+      );
     });
   }
 
@@ -379,7 +444,20 @@ export class PythonBridge {
       appendProviderArgs(cmdArgs, options);
 
       const { command, args } = this.getArenaCommand('analyze', cmdArgs);
-      this.runCommand(command, args, resolve, reject, onProgress, onError);
+      this.runCommand(
+        command,
+        args,
+        resolve,
+        reject,
+        onProgress,
+        onError,
+        providersFor(
+          options,
+          options.transcriptPath
+            ? ['chat', 'overviewChat', 'embedding']
+            : ['chat', 'overviewChat', 'embedding', 'transcription']
+        )
+      );
     });
   }
 
@@ -409,7 +487,15 @@ export class PythonBridge {
       });
 
       const { command, args } = this.getArenaCommand('transcribe', cmdArgs);
-      this.runCommand(command, args, resolve, reject, onProgress, onError);
+      this.runCommand(
+        command,
+        args,
+        resolve,
+        reject,
+        onProgress,
+        onError,
+        providersFor(options, ['transcription'])
+      );
     });
   }
 
@@ -484,7 +570,8 @@ export class PythonBridge {
     resolve: (value: any) => void,
     reject: (reason?: any) => void,
     onProgress?: (update: ProgressUpdate) => void,
-    onError?: (error: string) => void
+    onError?: (error: string) => void,
+    providerNames: readonly string[] = []
   ): void {
     const isPackaged = typeof (process as any).pkg !== 'undefined';
     const binDir = path.join(getArenaHome(), 'bin');
@@ -502,10 +589,7 @@ export class PythonBridge {
     // Windows-specific spawn options to avoid job object errors
     const spawnOptions: any = {
       cwd: isPackaged ? binDir : (this.enginePath ?? process.cwd()),
-      env: {
-        ...process.env,
-        ...(isPackaged || hasManagedRuntime ? { PATH: updatedPath } : {}),
-      },
+      env: pythonChildEnvironment(updatedPath, providerNames),
     };
 
     // Fix for Windows "AssignProcessToJobObject" error
@@ -518,8 +602,6 @@ export class PythonBridge {
       // Use shell to ensure proper process handling
       spawnOptions.shell = false;
       // Enable UTF-8 encoding for Python output (emoji support)
-      spawnOptions.env.PYTHONUTF8 = '1';
-      spawnOptions.env.PYTHONIOENCODING = 'utf-8';
     }
 
     const pythonProcess = spawn(arenaCliPath, args, spawnOptions);
@@ -547,7 +629,7 @@ export class PythonBridge {
             if (update.type === 'progress' && onProgress) {
               onProgress({
                 stage: update.stage,
-                progress: update.progress,
+                progress: typeof update.progress === 'number' ? update.progress : null,
                 message: update.message,
               });
             } else if (update.type === 'result') {
@@ -586,17 +668,28 @@ export class PythonBridge {
         );
       } else {
         const diagnostics = `${errorBuffer}\n${diagnosticOutput}`.trim();
-        if (onError && diagnostics) {
-          onError(diagnostics);
-        }
         // Parse error from Python output
         const errorMessage = this.parseErrorFromOutput(diagnostics);
+        if (onError && errorMessage) {
+          onError(errorMessage);
+        }
+        const isTimeout = /\[timeout;/i.test(errorMessage);
+        const isResourceLimit = /\[local_resource_limit;/i.test(errorMessage);
+        const timeoutSuggestion = /^Transcription failed/i.test(errorMessage)
+          ? 'Retry once; if it repeats, use a faster transcription model or --transcription-provider openai'
+          : /^Analysis failed/i.test(errorMessage)
+            ? 'Retry with fewer clips, install a faster local model pack, or use --chat-provider openai'
+            : 'Retry once; if it repeats, move the timed-out capability to a faster model or cloud provider';
 
         reject(
           new ProcessingError(
-            'PROCESSING_FAILED',
+            isTimeout ? 'TIMEOUT' : isResourceLimit ? 'LOCAL_RESOURCE_LIMIT' : 'PROCESSING_FAILED',
             errorMessage || `Processing failed with exit code ${code}`,
-            'Check the error message above for details'
+            isTimeout
+              ? timeoutSuggestion
+              : isResourceLimit
+                ? 'Close memory-intensive apps, use the lite model pack, or move one capability to a cloud provider'
+                : 'Run again with --debug for CLI stack details'
           )
         );
       }
@@ -620,8 +713,24 @@ export class PythonBridge {
    * Parse error message from Python output
    */
   private parseErrorFromOutput(errorOutput: string): string {
-    // Try to extract meaningful error from Python traceback
-    const lines = errorOutput.trim().split('\n');
+    const lines = errorOutput
+      .trim()
+      .split(/[\r\n]+/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    // Arena's public error contract is already sanitized and includes a
+    // stable code plus a correlation reference. Prefer it over native model
+    // diagnostics and terminal progress lines captured from stderr.
+    for (const line of lines) {
+      const marker = line.indexOf('❌');
+      if (
+        marker >= 0 &&
+        /\[[a-z0-9_-]+;\s*retryable=(?:true|false);\s*ref=[a-z0-9]+\]:/i.test(line)
+      ) {
+        return line.slice(marker + 1).trim();
+      }
+    }
 
     // Look for common error patterns
     for (const line of lines) {
@@ -632,8 +741,8 @@ export class PythonBridge {
 
     // Return last non-empty line as error
     for (let i = lines.length - 1; i >= 0; i--) {
-      const line = lines[i].trim();
-      if (line && !line.startsWith('File ') && !line.startsWith('  ')) {
+      const line = lines[i];
+      if (line && !line.startsWith('File ') && !line.includes('%|') && !line.startsWith('ggml_')) {
         return line;
       }
     }
@@ -736,7 +845,9 @@ export class PythonBridge {
           : 'python3';
 
       // Windows-specific spawn options to avoid job object errors
-      const spawnOptions: any = {};
+      const spawnOptions: any = {
+        env: pythonChildEnvironment(process.env.PATH || ''),
+      };
       if (process.platform === 'win32') {
         spawnOptions.windowsHide = true;
         spawnOptions.detached = true;
@@ -793,10 +904,11 @@ export class PythonBridge {
       // Windows-specific spawn options to avoid job object errors
       const spawnOptions: any = {
         cwd: this.enginePath ?? process.cwd(),
-        env: {
-          ...process.env,
-          ...(this.enginePath ? { PYTHONPATH: this.enginePath } : {}),
-        },
+        env: pythonChildEnvironment(
+          process.env.PATH || '',
+          [],
+          this.enginePath ? { PYTHONPATH: this.enginePath } : {}
+        ),
       };
 
       if (process.platform === 'win32') {

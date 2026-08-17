@@ -19,7 +19,7 @@ This roadmap communicates direction, not guaranteed dates. Priorities may change
 - Processing starts immediately from the terminal without requiring a large source-video upload to the cloud.
 - Creators save upload time and bandwidth and avoid repeated upload failures on unreliable connections.
 - Source videos, transcripts, analysis results, and generated clips remain on the user's machine unless they explicitly use an external provider or Arena Cloud.
-- The architecture leaves room for optional local transcription, analysis, and embedding models in the future.
+- Optional verified local transcription, analysis, and embedding models run on Linux, macOS, and Windows.
 - Creators get a fast, private workflow while developers get scriptable commands and inspectable artifacts.
 
 ## Product tracks

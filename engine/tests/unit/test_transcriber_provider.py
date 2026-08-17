@@ -25,6 +25,21 @@ class SizeRecordingSpeechModel(FakeSpeechModel):
 
 class TestProviderChunking(unittest.TestCase):
 
+    @patch("arena.providers.local_speech.LocalSpeechModel")
+    @patch("arena.models.locator.ModelLocator.resolve_speech_model")
+    def test_legacy_local_mode_uses_verified_path_without_alias_download(
+        self, resolve_model, local_model
+    ):
+        verified_path = "/private/models/faster-whisper-base"
+        resolve_model.return_value = verified_path
+        local_model.return_value = FakeSpeechModel()
+
+        transcriber = Transcriber(mode="local")
+
+        resolve_model.assert_called_once_with("auto")
+        local_model.assert_called_once_with(model_size_or_path=verified_path)
+        self.assertEqual(transcriber.mode, "provider")
+
     def test_oversized_encoded_chunk_is_reduced_before_submission(self):
         limit_mb = 0.01
         limit_bytes = int(limit_mb * 1024 * 1024)

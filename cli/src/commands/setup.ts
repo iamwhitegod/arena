@@ -16,6 +16,7 @@ import { fileURLToPath } from 'url';
 import {
   RUNTIME_SCHEMA_VERSION,
   findCompatibleSystemPython,
+  getArenaHome,
   getManagedEnvironmentsDir,
   getManagedVenvDir,
   getRuntimeDir,
@@ -35,11 +36,16 @@ const packageJson = fs.readJsonSync(path.resolve(__dirname, '../../package.json'
   arenaPreparedArtifact?: boolean;
 };
 const DEFAULT_SETUP_TIMEOUT_MS = 15 * 60 * 1000;
+const MODEL_INSTALL_TIMEOUT_MS = 90 * 60 * 1000;
 const COMMAND_CHECK_TIMEOUT_MS = 15 * 1000;
+const LOCAL_MODEL_PACKS = ['lite', 'default', 'pro'] as const;
+type LocalModelPack = (typeof LOCAL_MODEL_PACKS)[number];
 
 export interface SetupOptions {
   check?: boolean;
   force?: boolean;
+  local?: boolean;
+  modelPack?: LocalModelPack;
   yes?: boolean;
 }
 
@@ -64,6 +70,35 @@ interface InstallerCommand {
 interface IntegrityStatus {
   valid: boolean;
   detail: string;
+}
+
+export function nativeCompilerChecks(
+  platform: NodeJS.Platform = process.platform
+): Array<[string, string[]]> {
+  if (platform === 'win32') {
+    return [
+      ['where.exe', ['cl.exe']],
+      ['where.exe', ['clang.exe']],
+      ['where.exe', ['gcc.exe']],
+    ];
+  }
+  if (platform === 'darwin') {
+    return [['xcrun', ['--find', 'clang']]];
+  }
+  return [
+    ['cc', ['--version']],
+    ['clang', ['--version']],
+    ['gcc', ['--version']],
+  ];
+}
+
+async function hasNativeCompiler(): Promise<boolean> {
+  for (const [command, args] of nativeCompilerChecks()) {
+    if (await commandAvailable(command, args)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function getSetupTimeoutMs(): number {
@@ -348,7 +383,23 @@ function managedPythonAt(venvDir: string): string {
   );
 }
 
-async function verifyPython(pythonPath: string, verifyImports = true): Promise<RuntimeStatus> {
+export function runtimeRequirementsLock(includeLocal: boolean): string {
+  return includeLocal ? 'requirements-local.lock' : 'requirements.lock';
+}
+
+export function runtimeImportProbe(includeLocal: boolean): string {
+  const imports = ['arena', 'cv2', 'librosa', 'numpy', 'openai', 'yt_dlp'];
+  if (includeLocal) {
+    imports.push('llama_cpp', 'faster_whisper', 'ctranslate2');
+  }
+  return `import ${imports.join(', ')}; print("arena-runtime-ok")`;
+}
+
+async function verifyPython(
+  pythonPath: string,
+  verifyImports = true,
+  includeLocal = false
+): Promise<RuntimeStatus> {
   if (!(await fs.pathExists(pythonPath))) {
     return { ready: false, reason: 'managed Python is missing' };
   }
@@ -367,10 +418,7 @@ async function verifyPython(pythonPath: string, verifyImports = true): Promise<R
     return { ready: true, pythonVersion };
   }
 
-  const importResult = await runCommand(pythonPath, [
-    '-c',
-    'import arena, cv2, librosa, numpy, openai, yt_dlp; print("arena-runtime-ok")',
-  ]);
+  const importResult = await runCommand(pythonPath, ['-c', runtimeImportProbe(includeLocal)]);
   if (importResult.code !== 0 || !importResult.stdout.includes('arena-runtime-ok')) {
     return {
       ready: false,
@@ -382,7 +430,7 @@ async function verifyPython(pythonPath: string, verifyImports = true): Promise<R
   return { ready: true, pythonVersion };
 }
 
-async function getInstalledRuntimeStatus(): Promise<RuntimeStatus> {
+async function getInstalledRuntimeStatus(includeLocal = false): Promise<RuntimeStatus> {
   const manifest = await readRuntimeManifest();
   if (!manifest) {
     return { ready: false, reason: 'runtime manifest is missing' };
@@ -395,7 +443,31 @@ async function getInstalledRuntimeStatus(): Promise<RuntimeStatus> {
     };
   }
 
-  return verifyPython(manifest.pythonPath);
+  return verifyPython(manifest.pythonPath, true, includeLocal);
+}
+
+async function installVerifiedModelPack(
+  pythonPath: string,
+  pack: LocalModelPack,
+  onOutput?: (output: string) => void
+): Promise<void> {
+  if (!LOCAL_MODEL_PACKS.includes(pack)) {
+    throw new Error(`Unknown local model pack: ${pack}`);
+  }
+  const modelRoot = path.join(getArenaHome(), 'models');
+  const code = [
+    'from pathlib import Path',
+    'from arena.models import MODEL_PACKS, ModelManager',
+    `ModelManager(Path(${JSON.stringify(modelRoot)})).install_pack(MODEL_PACKS[${JSON.stringify(pack)}])`,
+  ].join('; ');
+  const result = await runCommand(pythonPath, ['-c', code], {
+    env: { ...process.env, ARENA_MODEL_ROOT: modelRoot },
+    onOutput,
+    timeoutMs: MODEL_INSTALL_TIMEOUT_MS,
+  });
+  if (result.code !== 0) {
+    throw commandFailure(`Installing verified ${pack} model pack`, result);
+  }
 }
 
 async function detectFfmpegInstaller(): Promise<InstallerCommand | null> {
@@ -545,6 +617,7 @@ function commandFailure(step: string, result: CommandResult): Error {
 async function buildRuntime(
   basePython: PythonCommand,
   enginePath: string,
+  includeLocal: boolean,
   onProgress?: (message: string) => void
 ): Promise<RuntimeStatus> {
   const runtimeDir = getRuntimeDir();
@@ -559,7 +632,7 @@ async function buildRuntime(
   const lockPath = await acquireInstallLock();
   let promoted = false;
 
-  const pipEnvironment = {
+  const pipEnvironment: NodeJS.ProcessEnv = {
     ...process.env,
     PIP_DISABLE_PIP_VERSION_CHECK: '1',
     PIP_NO_INPUT: '1',
@@ -607,6 +680,8 @@ async function buildRuntime(
       'setup.py',
       'requirements.txt',
       'requirements.lock',
+      'requirements-local.txt',
+      'requirements-local.lock',
       'build-requirements.txt',
       'build-requirements.lock',
     ]) {
@@ -625,6 +700,12 @@ async function buildRuntime(
     }
 
     const candidatePython = managedPythonAt(candidateVenvDir);
+    pipEnvironment.PATH = [path.dirname(candidatePython), process.env.PATH ?? '']
+      .filter(Boolean)
+      .join(path.delimiter);
+    if (includeLocal && process.platform === 'darwin' && process.arch === 'arm64') {
+      pipEnvironment.CMAKE_ARGS = '-DGGML_METAL=on -DCMAKE_OSX_ARCHITECTURES=arm64';
+    }
     onProgress?.('Installing hash-verified Python build tooling');
     const toolingResult = await runCommand(
       candidatePython,
@@ -655,7 +736,7 @@ async function buildRuntime(
         '--require-hashes',
         '--no-build-isolation',
         '--requirement',
-        path.join(engineSourceDir, 'requirements.lock'),
+        path.join(engineSourceDir, runtimeRequirementsLock(includeLocal)),
       ],
       { env: pipEnvironment, onOutput: reportOutput, timeoutMs: setupTimeoutMs }
     );
@@ -683,7 +764,7 @@ async function buildRuntime(
     }
 
     onProgress?.('Verifying engine imports');
-    const verification = await verifyPython(candidatePython);
+    const verification = await verifyPython(candidatePython, true, includeLocal);
     if (!verification.ready) {
       throw new Error(`Runtime verification failed: ${verification.reason}`);
     }
@@ -707,14 +788,14 @@ async function buildRuntime(
   }
 }
 
-async function printCheck(): Promise<boolean> {
+async function printCheck(includeLocal = false): Promise<boolean> {
   console.log(chalk.bold('\nArena installation check\n'));
 
   const enginePath = resolveEnginePath(__dirname);
   const integrity = enginePath
     ? await verifyEngineIntegrity(enginePath)
     : { valid: false, detail: 'engine unavailable' };
-  const runtime = await getInstalledRuntimeStatus();
+  const runtime = await getInstalledRuntimeStatus(includeLocal);
   const ffmpeg = await commandAvailable('ffmpeg', ['-version']);
   const ffprobe = await commandAvailable('ffprobe', ['-version']);
   const systemPython = await findCompatibleSystemPython();
@@ -736,6 +817,13 @@ async function printCheck(): Promise<boolean> {
     ['ffprobe', ffprobe, ffprobe ? 'available' : 'not found'],
     ['yt-dlp JS runtime', true, `Node ${process.versions.node}`],
   ];
+  if (includeLocal) {
+    rows.push([
+      'Local inference runtimes',
+      runtime.ready,
+      runtime.ready ? 'llama.cpp, faster-whisper, and CTranslate2 available' : 'not installed',
+    ]);
+  }
 
   for (const [name, ready, detail] of rows) {
     console.log(`${ready ? chalk.green('✓') : chalk.red('✗')} ${name}: ${chalk.gray(detail)}`);
@@ -753,13 +841,24 @@ async function printCheck(): Promise<boolean> {
 export async function setupCommand(options: SetupOptions = {}): Promise<void> {
   logCommand('setup', { ...options });
 
+  if (options.modelPack && !options.local) {
+    console.log(chalk.red('\n✗ --model-pack requires --local.\n'));
+    process.exitCode = 1;
+    return;
+  }
+
   if (typeof (process as NodeJS.Process & { pkg?: unknown }).pkg !== 'undefined') {
+    if (options.local) {
+      console.log(chalk.red('\n✗ Local inference add-ons require the npm-managed runtime.\n'));
+      process.exitCode = 1;
+      return;
+    }
     console.log(chalk.green('\n✓ Arena standalone includes its processing runtime.\n'));
     return;
   }
 
   if (options.check) {
-    if (!(await printCheck())) {
+    if (!(await printCheck(options.local === true))) {
       process.exitCode = 1;
     }
     return;
@@ -797,11 +896,29 @@ export async function setupCommand(options: SetupOptions = {}): Promise<void> {
     return;
   }
 
-  const currentStatus = await getInstalledRuntimeStatus();
+  const currentStatus = await getInstalledRuntimeStatus(options.local === true);
   if (currentStatus.ready && !options.force) {
     console.log(
       chalk.green(`✓ Arena runtime is already ready (Python ${currentStatus.pythonVersion}).`)
     );
+    if (options.modelPack) {
+      const manifest = await readRuntimeManifest();
+      if (!manifest) {
+        console.log(chalk.red('✗ Arena runtime manifest is missing.\n'));
+        process.exitCode = 1;
+        return;
+      }
+      const spinner = ora(`Installing verified ${options.modelPack} model pack`).start();
+      try {
+        await installVerifiedModelPack(manifest.pythonPath, options.modelPack);
+        spinner.succeed(`Verified ${options.modelPack} model pack installed`);
+      } catch (error) {
+        spinner.fail('Verified model installation failed');
+        console.log(chalk.red(`\n${(error as Error).message}\n`));
+        process.exitCode = 1;
+      }
+      return;
+    }
     console.log(chalk.gray('  Use arena setup --force to rebuild it.\n'));
     return;
   }
@@ -815,22 +932,61 @@ export async function setupCommand(options: SetupOptions = {}): Promise<void> {
     return;
   }
 
+  if (options.local && !(await hasNativeCompiler())) {
+    console.log(chalk.red('✗ Local llama.cpp setup requires a native C/C++ compiler.'));
+    const help =
+      process.platform === 'darwin'
+        ? 'Run: xcode-select --install'
+        : process.platform === 'win32'
+          ? 'Install Visual Studio Build Tools with Desktop development with C++.'
+          : 'Install GCC or Clang with your distribution package manager.';
+    console.log(chalk.white(`  ${help}\n`));
+    process.exitCode = 1;
+    return;
+  }
+
   if (options.force) {
     console.log(chalk.gray('Rebuilding the managed runtime from scratch.'));
   }
 
-  const spinner = ora(`Installing Arena engine with Python ${basePython.version}`).start();
+  const runtimeLabel = options.local ? 'Arena engine and local inference runtimes' : 'Arena engine';
+  const spinner = ora(`Installing ${runtimeLabel} with Python ${basePython.version}`).start();
   try {
-    const installed = await buildRuntime(basePython, enginePath, (message) => {
-      spinner.text = message;
-      if (!process.stdout.isTTY) {
-        console.log(chalk.gray(`  ${message}`));
+    const installed = await buildRuntime(
+      basePython,
+      enginePath,
+      options.local === true,
+      (message) => {
+        spinner.text = message;
+        if (!process.stdout.isTTY) {
+          console.log(chalk.gray(`  ${message}`));
+        }
       }
-    });
+    );
     spinner.succeed(`Arena runtime installed (Python ${installed.pythonVersion})`);
+    if (options.modelPack) {
+      const manifest = await readRuntimeManifest();
+      if (!manifest) {
+        throw new Error('Runtime manifest missing after local installation');
+      }
+      const modelSpinner = ora(`Installing verified ${options.modelPack} model pack`).start();
+      try {
+        await installVerifiedModelPack(manifest.pythonPath, options.modelPack);
+        modelSpinner.succeed(`Verified ${options.modelPack} model pack installed`);
+      } catch (error) {
+        modelSpinner.fail('Verified model installation failed');
+        throw error;
+      }
+    }
     console.log(chalk.green('\n✓ Arena installation is ready.'));
     console.log(chalk.white('  Next: arena init'));
     console.log(chalk.white('  Verify anytime: arena setup --check\n'));
+    if (options.local) {
+      if (!options.modelPack) {
+        console.log(chalk.white('  Install models: arena setup --local --model-pack lite'));
+      }
+      console.log(chalk.white('  See: docs/guides/local-inference.md\n'));
+    }
   } catch (error) {
     const setupError = error instanceof Error ? error : new Error(String(error));
     spinner.fail('Arena runtime installation failed');

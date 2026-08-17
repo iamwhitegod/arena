@@ -84,21 +84,21 @@ class TestPipelineSignature(unittest.TestCase):
 
 class TestEditorialInferenceIdentity(unittest.TestCase):
 
-    def _bundle(self, chat_model):
+    def _bundle(self, chat_model, concurrency=1):
         profile = RuntimeProfile(
             chat=ModelBinding(provider="fake", model=chat_model),
             embedding=ModelBinding(provider="fake", model="embed"),
             transcription=ModelBinding(provider="fake", model="speech"),
         )
-        return self._registry().build_required(
+        return self._registry(concurrency).build_required(
             profile,
             {Capability.CHAT, Capability.EMBEDDING},
             MagicMock(),
         )
 
-    def _registry(self):
+    def _registry(self, concurrency=1):
         return ProviderRegistry(ProviderFactories(
-            chat={"fake": lambda b, c: FakeChatModel()},
+            chat={"fake": lambda b, c: FakeChatModel(concurrency=concurrency)},
             embedding={"fake": lambda b, c: FakeEmbeddingModel()},
             speech={"fake": lambda b, c: FakeSpeechModel()},
         ))
@@ -130,6 +130,19 @@ class TestEditorialInferenceIdentity(unittest.TestCase):
                 "completeness": float("nan"),
                 "standalone": 1.0,
             })
+
+    def test_editorial_parallelism_uses_provider_concurrency_hint(self):
+        from arena.editorial import FourLayerAdapter
+
+        adapter = FourLayerAdapter(inference=self._bundle("chat-a", concurrency=3))
+
+        self.assertEqual(adapter.max_workers, 3)
+
+    def test_explicit_parallelism_is_bounded(self):
+        from arena.editorial import FourLayerAdapter
+
+        with self.assertRaisesRegex(ValueError, "between 1 and 16"):
+            FourLayerAdapter(inference=self._bundle("chat-a"), max_workers=17)
 
 
 class TestPythonCliArgParsing(unittest.TestCase):

@@ -2,7 +2,6 @@
  * Format clips for specific social media platforms
  */
 
-import chalk from 'chalk';
 import path from 'path';
 import { PythonBridge } from '../bridge/python-bridge.js';
 import { displayErrorSummary } from '../ui/summary.js';
@@ -46,11 +45,12 @@ export async function formatCommand(input: string, options: FormatOptions): Prom
     // Progress tracking
     const progress = new ProgressTracker();
     progress.start('Formatting media...');
-    const onProgress = (update: ProgressUpdate) =>
-      progress.showDeterminate(update.progress, update.message);
-
-    const onError = (error: string) => {
-      console.error(chalk.red(`  ⚠️  ${error}`));
+    const onProgress = (update: ProgressUpdate) => {
+      if (update.progress === null) {
+        progress.showIndeterminate(update.message);
+      } else {
+        progress.showDeterminate(update.progress, update.message);
+      }
     };
 
     // Run formatting
@@ -68,8 +68,7 @@ export async function formatCommand(input: string, options: FormatOptions): Prom
         captionColor: options.captionColor,
         captionPosition: options.captionPosition,
       },
-      onProgress,
-      onError
+      onProgress
     );
 
     // Display results

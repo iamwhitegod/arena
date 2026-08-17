@@ -13,14 +13,18 @@ import { isArenaError } from '../errors/index.js';
 import { displayAnalysisSummary } from '../ui/summary.js';
 import { commandHeader } from '../ui/output.js';
 import { ConfigManager } from '../core/config.js';
-import { requiredProviders, type ProviderSelectors } from '../core/providers.js';
+import {
+  requiredProviders,
+  resolveProviderSelectors,
+  type ProviderSelectors,
+} from '../core/providers.js';
 
 interface AnalyzeOptions extends ProviderSelectors {
   output?: string;
   numClips?: string;
   min?: string;
   max?: string;
-  editorialModel?: 'gpt-4o' | 'gpt-4o-mini';
+  editorialModel?: string;
   transcript?: string;
   sceneDetection?: boolean;
   debug?: boolean;
@@ -39,23 +43,27 @@ export async function analyzeCommand(videoPath: string, options: AnalyzeOptions)
         path.dirname(absoluteVideoPath),
         `${path.basename(absoluteVideoPath, path.extname(absoluteVideoPath))}_analysis.json`
       );
-    const globalConfig = await new ConfigManager().getGlobalConfig();
-    const selectors: ProviderSelectors = {
-      provider: options.provider || globalConfig.provider,
-      chatProvider: options.chatProvider || globalConfig.chat_provider,
-      chatModel: options.chatModel || options.editorialModel || globalConfig.chat_model || 'gpt-4o',
-      overviewChatProvider: options.overviewChatProvider || globalConfig.overview_chat_provider,
-      overviewChatModel: options.overviewChatModel || globalConfig.overview_chat_model,
-      embeddingProvider: options.embeddingProvider || globalConfig.embedding_provider,
-      embeddingModel: options.embeddingModel || globalConfig.embedding_model,
-      transcriptionProvider: options.transcriptionProvider || globalConfig.transcription_provider,
-      transcriptionModel: options.transcriptionModel || globalConfig.transcription_model,
-    };
+    const configManager = new ConfigManager();
+    const globalConfig = await configManager.getGlobalConfig();
+    const selectors = resolveProviderSelectors(
+      {
+        ...options,
+        chatModel: options.chatModel || options.editorialModel,
+      },
+      globalConfig
+    );
+    const providerNames = requiredProviders(
+      selectors,
+      options.transcript
+        ? ['chat', 'overviewChat', 'embedding']
+        : ['chat', 'overviewChat', 'embedding', 'transcription']
+    );
+    await configManager.populateRequiredProviderCredentials(providerNames);
 
     commandHeader('Analyze video', [
       ['Input', path.basename(absoluteVideoPath)],
       ['Output', outputFile],
-      ['Model', selectors.chatModel || 'gpt-4o'],
+      ['Model', selectors.chatModel || 'provider default'],
     ]);
 
     const preflightResult = await runPreflightChecksWithProgress({
@@ -64,12 +72,7 @@ export async function analyzeCommand(videoPath: string, options: AnalyzeOptions)
       numClips: options.numClips,
       minDuration: options.min,
       maxDuration: options.max,
-      requiredProviders: requiredProviders(
-        selectors,
-        options.transcript
-          ? ['chat', 'overviewChat', 'embedding']
-          : ['chat', 'overviewChat', 'embedding', 'transcription']
-      ),
+      requiredProviders: providerNames,
       enginePath: bridge.getEnginePath(),
     });
 
@@ -103,9 +106,6 @@ export async function analyzeCommand(videoPath: string, options: AnalyzeOptions)
       },
       (update) => {
         progress.updateStage(update.stage, update.progress, update.message);
-      },
-      (error) => {
-        console.error(chalk.red(error));
       }
     );
 

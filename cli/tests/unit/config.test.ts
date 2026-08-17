@@ -138,6 +138,18 @@ describe('ConfigManager', () => {
       expect(await manager.resolveOpenAIApiKey()).toBe(process.env.OPENAI_API_KEY);
     });
 
+    it('should expose stored credentials only for required providers', async () => {
+      const manager = new ConfigManager();
+      const apiKey = `sk-${'r'.repeat(48)}`;
+      await manager.setOpenAIApiKey(apiKey);
+
+      await manager.populateRequiredProviderCredentials([]);
+      expect(process.env.OPENAI_API_KEY).toBeUndefined();
+
+      await manager.populateRequiredProviderCredentials(['openai']);
+      expect(process.env.OPENAI_API_KEY).toBe(apiKey);
+    });
+
     it('should migrate a legacy API key out of config.json', async () => {
       const manager = new ConfigManager();
       const apiKey = `sk-${'m'.repeat(48)}`;

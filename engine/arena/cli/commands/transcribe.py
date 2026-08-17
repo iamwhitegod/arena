@@ -22,27 +22,35 @@ def run_transcribe(args):
         return 1
 
     # Build a non-secret transcription identity before constructing adapters.
-    if args.mode == "local":
-        transcription_fingerprint = hashlib.sha256(
-            b"arena-transcription-v1:local:openai-whisper:base"
-        ).hexdigest()[:20]
-        runtime_profile = None
-        speech = None
-    else:
-        from arena.providers import Capability, RuntimeProfile
-        try:
-            runtime_profile = RuntimeProfile.from_args(
-                provider=getattr(args, 'provider', None),
-                transcription_provider=getattr(args, 'transcription_provider', None),
-                transcription_model=getattr(args, 'transcription_model', None),
-            )
-        except ValueError as e:
-            print(f"❌ Provider configuration failed: {e}")
-            return 1
-        transcription_fingerprint = runtime_profile.fingerprint(
-            {Capability.SPEECH}, namespace="arena-transcription-v1"
+    # --mode local is deprecated; redirect through the provider system.
+    effective_provider = getattr(args, 'provider', None)
+    effective_trans_provider = getattr(args, 'transcription_provider', None)
+    effective_trans_model = getattr(args, 'transcription_model', None)
+
+    if args.mode == "local" and not effective_provider and not effective_trans_provider:
+        import warnings
+        warnings.warn(
+            "--mode local is deprecated. Use --provider local instead.",
+            DeprecationWarning,
+            stacklevel=2,
         )
-        speech = None
+        effective_provider = "local"
+
+    from arena.providers import Capability, RuntimeProfile
+    try:
+        runtime_profile = RuntimeProfile.from_args(
+            provider=effective_provider,
+            transcription_provider=effective_trans_provider,
+            transcription_model=effective_trans_model,
+        )
+    except ValueError as e:
+        from arena.cli.public_errors import format_public_error
+        print(format_public_error(e, "Provider configuration failed"))
+        return 1
+    transcription_fingerprint = runtime_profile.fingerprint(
+        {Capability.SPEECH}, namespace="arena-transcription-v1"
+    )
+    speech = None
 
     # Determine output path
     if args.output:
@@ -69,19 +77,19 @@ def run_transcribe(args):
         result({"success": True, "cached": True, "duration": transcript_data.get("duration", 0), "wordCount": len(transcript_data.get("words", [])), "language": transcript_data.get("language", "unknown"), "outputFile": str(output_path)})
         return 0
 
-    if args.mode != "local":
-        from arena.providers import resolve_inference, Capability
-        from arena.providers.base import ProviderAuthError
-        try:
-            inference = resolve_inference(
-                required={Capability.SPEECH}, profile=runtime_profile,
-            )
-            speech = inference.require_speech()
-        except ProviderAuthError as e:
-            print(f"❌ Error: {e}")
-            print("   Get one at: https://platform.openai.com/api-keys")
-            print("   Set it with: export OPENAI_API_KEY='sk-your-key-here'")
-            return 1
+    from arena.providers import resolve_inference, Capability
+    from arena.providers.base import ProviderAuthError
+    try:
+        inference = resolve_inference(
+            required={Capability.SPEECH}, profile=runtime_profile,
+        )
+        speech = inference.require_speech()
+    except ProviderAuthError as e:
+        from arena.cli.public_errors import format_public_error
+        print(format_public_error(e))
+        print("   Get one at: https://platform.openai.com/api-keys")
+        print("   Set it with: export OPENAI_API_KEY='sk-your-key-here'")
+        return 1
 
     print(f"\n🎤 Transcribing: {video_path.name}")
     print(f"   Mode: {args.mode}")
@@ -89,12 +97,10 @@ def run_transcribe(args):
 
     try:
         progress("transcription", 5, "Preparing audio")
-        if speech is not None:
-            transcriber = Transcriber(speech=speech)
-        else:
-            transcriber = Transcriber(mode="local")
+        transcriber = Transcriber(speech=speech)
 
         print("⏳ Transcribing (this may take a few minutes)...")
+        progress("transcription", None, "Transcribing audio")
         transcript_data = transcriber.transcribe(video_path)
 
         # Save transcript
@@ -115,5 +121,6 @@ def run_transcribe(args):
         return 0
 
     except Exception as e:
-        print(f"\n❌ Transcription failed: {e}")
+        from arena.cli.public_errors import format_public_error
+        print(f"\n{format_public_error(e, 'Transcription failed')}")
         return 1

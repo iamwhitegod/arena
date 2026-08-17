@@ -90,7 +90,8 @@ def run_generate(args):
                             json.dump(metadata, f, indent=2)
 
                     except Exception as e:
-                        print(f"   ⚠️  Thumbnail failed for {result['clip_id']}: {e}")
+                        from arena.cli.public_errors import format_public_error
+                        print(f"   {format_public_error(e, 'Thumbnail generation failed')}")
 
         # Summary
         successful = sum(1 for r in results if r.get('success'))
@@ -108,7 +109,6 @@ def run_generate(args):
         return 0
 
     except Exception as e:
-        print(f"\n❌ Generation failed: {e}")
-        import traceback
-        traceback.print_exc()
+        from arena.cli.public_errors import format_public_error
+        print(f"\n{format_public_error(e, 'Generation failed')}")
         return 1

@@ -41,6 +41,7 @@ def make_standalone_response():
     content = json.dumps({
         'is_standalone': True,
         'standalone_score': 0.95,
+        'dependency_level': 'standalone',
         'issues': [],
         'unresolved_references': [],
         'reasoning': 'Content is fully self-contained with clear context.',
@@ -61,6 +62,7 @@ def make_needs_context_response():
     content = json.dumps({
         'is_standalone': False,
         'standalone_score': 0.3,
+        'dependency_level': 'needs_context',
         'issues': [
             'Unresolved pronoun "he" without antecedent',
             'Reference to "that idea" without prior context',
@@ -106,6 +108,46 @@ class TestStandaloneValidation(unittest.TestCase):
         self.assertFalse(result['is_standalone'])
         self.assertLess(result['standalone_score'], 0.5)
         self.assertGreater(len(result['issues']), 0)
+
+    def test_string_false_is_not_treated_as_true(self):
+        content = json.dumps({
+            'is_standalone': 'false',
+            'standalone_score': 0.95,
+            'dependency_level': 'standalone',
+            'issues': [],
+            'unresolved_refs': [],
+            'reasoning': 'malformed boolean',
+            'confidence': 0.9,
+        })
+        validator = StandaloneValidator(chat=FakeChatModel([
+            ChatResponse(content=content, parsed=json.loads(content))
+        ]))
+
+        result = validator.validate(make_thought_unit())
+
+        self.assertFalse(result['is_standalone'])
+
+    def test_untrusted_collections_and_text_are_bounded(self):
+        parsed = {
+            'is_standalone': False,
+            'standalone_score': 0.2,
+            'dependency_level': 'needs_context',
+            'issues': ['x' * 2000] * 100,
+            'unresolved_refs': 'not-a-list',
+            'reasoning': '\x1b]52;c;unsafe\x07' + ('r' * 20_000),
+            'confidence': 0.5,
+        }
+        validator = StandaloneValidator(chat=FakeChatModel([
+            ChatResponse(content='{}', parsed=parsed)
+        ]))
+
+        result = validator.validate(make_thought_unit())
+
+        self.assertEqual(len(result['issues']), 50)
+        self.assertTrue(all(len(issue) <= 1000 for issue in result['issues']))
+        self.assertEqual(result['unresolved_refs'], [])
+        self.assertEqual(len(result['reasoning']), 10_000)
+        self.assertNotIn('\x1b', result['reasoning'])
 
     def test_metrics_tracked(self):
         """Metrics should track validated units and standalone counts."""

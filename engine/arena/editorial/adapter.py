@@ -49,7 +49,7 @@ class FourLayerAdapter:
         score_weights: Optional[Dict[str, float]] = None,
         enable_checkpoints: bool = True,
         checkpoint_dir: str = ".checkpoint",
-        max_workers: int = 1,
+        max_workers: Optional[int] = None,
         *,
         inference=None,
     ):
@@ -63,8 +63,8 @@ class FourLayerAdapter:
             score_weights: Custom scoring weights (default: {'completeness': 0.75, 'standalone': 0.25})
             enable_checkpoints: Enable progress checkpointing (default: True)
             checkpoint_dir: Directory for checkpoints (default: .checkpoint)
-            max_workers: Max parallel API calls for scoring/validation (default: 1)
-                        Sequential avoids 429 rate limits on most OpenAI tiers.
+            max_workers: Explicit parallel-call limit. By default Arena uses
+                        the most conservative provider concurrency hint.
             inference: InferenceBundle with chat and embedding models (preferred)
         """
         if inference is not None:
@@ -93,11 +93,26 @@ class FourLayerAdapter:
         else:
             raise ValueError("Either inference bundle or api_key is required")
 
+        self._compact_editorial = (
+            getattr(self._chat, "context_window_tokens", 128_000) <= 16_384
+        )
+
         self.export_layers = export_layers
         self.layer_outputs = {}  # Store for export
         self.enable_checkpoints = enable_checkpoints
         self.checkpoint_dir = checkpoint_dir
-        self.max_workers = max_workers
+        if max_workers is None:
+            hints = [
+                self._chat.concurrency_hint,
+                self._overview_chat.concurrency_hint,
+            ]
+            self.max_workers = max(1, min(min(hints), 16))
+        elif isinstance(max_workers, bool) or not isinstance(max_workers, int):
+            raise ValueError("max_workers must be an integer")
+        elif not 1 <= max_workers <= 16:
+            raise ValueError("max_workers must be between 1 and 16")
+        else:
+            self.max_workers = max_workers
 
         # Scoring weights affect both output and checkpoint identity. Keep an
         # immutable, validated snapshot so the two cannot drift mid-run.
@@ -375,23 +390,27 @@ class FourLayerAdapter:
         print("-" * 70)
         sys.stdout.flush()
 
-        # Standalone validation (parallel processing for speed)
-        print("      Running standalone validation...")
-        sys.stdout.flush()
-        self.standalone_validator = StandaloneValidator(chat=self._chat)
-        validations = self.standalone_validator.validate_batch_parallel(thought_units, max_workers=self.max_workers, verbose=False)
-        thought_units = self.standalone_validator.update_thought_units(thought_units, validations)
+        if self._compact_editorial:
+            validations, scores = self._score_compact_units(thought_units)
+        else:
+            # Standalone validation (parallel processing for speed)
+            print("      Running standalone validation...")
+            sys.stdout.flush()
+            self.standalone_validator = StandaloneValidator(chat=self._chat)
+            validations = self.standalone_validator.validate_batch_parallel(thought_units, max_workers=self.max_workers, verbose=False)
+            thought_units = self.standalone_validator.update_thought_units(thought_units, validations)
 
         standalone_rate = sum(1 for v in validations if v['is_standalone']) / len(validations) * 100 if validations else 0
         print(f"      ✓ Standalone validation: {standalone_rate:.0f}% passed")
         sys.stdout.flush()
 
-        # Completeness scoring (parallel processing for speed)
-        print("      Running completeness scoring...")
-        sys.stdout.flush()
-        self.completeness_scorer = CompletenessScorer(chat=self._chat)
-        scores = self.completeness_scorer.score_batch_parallel(thought_units, max_workers=self.max_workers, verbose=False)
-        thought_units = self.completeness_scorer.update_thought_units(thought_units, scores)
+        if not self._compact_editorial:
+            # Completeness scoring (parallel processing for speed)
+            print("      Running completeness scoring...")
+            sys.stdout.flush()
+            self.completeness_scorer = CompletenessScorer(chat=self._chat)
+            scores = self.completeness_scorer.score_batch_parallel(thought_units, max_workers=self.max_workers, verbose=False)
+            thought_units = self.completeness_scorer.update_thought_units(thought_units, scores)
 
         avg_completeness = sum(u.completeness_score for u in thought_units) / len(thought_units) if thought_units else 0
         production_count = sum(1 for u in thought_units if u.meets_production_standard())
@@ -531,6 +550,55 @@ class FourLayerAdapter:
             checkpoint_mgr.clear_checkpoints(job_id)
 
         return legacy_clips
+
+    @staticmethod
+    def _score_compact_units(thought_units):
+        """Deterministically score transcript-grounded compact-model units."""
+        from .thought_unit import DependencyLevel
+
+        validations = []
+        scores = []
+        for unit in thought_units:
+            has_structure = (
+                unit.has_premise() and unit.has_claim() and unit.has_resolution()
+            )
+            standalone_score = 0.86 if has_structure else 0.55
+            unit.dependency_level = (
+                DependencyLevel.STANDALONE
+                if has_structure
+                else DependencyLevel.NEEDS_CONTEXT
+            )
+            unit.has_unresolved_refs = not has_structure
+
+            premise_score = 8.4 if unit.has_premise() else 5.0
+            claim_score = max(
+                5.0, min(9.5, float(unit.claim_strength or 0.0))
+            )
+            resolution_score = 8.4 if unit.has_resolution() else 5.0
+            unit.premise_clarity = premise_score
+            unit.claim_strength = claim_score
+            unit.resolution_closure = resolution_score
+            unit.completeness_score = unit.calculate_completeness_score()
+
+            validations.append({
+                'is_standalone': has_structure,
+                'dependency_level': unit.dependency_level,
+                'standalone_score': standalone_score,
+                'issues': [] if has_structure else ['Incomplete transcript context'],
+                'unresolved_refs': [],
+                'reasoning': 'Deterministic transcript-grounded local scoring',
+                'confidence': 0.75,
+            })
+            scores.append({
+                'premise_clarity': premise_score,
+                'claim_strength': claim_score,
+                'resolution_closure': resolution_score,
+                'completeness_score': unit.completeness_score,
+                'meets_production_standard': unit.meets_production_standard(),
+                'reasoning': {'mode': 'compact_local'},
+                'suggestions': [],
+            })
+        return validations, scores
 
     def generate_clip_title(self, transcript_segment: str) -> str:
         """

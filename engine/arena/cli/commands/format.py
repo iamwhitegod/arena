@@ -171,6 +171,7 @@ def run_format(args):
                 subtitle_path = None
 
         progress("formatting", 5, "Formatting video")
+        progress("formatting", None, "Encoding formatted video")
         result = formatter.format_for_platform(
             input_path,
             output_path,

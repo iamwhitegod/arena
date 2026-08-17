@@ -1,6 +1,7 @@
 """Tests for OpenAI adapter — request serialization, error normalization, and sanitization."""
 
 import json
+import pickle
 import unittest
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
@@ -14,7 +15,11 @@ from arena.providers.base import (
     ProviderUnavailableError,
     ResponseMode,
 )
-from arena.providers.openai_adapter import OpenAIChatModel, OpenAIEmbeddingModel
+from arena.providers.openai_adapter import (
+    OpenAIChatModel,
+    OpenAIEmbeddingModel,
+    OpenAISpeechModel,
+)
 
 
 class TestOpenAIChatModelRequestSerialization(unittest.TestCase):
@@ -41,6 +46,7 @@ class TestOpenAIChatModelRequestSerialization(unittest.TestCase):
 
         call_kwargs = model._client.chat.completions.create.call_args
         self.assertNotIn("response_format", call_kwargs.kwargs)
+        self.assertEqual(call_kwargs.kwargs["max_completion_tokens"], 8192)
 
     @patch("arena.providers.openai_adapter.OpenAIChatModel._ensure_client")
     def test_json_mode_includes_response_format(self, _):
@@ -56,6 +62,20 @@ class TestOpenAIChatModelRequestSerialization(unittest.TestCase):
         call_kwargs = model._client.chat.completions.create.call_args
         self.assertEqual(call_kwargs.kwargs.get("response_format"), {"type": "json_object"})
         self.assertEqual(result.parsed, {"key": "val"})
+
+    @patch("arena.providers.openai_adapter.OpenAIChatModel._ensure_client")
+    def test_per_call_output_limit_is_forwarded(self, _):
+        model = OpenAIChatModel(api_key="sk-test", model="gpt-4o")
+        model._client = MagicMock()
+        model._client.chat.completions.create.return_value = self._mock_client_response("ok")
+
+        model.complete(
+            messages=[{"role": "user", "content": "hi"}],
+            max_output_tokens=600,
+        )
+
+        call_kwargs = model._client.chat.completions.create.call_args.kwargs
+        self.assertEqual(call_kwargs["max_completion_tokens"], 600)
 
     @patch("arena.providers.openai_adapter.OpenAIChatModel._ensure_client")
     def test_text_mode_returns_none_parsed(self, _):
@@ -83,6 +103,32 @@ class TestOpenAIChatModelRequestSerialization(unittest.TestCase):
         )
 
         self.assertIsInstance(result.usage.estimated_cost_usd, Decimal)
+
+    @patch("arena.providers.openai_adapter.OpenAIChatModel._ensure_client")
+    def test_json_mode_rejects_non_object_json(self, _):
+        model = OpenAIChatModel(api_key="sk-test", model="gpt-4o")
+        model._client = MagicMock()
+        model._client.chat.completions.create.return_value = self._mock_client_response("[]")
+
+        with self.assertRaises(ProviderResponseError):
+            model.complete(
+                messages=[{"role": "user", "content": "hi"}],
+                response_mode=ResponseMode.JSON,
+            )
+
+    @patch("arena.providers.openai_adapter.OpenAIChatModel._ensure_client")
+    def test_json_mode_rejects_non_finite_nested_values(self, _):
+        model = OpenAIChatModel(api_key="sk-test", model="gpt-4o")
+        model._client = MagicMock()
+        model._client.chat.completions.create.return_value = self._mock_client_response(
+            '{"score": NaN}'
+        )
+
+        with self.assertRaises(ProviderResponseError):
+            model.complete(
+                messages=[{"role": "user", "content": "hi"}],
+                response_mode=ResponseMode.JSON,
+            )
 
 
 class TestOpenAIChatModelErrorNormalization(unittest.TestCase):
@@ -124,6 +170,30 @@ class TestOpenAIChatModelErrorNormalization(unittest.TestCase):
 
 
 class TestOpenAIChatModelErrorSanitization(unittest.TestCase):
+
+    def test_credential_bearing_adapters_cannot_be_serialized(self):
+        secret = "sk-canary-secret-value"
+        adapters = [
+            OpenAIChatModel(secret),
+            OpenAIEmbeddingModel(secret),
+            OpenAISpeechModel(secret),
+        ]
+
+        for adapter in adapters:
+            with self.subTest(adapter=type(adapter).__name__):
+                self.assertNotIn(secret, repr(adapter))
+                self.assertNotIn(secret, repr(vars(adapter)))
+                with self.assertRaises(TypeError):
+                    pickle.dumps(adapter)
+
+    @patch("openai.OpenAI")
+    def test_client_disables_sdk_retries_and_sets_timeout(self, mock_openai):
+        model = OpenAIChatModel(api_key="sk-test", model="gpt-4o")
+
+        model._ensure_client()
+
+        self.assertEqual(mock_openai.call_args.kwargs["max_retries"], 0)
+        self.assertEqual(mock_openai.call_args.kwargs["timeout"], 120.0)
 
     def test_invalid_json_error_does_not_leak_content(self):
         """ProviderResponseError must not contain model output."""

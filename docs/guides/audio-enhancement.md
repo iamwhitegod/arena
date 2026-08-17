@@ -84,11 +84,9 @@ Trade-off: Slightly slower but much better audio quality!
 ```bash
 # Process with enhancement
 export ARENA_ENHANCE_AUDIO=true
-export ARENA_WHISPER_MODE=local  # Free transcription
 export OPENAI_API_KEY=sk-your-key  # For AI analysis
 
-cd cli
-npm run dev process ~/Downloads/IMG_2774.MOV
+arena process ~/Downloads/IMG_2774.MOV --transcription-provider local
 ```
 
 ## Cached Results

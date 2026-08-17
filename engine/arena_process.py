@@ -55,7 +55,7 @@ def run_arena_pipeline(
     enhance_audio: bool = True,
     use_scene_detection: bool = False,
     export_editorial_layers: bool = False,
-    editorial_model: str = "gpt-4o",
+    editorial_model: Optional[str] = None,
     platform: Optional[str] = None,
     crop_strategy: str = "center",
     pad_strategy: str = "blur",
@@ -153,24 +153,10 @@ def run_arena_pipeline(
             transcription_model=transcription_model,
         )
     except ValueError as e:
-        print(f"❌ Provider configuration failed: {e}")
+        from arena.cli.public_errors import format_public_error
+        print(format_public_error(e, "Provider configuration failed"))
         return 1
     effective_editorial_model = runtime_profile.binding_for(Capability.CHAT).model
-
-    # Resolve chat + embedding eagerly; speech is deferred until needed.
-    try:
-        inference = resolve_inference(
-            required={Capability.CHAT, Capability.EMBEDDING},
-            profile=runtime_profile,
-        )
-    except ProviderAuthError as e:
-        print(f"⚠️  {e}")
-        print("   Set it with: export OPENAI_API_KEY='your-key'")
-        print("   Get one at: https://platform.openai.com/api-keys\n")
-        return 1
-    except Exception as e:
-        print(f"❌ Provider setup failed: {e}")
-        return 1
 
     # Pipeline progress tracking
     total_steps = 4  # Added professional alignment step
@@ -238,10 +224,13 @@ def run_arena_pipeline(
                 print(f"  Enhanced audio: {enhanced_audio_path.name}\n")
 
             except Exception as e:
-                print(f"⚠️  Audio enhancement failed: {e}")
+                from arena.cli.public_errors import format_public_error
+                print(format_public_error(e, "Audio enhancement failed"))
                 print(f"   Continuing with original audio...\n")
                 audio_to_transcribe = video_file
 
+    speech_bundle = None
+    transcriber = None
     if use_cached_transcript and transcript_cache.exists():
         print(f"✓ Using cached transcript: {transcript_cache.name}")
         with open(transcript_cache) as f:
@@ -255,7 +244,8 @@ def run_arena_pipeline(
                 required={Capability.SPEECH}, profile=runtime_profile,
             )
         except ProviderAuthError as e:
-            print(f"⚠️  {e}")
+            from arena.cli.public_errors import format_public_error
+            print(format_public_error(e, "Transcription provider setup failed"))
             return 1
 
         if HAS_TQDM:
@@ -279,7 +269,8 @@ def run_arena_pipeline(
                     print(f"  Saved to: {transcript_cache.name}\n")
 
                 except Exception as e:
-                    print(f"\n❌ Transcription failed: {e}")
+                    from arena.cli.public_errors import format_public_error
+                    print(f"\n{format_public_error(e, 'Transcription failed')}")
                     return 1
         else:
             print("🎤 Transcribing audio...")
@@ -302,8 +293,19 @@ def run_arena_pipeline(
                 print(f"  Saved to: {transcript_cache.name}\n")
 
             except Exception as e:
-                print(f"❌ Transcription failed: {e}")
+                from arena.cli.public_errors import format_public_error
+                print(format_public_error(e, "Transcription failed"))
                 return 1
+
+    # Release the speech runtime before loading local chat and embedding
+    # models. On unified-memory systems, keeping both model families resident
+    # can significantly increase pressure during the analysis handoff.
+    if speech_bundle is not None:
+        speech_bundle.close()
+    transcriber = None
+    speech_bundle = None
+    import gc
+    gc.collect()
 
     # =========================================================================
     # STEP 2: Hybrid Analysis (AI + Energy)
@@ -312,6 +314,26 @@ def run_arena_pipeline(
     print(f"{'='*70}")
     print(f"[{current_step}/{total_steps}] 🧠 Hybrid Analysis (AI + Energy)")
     print(f"{'='*70}\n")
+
+    # Chat and embedding are not needed until analysis. Deferring them avoids
+    # loading the llama runtime (and emitting its native startup diagnostics)
+    # while local speech transcription is still running.
+    print("🔧 Loading inference models...")
+    try:
+        inference = resolve_inference(
+            required={Capability.CHAT, Capability.EMBEDDING},
+            profile=runtime_profile,
+        )
+    except ProviderAuthError as e:
+        from arena.cli.public_errors import format_public_error
+        print(format_public_error(e, "Provider setup failed"))
+        print("   Set it with: export OPENAI_API_KEY='your-key'")
+        print("   Get one at: https://platform.openai.com/api-keys\n")
+        return 1
+    except Exception as e:
+        from arena.cli.public_errors import format_public_error
+        print(format_public_error(e, "Provider setup failed"))
+        return 1
 
     try:
         # Initialize analyzers
@@ -376,11 +398,8 @@ def run_arena_pipeline(
         print(f"  Selected {len(top_clips)} candidates for professional alignment\n")
 
     except Exception as e:
-        print(f"❌ Analysis failed: {e}")
-        from arena.providers.base import ProviderError
-        if not isinstance(e, ProviderError):
-            import traceback
-            traceback.print_exc()
+        from arena.cli.public_errors import format_public_error
+        print(format_public_error(e, "Analysis failed"))
         return 1
 
     # =========================================================================
@@ -429,7 +448,8 @@ def run_arena_pipeline(
         hybrid_analyzer.export_results(analysis_results, analysis_file)
 
     except Exception as e:
-        print(f"⚠️  Alignment failed, using original timestamps: {e}")
+        from arena.cli.public_errors import format_public_error
+        print(format_public_error(e, "Alignment failed; using original timestamps"))
         print(f"   Continuing with clip generation...\n")
         # Continue with original clips if alignment fails
 
@@ -542,7 +562,8 @@ def run_arena_pipeline(
                         thumb_pbar.update(1)
 
                 except Exception as e:
-                    print(f"   ⚠️  Failed to generate thumbnail for {clip_id}: {e}")
+                    from arena.cli.public_errors import format_public_error
+                    print(f"   {format_public_error(e, 'Thumbnail generation failed')}")
                     if HAS_TQDM:
                         thumb_pbar.update(1)
 
@@ -589,9 +610,8 @@ def run_arena_pipeline(
             print(f"📝 Generated {len(srt_paths)} subtitle files\n")
 
     except Exception as e:
-        print(f"❌ Clip generation failed: {e}")
-        import traceback
-        traceback.print_exc()
+        from arena.cli.public_errors import format_public_error
+        print(format_public_error(e, "Clip generation failed"))
         return 1
 
     # =========================================================================
@@ -640,12 +660,14 @@ def run_arena_pipeline(
                     else:
                         print(f"  [{i}/{len(video_files)}] ❌ Failed")
                 except Exception as e:
-                    print(f"  [{i}/{len(video_files)}] ❌ {e}")
+                    from arena.cli.public_errors import format_public_error
+                    print(f"  [{i}/{len(video_files)}] {format_public_error(e, 'Formatting failed')}")
 
             print(f"\n✓ Formatted {formatted_count}/{len(video_files)} clips for {spec.name}\n")
 
         except Exception as e:
-            print(f"⚠️  Platform formatting failed: {e}")
+            from arena.cli.public_errors import format_public_error
+            print(format_public_error(e, "Platform formatting failed"))
             print(f"   Original clips are still available in clips/\n")
 
     # Standalone caption burning (when no platform formatting)
@@ -675,7 +697,8 @@ def run_arena_pipeline(
                     burner.burn_subtitles(clip_file, srt_path, out_path)
                     print(f"  ✅ {out_path.name}")
                 except Exception as e:
-                    print(f"  ❌ {clip_id}: {e}")
+                    from arena.cli.public_errors import format_public_error
+                    print(f"  {clip_id}: {format_public_error(e, 'Caption rendering failed')}")
 
         print(f"\n✓ Captioned clips saved to {captioned_dir}\n")
 
@@ -826,8 +849,8 @@ Environment:
     parser.add_argument(
         '--editorial-model',
         choices=['gpt-4o', 'gpt-4o-mini'],
-        default='gpt-4o',
-        help='Model to use for Layers 1-2 (default: gpt-4o, mini saves ~60%% cost but may reduce quality)'
+        default=None,
+        help='Backward-compatible alias for --chat-model'
     )
     parser.add_argument(
         '-p', '--platform',

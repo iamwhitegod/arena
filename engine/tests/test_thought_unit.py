@@ -12,8 +12,13 @@ from arena.editorial.thought_unit import (
     IncompletePremiseError,
     IncompleteResolutionError,
     AmbiguousBoundaryError,
-    UnresolvedReferenceError
+    UnresolvedReferenceError,
+    safe_float,
 )
+
+
+def test_safe_float_never_raises_on_oversized_integer():
+    assert safe_float(10**1000, 0.5) == 0.5
 
 
 class TestThoughtUnitCreation:

@@ -171,6 +171,7 @@ class ChatModel(ABC):
         temperature: float = 0.3,
         response_mode: ResponseMode = ResponseMode.TEXT,
         json_schema: Optional[dict] = None,
+        max_output_tokens: Optional[int] = None,
     ) -> ChatResponse:
         """Run a chat completion.
 
@@ -183,6 +184,8 @@ class ChatModel(ABC):
             json_schema: Optional JSON schema hint for structured output.
                 Adapters may use this for grammar-constrained generation
                 or validation. Ignored when response_mode is TEXT.
+            max_output_tokens: Optional per-call generation bound. Adapters
+                clamp this to their own safe maximum.
 
         Returns:
             ChatResponse with content and optional parsed JSON.
@@ -198,6 +201,16 @@ class ChatModel(ABC):
     def supports_json_mode(self) -> bool:
         """Whether this model reliably produces structured JSON output."""
         return False
+
+    @property
+    def context_window_tokens(self) -> int:
+        """Usable model context exposed to application-level prompt planners."""
+        return 128_000
+
+    @property
+    def max_output_tokens(self) -> int:
+        """Maximum output supported by one completion call."""
+        return 8_192
 
     @property
     def concurrency_hint(self) -> int:
@@ -296,4 +309,9 @@ class SpeechModel(ABC):
     @property
     def max_file_size_mb(self) -> float:
         """Maximum file size this model accepts. inf for local models."""
+        return float("inf")
+
+    @property
+    def max_audio_duration_seconds(self) -> float:
+        """Maximum duration per provider call; inf means size-only chunking."""
         return float("inf")

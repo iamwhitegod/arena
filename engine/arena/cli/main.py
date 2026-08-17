@@ -11,12 +11,7 @@ if sys.platform == 'win32':
 
 from . import __version__
 
-_PROVIDER_CHOICES = ["openai"]
-_CHAT_MODEL_CHOICES = ["gpt-4o", "gpt-4o-mini"]
-_EMBEDDING_MODEL_CHOICES = ["text-embedding-3-small", "text-embedding-3-large"]
-_TRANSCRIPTION_MODEL_CHOICES = ["whisper-1"]
-
-
+_PROVIDER_CHOICES = ["openai", "local", "ollama"]
 def _add_capability_provider_args(
     parser,
     *,
@@ -28,18 +23,16 @@ def _add_capability_provider_args(
     """Add non-secret per-capability provider/model selectors."""
     if chat:
         parser.add_argument("--chat-provider", choices=_PROVIDER_CHOICES, default=None)
-        parser.add_argument("--chat-model", choices=_CHAT_MODEL_CHOICES, default=None)
+        parser.add_argument("--chat-model", default=None)
     if overview_chat:
         parser.add_argument("--overview-chat-provider", choices=_PROVIDER_CHOICES, default=None)
-        parser.add_argument("--overview-chat-model", choices=_CHAT_MODEL_CHOICES, default=None)
+        parser.add_argument("--overview-chat-model", default=None)
     if embedding:
         parser.add_argument("--embedding-provider", choices=_PROVIDER_CHOICES, default=None)
-        parser.add_argument("--embedding-model", choices=_EMBEDDING_MODEL_CHOICES, default=None)
+        parser.add_argument("--embedding-model", default=None)
     if transcription:
         parser.add_argument("--transcription-provider", choices=_PROVIDER_CHOICES, default=None)
-        parser.add_argument(
-            "--transcription-model", choices=_TRANSCRIPTION_MODEL_CHOICES, default=None
-        )
+        parser.add_argument("--transcription-model", default=None)
 
 
 def main():
@@ -197,8 +190,8 @@ Documentation:
     process_parser.add_argument(
         '--editorial-model',
         choices=['gpt-4o', 'gpt-4o-mini'],
-        default='gpt-4o',
-        help='Model to use for Layers 1-2 (default: gpt-4o, mini saves ~60%% cost)'
+        default=None,
+        help='Backward-compatible alias for --chat-model'
     )
     process_parser.add_argument(
         '--provider',
@@ -363,8 +356,8 @@ Documentation:
     analyze_parser.add_argument(
         '--editorial-model',
         choices=['gpt-4o', 'gpt-4o-mini'],
-        default='gpt-4o',
-        help='Model to use for editorial analysis (default: gpt-4o, mini saves ~60%% cost)'
+        default=None,
+        help='Backward-compatible alias for --chat-model'
     )
     analyze_parser.add_argument(
         '--provider',
@@ -572,11 +565,8 @@ Documentation:
         print("\n\n⚠️  Interrupted by user")
         return 130
     except Exception as e:
-        print(f"\n❌ Error: {e}", file=sys.stderr)
-        from arena.providers.base import ProviderError
-        if not isinstance(e, ProviderError):
-            import traceback
-            traceback.print_exc()
+        from arena.cli.public_errors import format_public_error
+        print(f"\n{format_public_error(e)}", file=sys.stderr)
         return 1
 
 

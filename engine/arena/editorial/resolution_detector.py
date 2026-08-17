@@ -15,6 +15,8 @@ This is the "forward search" part of thought unit construction.
 from typing import Dict, List, Optional
 import json
 
+from .thought_unit import safe_float, safe_text
+
 
 class ResolutionDetector:
     """
@@ -223,10 +225,20 @@ class ResolutionDetector:
         # Parse response
         try:
             result = response.parsed
+            if not isinstance(result, dict):
+                return None
 
             resolution_index = result.get('resolution_end_index', -1)
 
-            if resolution_index < 0 or resolution_index >= len(context['after_segments']):
+            if (
+                isinstance(resolution_index, bool)
+                or not isinstance(resolution_index, int)
+                or resolution_index < 0
+                or resolution_index >= len(context['after_segments'])
+            ):
+                return None
+            is_complete = result.get('is_complete')
+            if not isinstance(is_complete, bool):
                 return None
 
             # Build resolution dict
@@ -241,15 +253,15 @@ class ResolutionDetector:
                 'resolution_start': first_segment['start'],
                 'resolution_end': resolution_segment['end'],
                 'resolution_text': resolution_text,
-                'completion_type': result.get('completion_type', 'unknown'),
-                'is_complete': result.get('is_complete', False),
-                'reasoning': result.get('reasoning', ''),
-                'confidence': result.get('confidence', 0.5),
+                'completion_type': safe_text(result.get('completion_type'), 'unknown', 100),
+                'is_complete': is_complete,
+                'reasoning': safe_text(result.get('reasoning')),
+                'confidence': safe_float(result.get('confidence'), 0.5),
                 'sentences_forward': resolution_index + 1
             }
 
-        except (json.JSONDecodeError, KeyError, IndexError) as e:
-            print(f"      ⚠️  Failed to parse resolution response: {e}")
+        except (json.JSONDecodeError, KeyError, IndexError):
+            print("      ⚠️  Failed to parse resolution response")
             return None
 
     def _create_resolution_prompt(

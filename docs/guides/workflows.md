@@ -570,8 +570,8 @@ Set these in your shell or in `~/.arena/config.json`:
 # Required
 export OPENAI_API_KEY="sk-your-key-here"
 
-# Optional
-export ARENA_WHISPER_MODE="api"  # or "local"
+# Optional capability-specific selection
+# arena process video.mp4 --transcription-provider local
 ```
 
 ## Configuration

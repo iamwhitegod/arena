@@ -15,6 +15,8 @@ This is the "backward search" part of thought unit construction.
 from typing import Dict, List, Optional
 import json
 
+from .thought_unit import safe_float, safe_text
+
 
 class PremiseDetector:
     """
@@ -222,10 +224,17 @@ class PremiseDetector:
         # Parse response
         try:
             result = response.parsed
+            if not isinstance(result, dict):
+                return None
 
             premise_index = result.get('premise_start_index', -1)
 
-            if premise_index < 0 or premise_index >= len(context['before_segments']):
+            if (
+                isinstance(premise_index, bool)
+                or not isinstance(premise_index, int)
+                or premise_index < 0
+                or premise_index >= len(context['before_segments'])
+            ):
                 return None
 
             # Build premise dict
@@ -240,14 +249,14 @@ class PremiseDetector:
                 'premise_start': premise_segment['start'],
                 'premise_end': last_segment['end'],
                 'premise_text': premise_text,
-                'premise_type': result.get('premise_type', 'unknown'),
-                'reasoning': result.get('reasoning', ''),
-                'confidence': result.get('confidence', 0.5),
+                'premise_type': safe_text(result.get('premise_type'), 'unknown', 100),
+                'reasoning': safe_text(result.get('reasoning')),
+                'confidence': safe_float(result.get('confidence'), 0.5),
                 'sentences_back': len(context['before_segments']) - premise_index
             }
 
-        except (json.JSONDecodeError, KeyError, IndexError) as e:
-            print(f"      ⚠️  Failed to parse premise response: {e}")
+        except (json.JSONDecodeError, KeyError, IndexError):
+            print("      ⚠️  Failed to parse premise response")
             return None
 
     def _create_premise_prompt(

@@ -167,6 +167,8 @@ Required controls:
 - Enforce model-size, context-window, RAM, VRAM, CPU, thread, and inference-time limits.
 - Treat Ollama and other loopback services as untrusted network peers: set timeouts, limit response sizes, validate responses, and do not send credentials intended for another provider.
 - Document licenses and provenance for every model pack.
+- Apply the same minimum/recommended capacity policy on Linux, macOS, and Windows; unknown capacity must select the conservative CPU path.
+- Enable only bundled, data-only Silero VAD through faster-whisper. Do not add pyannote until speaker-aware contracts and its separate runtime/model trust boundary are reviewed.
 
 ## Filesystem and media-tool boundaries
 
@@ -224,15 +226,14 @@ Phase 2 additionally requires tests proving that:
 
 ## Release checklist
 
-- [ ] Threat model updated for provider abstraction and local model execution.
+- [x] Threat model updated for provider abstraction and local model execution.
 - [ ] Credential flow and subprocess environment boundaries reviewed.
 - [ ] Provider data disclosures documented.
 - [ ] Safe error catalog and redaction tests complete.
 - [ ] Prompt/output schemas and bounds documented.
-- [ ] Retry, timeout, cancellation, concurrency, and cost limits tested.
+- [x] Retry, timeout, cancellation, concurrency, and cost limits tested.
 - [ ] Cache identity includes provider/model/prompt provenance.
 - [ ] Required-capability construction tested.
 - [ ] Offline network-denial suite passes.
-- [ ] Dependency locks, hashes, SBOM, and provenance updated.
-- [ ] Local model sources, hashes, formats, and licenses reviewed before Phase 2 release.
-
+- [x] Dependency locks, hashes, SBOM, and provenance updated.
+- [x] Local model sources, hashes, formats, and licenses reviewed before Phase 2 release.

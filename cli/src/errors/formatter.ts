@@ -129,6 +129,7 @@ function formatProcessingErrorTitle(code: string): string {
     API_RATE_LIMIT: 'API rate limit exceeded',
     API_ERROR: 'API error',
     TIMEOUT: 'Processing timed out',
+    LOCAL_RESOURCE_LIMIT: 'Not enough memory for local inference',
     NO_CLIPS_GENERATED: 'No clips generated',
   };
 

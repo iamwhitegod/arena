@@ -69,9 +69,6 @@ export async function detectScenesCommand(
       },
       (update) => {
         progress.updateStage(update.stage, update.progress, update.message);
-      },
-      (error) => {
-        console.error(chalk.red(error));
       }
     );
 
