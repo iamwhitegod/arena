@@ -20,4 +20,6 @@ Arena uses Semantic Versioning. Before 1.0, breaking changes increment the minor
 
 The publication workflow must not be bypassed when a gate fails. A security hotfix may reduce the normal announcement window, but it still requires tests, artifact inspection, audits, SBOMs, and provenance.
 
+GitHub release events are not passed directly to event-sensitive scanning actions. Each publication workflow instead queries GitHub Actions and requires a completed successful Security run from a `push` or manual dispatch on the exact tagged commit and repository default branch. This reuses the immutable commit's CodeQL, dependency, secret, and container-scan evidence and fails closed when the evidence is missing or belongs to another SHA or branch.
+
 The public container contract is `docker.io/whitegodkingsley/arena`. Stable releases publish immutable `X.Y.Z` and commit tags plus moving `X.Y`, `X`, and `latest` tags. Pre-releases publish only the exact version and commit tags, so they cannot replace `latest`. The npm workflow applies the same rule by publishing pre-releases under `next` and stable releases under `latest`. Both publication workflows reject a Git tag that does not match `cli/package.json`. The container workflow publishes one multi-architecture manifest for Linux AMD64 and ARM64 and verifies the registry digest before completion.
