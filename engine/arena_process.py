@@ -10,6 +10,7 @@ This script runs the complete Arena pipeline:
 """
 
 import sys
+from contextlib import suppress
 import hashlib
 import json
 import time
@@ -271,6 +272,8 @@ def run_arena_pipeline(
                 except Exception as e:
                     from arena.cli.public_errors import format_public_error
                     print(f"\n{format_public_error(e, 'Transcription failed')}")
+                    with suppress(Exception):
+                        speech_bundle.close()
                     return 1
         else:
             print("🎤 Transcribing audio...")
@@ -295,13 +298,16 @@ def run_arena_pipeline(
             except Exception as e:
                 from arena.cli.public_errors import format_public_error
                 print(format_public_error(e, "Transcription failed"))
+                with suppress(Exception):
+                    speech_bundle.close()
                 return 1
 
     # Release the speech runtime before loading local chat and embedding
     # models. On unified-memory systems, keeping both model families resident
     # can significantly increase pressure during the analysis handoff.
     if speech_bundle is not None:
-        speech_bundle.close()
+        with suppress(Exception):
+            speech_bundle.close()
     transcriber = None
     speech_bundle = None
     import gc
@@ -321,7 +327,7 @@ def run_arena_pipeline(
     print("🔧 Loading inference models...")
     try:
         inference = resolve_inference(
-            required={Capability.CHAT, Capability.EMBEDDING},
+            required={Capability.CHAT, Capability.OVERVIEW_CHAT, Capability.EMBEDDING},
             profile=runtime_profile,
         )
     except ProviderAuthError as e:
@@ -400,6 +406,8 @@ def run_arena_pipeline(
     except Exception as e:
         from arena.cli.public_errors import format_public_error
         print(format_public_error(e, "Analysis failed"))
+        with suppress(Exception):
+            inference.close()
         return 1
 
     # =========================================================================
@@ -452,6 +460,11 @@ def run_arena_pipeline(
         print(format_public_error(e, "Alignment failed; using original timestamps"))
         print(f"   Continuing with clip generation...\n")
         # Continue with original clips if alignment fails
+
+    # Editorial inference is no longer needed after title regeneration and
+    # alignment. Release native weights and cloud HTTP pools before encoding.
+    with suppress(Exception):
+        inference.close()
 
     # =========================================================================
     # STEP 4: Clip Generation

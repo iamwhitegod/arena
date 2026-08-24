@@ -23,6 +23,11 @@ class SizeRecordingSpeechModel(FakeSpeechModel):
         return super().transcribe(audio_path)
 
 
+class FailingSpeechModel(FakeSpeechModel):
+    def transcribe(self, audio_path: Path):
+        raise RuntimeError("transcription failed")
+
+
 class TestProviderChunking(unittest.TestCase):
 
     @patch("arena.providers.local_speech.LocalSpeechModel")
@@ -93,6 +98,64 @@ class TestProviderChunking(unittest.TestCase):
         self.assertIn("16000", command)
         self.assertIn("1", command)
         self.assertIn("env", mock_run.call_args.kwargs)
+
+
+class TestExtractedAudioCleanup(unittest.TestCase):
+
+    def _run_with_temporary_extraction(self, root: Path, speech):
+        video = root / "input.mp4"
+        video.write_bytes(b"video")
+        extracted_dir = root / "arena-extracted-audio"
+        extracted_dir.mkdir()
+        transcriber = Transcriber(speech=speech)
+
+        def fake_extract(_video, output):
+            output.write_bytes(b"audio")
+            return output
+
+        with (
+            patch(
+                "arena.audio.transcriber.tempfile.mkdtemp",
+                return_value=str(extracted_dir),
+            ),
+            patch.object(transcriber, "extract_audio", side_effect=fake_extract),
+        ):
+            result = transcriber.transcribe(video)
+        return extracted_dir, result
+
+    def test_removes_temporary_extraction_after_success(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            extracted_dir, result = self._run_with_temporary_extraction(
+                Path(temp_dir), FakeSpeechModel()
+            )
+
+            self.assertEqual(result["text"], "Hello world.")
+            self.assertFalse(extracted_dir.exists())
+
+    def test_removes_temporary_extraction_after_provider_failure(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            video = root / "input.mp4"
+            video.write_bytes(b"video")
+            extracted_dir = root / "arena-extracted-audio"
+            extracted_dir.mkdir()
+            transcriber = Transcriber(speech=FailingSpeechModel())
+
+            def fake_extract(_video, output):
+                output.write_bytes(b"audio")
+                return output
+
+            with (
+                patch(
+                    "arena.audio.transcriber.tempfile.mkdtemp",
+                    return_value=str(extracted_dir),
+                ),
+                patch.object(transcriber, "extract_audio", side_effect=fake_extract),
+                self.assertRaisesRegex(RuntimeError, "transcription failed"),
+            ):
+                transcriber.transcribe(video)
+
+            self.assertFalse(extracted_dir.exists())
 
 
 class TestTranscriptionCacheIdentity(unittest.TestCase):

@@ -112,6 +112,12 @@ function formatPreflightErrorTitle(code: string): string {
     DEPENDENCIES_MISSING: 'Python dependencies missing',
     API_KEY_MISSING: 'OpenAI API key not set',
     API_KEY_INVALID: 'OpenAI API key is invalid',
+    OLLAMA_NOT_RUNNING: 'Ollama is not running',
+    OLLAMA_UNAVAILABLE: 'Ollama is unavailable',
+    OLLAMA_INVALID_RESPONSE: 'Invalid Ollama response',
+    OLLAMA_MODEL_MISSING: 'Ollama model not installed',
+    PROVIDER_CAPABILITY_UNSUPPORTED: 'Provider capability is unsupported',
+    INVALID_MODEL: 'Invalid model identifier',
     INVALID_OPTION: 'Invalid command option',
   };
 

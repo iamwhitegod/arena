@@ -73,6 +73,19 @@ class TestInferenceBundle(unittest.TestCase):
         self.assertIsNone(bundle.overview_chat)
         self.assertIsNone(bundle.speech)
 
+    def test_close_continues_after_one_model_fails(self):
+        chat = MagicMock()
+        speech = MagicMock()
+        speech.close.side_effect = RuntimeError("close failed")
+        bundle = InferenceBundle(chat=chat, speech=speech)
+
+        with self.assertRaises(RuntimeError):
+            bundle.close()
+
+        chat.close.assert_called_once_with()
+        self.assertIsNone(bundle.chat)
+        self.assertIsNone(bundle.speech)
+
 
 class TestProviderRegistry(unittest.TestCase):
 
@@ -133,6 +146,32 @@ class TestProviderRegistry(unittest.TestCase):
         self.assertIsNotNone(bundle.embedding)
         self.assertIsNotNone(bundle.speech)
 
+    def test_partial_construction_is_closed_when_later_factory_fails(self):
+        chat = MagicMock()
+
+        def fail_embedding(binding, credentials):
+            raise RuntimeError("embedding failed")
+
+        registry = ProviderRegistry(ProviderFactories(
+            chat={"fake": lambda binding, credentials: chat},
+            embedding={"fake": fail_embedding},
+            speech={"fake": lambda binding, credentials: FakeSpeechModel()},
+        ))
+        profile = RuntimeProfile(
+            chat=ModelBinding(provider="fake", model="chat"),
+            embedding=ModelBinding(provider="fake", model="embed"),
+            transcription=ModelBinding(provider="fake", model="speech"),
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "embedding failed"):
+            registry.build_required(
+                profile,
+                {Capability.CHAT, Capability.EMBEDDING},
+                EnvironmentCredentialResolver(),
+            )
+
+        chat.close.assert_called_once_with()
+
     def test_overview_reuses_chat_when_identical(self):
         registry = ProviderRegistry(self._fake_factories())
         profile = RuntimeProfile(
@@ -179,6 +218,23 @@ class TestResolveInference(unittest.TestCase):
             registry=registry,
         )
         self.assertIsInstance(bundle.chat, FakeChatModel)
+
+    def test_transcript_only_ollama_does_not_resolve_speech(self):
+        fake_factories = ProviderFactories(
+            chat={"ollama": lambda b, c: FakeChatModel()},
+            embedding={"ollama": lambda b, c: FakeEmbeddingModel()},
+            speech={},
+        )
+        bundle = resolve_inference(
+            required={Capability.CHAT, Capability.EMBEDDING},
+            provider="ollama",
+            registry=ProviderRegistry(fake_factories),
+        )
+
+        self.assertIsInstance(bundle.chat, FakeChatModel)
+        self.assertIsInstance(bundle.embedding, FakeEmbeddingModel)
+        self.assertIsNone(bundle.speech)
+        self.assertEqual(bundle.profile.transcription.provider, "openai")
 
 
 if __name__ == "__main__":

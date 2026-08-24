@@ -35,6 +35,7 @@ Your clips are ready in `output/formatted/`
 - **Scene Detection** - Align cuts to visual transitions
 - **Hybrid Detection** - Combines transcript analysis with audio energy
 - **Cost-Optimized** - ~$0.20/video with gpt-4o-mini
+- **Local Providers** - Verified Arena model packs or loopback Ollama chat and embeddings
 - **Flexible Workflow** - Analyze, review, and generate separately
 - **Cross-Platform Design** - Supports current Windows, macOS, and Linux releases under the documented runtime contract
 
@@ -130,6 +131,21 @@ arena format output/clips/ -p instagram-reels -o social/reels/
 arena format output/clips/ -p youtube-shorts -o social/shorts/
 ```
 
+### Ollama
+
+Ollama supplies chat and embeddings, while transcription must use Arena's
+local speech model or OpenAI:
+
+```bash
+ollama pull llama3.2
+ollama pull nomic-embed-text
+arena setup --local --model-pack lite
+arena process video.mp4 --provider ollama --transcription-provider local
+```
+
+Arena checks that the loopback server is running and that both models are
+installed before processing. See the [Ollama guide](https://github.com/iamwhitegod/arena/blob/main/docs/guides/ollama.md) for custom models, hardware guidance, and troubleshooting.
+
 ## Platform Formats
 
 | Platform | Resolution | Aspect Ratio | Max Duration |
@@ -150,8 +166,8 @@ arena format output/clips/ -p youtube-shorts -o social/shorts/
 # Environment variable (recommended)
 export OPENAI_API_KEY="sk-..."
 
-# Or via config
-arena config set openai_api_key "sk-..."
+# Or via Arena's non-echoing credential prompt
+arena config set openai_api_key
 ```
 
 ### Interactive Setup
@@ -168,12 +184,15 @@ Located at `~/.arena/config.json`:
 
 ```json
 {
-  "openai_api_key": "sk-...",
   "whisper_mode": "api",
+  "provider": "openai",
   "clip_duration": [30, 90],
   "output_format": "mp4"
 }
 ```
+
+Credentials are stored separately with owner-only permissions and are never
+written to `config.json`.
 
 ## 4-Layer Editorial System
 
@@ -214,6 +233,12 @@ arena process video.mp4 --editorial-model gpt-4o-mini
 # Performance
 --fast                       Stream copy mode (10x faster)
 --no-cache                   Force re-transcription
+
+# Inference providers
+--provider <provider>        Shorthand for required capabilities
+--chat-provider <provider>   Chat provider: openai, local, ollama
+--embedding-provider <provider>
+--transcription-provider <provider>  Transcription: openai or local
 
 # Debugging
 --debug                      Show debug information

@@ -13,7 +13,7 @@ Arena is an AI-powered, open-source, local-first video clipping engine for the t
 - **Save time and data:** Avoid lengthy uploads and unnecessary bandwidth usage before processing can begin.
 - **Built for unreliable connections:** Process videos locally without repeatedly restarting failed uploads when your connection drops.
 - **Your files stay with you:** Source videos, transcripts, analysis results, and generated clips remain on your machine unless you explicitly use an external provider or Arena Cloud.
-- **Ready for local AI models:** Arena's architecture creates a path toward optional local transcription, analysis, and embedding models in the future.
+- **Local AI models available:** Use Arena's verified cross-platform local packs for transcription, analysis, and embeddings, or use a loopback Ollama server for analysis and embeddings.
 - **Creator and developer friendly:** Creators get a fast, private workflow; developers get a scriptable terminal interface, inspectable artifacts, and automation-friendly commands.
 
 ## ✨ Features
@@ -134,6 +134,25 @@ Arena provides 11 commands for flexible video clip generation workflows:
 All commands that accept a video file also accept audio files and URLs.
 
 See the [documentation index](./docs/README.md) for installation, workflows, reference material, architecture, and troubleshooting.
+
+### Local and Ollama providers
+
+Run all inference with Arena's verified local model packs:
+
+```bash
+arena setup --local --model-pack lite
+arena process video.mp4 --provider local
+```
+
+Or use Ollama for chat and embeddings with a separate transcription provider:
+
+```bash
+ollama pull llama3.2
+ollama pull nomic-embed-text
+arena process video.mp4 --provider ollama --transcription-provider local
+```
+
+See [Local inference](./docs/guides/local-inference.md) and the [Ollama guide](./docs/guides/ollama.md) for hardware requirements, provider combinations, and release validation.
 
 ## 🎯 Workflows
 

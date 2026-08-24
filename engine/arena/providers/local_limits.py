@@ -36,6 +36,18 @@ def validate_messages(messages: list[dict]) -> None:
             raise ProviderInvalidRequestError("Chat prompt exceeds Arena's local size limit.")
 
 
+def validate_temperature(temperature: object) -> float:
+    if (
+        isinstance(temperature, bool)
+        or not isinstance(temperature, (int, float))
+        or not math.isfinite(temperature)
+        or temperature < 0
+        or temperature > 2
+    ):
+        raise ProviderInvalidRequestError("temperature must be between 0 and 2.")
+    return float(temperature)
+
+
 def validate_embedding_inputs(texts: list[str]) -> None:
     if not isinstance(texts, list) or not texts or len(texts) > MAX_EMBEDDING_BATCH:
         raise ProviderInvalidRequestError("Embedding batch size is outside Arena's limit.")

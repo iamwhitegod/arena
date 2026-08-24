@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+from contextlib import suppress
 import hashlib
 import json
 import sys
@@ -39,6 +40,9 @@ class ProgressReporter:
 def process_video(args):
     """Main video processing pipeline"""
     reporter = ProgressReporter()
+    speech_bundle = None
+    edit_bundle = None
+    transcriber = None
 
     try:
         from arena.video.loader import VideoLoader
@@ -196,12 +200,25 @@ def process_video(args):
                 return 1
 
         # Stage 3: AI Analysis
+        if speech_bundle is not None:
+            with suppress(Exception):
+                speech_bundle.close()
+            speech_bundle = None
+        if transcriber is not None:
+            with suppress(Exception):
+                transcriber.close()
+            transcriber = None
+
         reporter.report("Analysis", 0, "Analyzing transcript with AI...")
 
         try:
             try:
                 edit_bundle = resolve_inference(
-                    required={Capability.CHAT, Capability.EMBEDDING},
+                    required={
+                        Capability.CHAT,
+                        Capability.OVERVIEW_CHAT,
+                        Capability.EMBEDDING,
+                    },
                     profile=runtime_profile,
                 )
             except ProviderAuthError as e:
@@ -215,6 +232,9 @@ def process_video(args):
                 max_duration=args.max_duration
             )
             reporter.report("Analysis", 100, f"Identified {len(ai_segments)} interesting segments")
+            with suppress(Exception):
+                edit_bundle.close()
+            edit_bundle = None
         except Exception as e:
             from arena.cli.public_errors import format_public_error
             reporter.error(format_public_error(e, "AI analysis failed"))
@@ -282,6 +302,16 @@ def process_video(args):
         from arena.cli.public_errors import format_public_error
         reporter.error(format_public_error(e))
         return 1
+    finally:
+        if speech_bundle is not None:
+            with suppress(Exception):
+                speech_bundle.close()
+        if edit_bundle is not None:
+            with suppress(Exception):
+                edit_bundle.close()
+        if transcriber is not None:
+            with suppress(Exception):
+                transcriber.close()
 
 
 def main():

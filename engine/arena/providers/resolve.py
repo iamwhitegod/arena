@@ -52,6 +52,7 @@ def resolve_inference(
         embedding_model=embedding_model,
         transcription_provider=transcription_provider,
         transcription_model=transcription_model,
+        required_capabilities=required,
     )
 
     creds = credentials or EnvironmentCredentialResolver()

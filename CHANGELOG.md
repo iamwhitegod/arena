@@ -4,6 +4,20 @@ All notable user-facing changes will be documented here. Arena follows [Semantic
 
 ## [Unreleased]
 
+### Added
+
+- Added production-facing Ollama support for editorial chat and embeddings,
+  including loopback readiness checks, required-model preflight, actionable
+  recovery errors, documentation, and an opt-in real-server release gate.
+
+### Changed
+
+- Transcript-only analysis can use `--provider ollama` without configuring an
+  unused transcription provider. Full processing still requires an explicit
+  `local` or `openai` transcription provider.
+- Changing a persisted provider now clears model selections inherited from the
+  previous provider unless replacement models are supplied in the same update.
+
 ## [0.4.2] - 2026-08-13
 
 ### Added

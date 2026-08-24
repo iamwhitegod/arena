@@ -99,6 +99,19 @@ class TestOllamaTransport(unittest.TestCase):
         self.assertEqual(ctx.exception.code, "ollama_oversized")
         response.iter_content.assert_not_called()
 
+    @patch("requests.sessions.Session.post")
+    def test_not_found_has_actionable_typed_error(self, mock_post):
+        response = MagicMock()
+        response.status_code = 404
+        response.headers = {}
+        mock_post.return_value = response
+
+        with self.assertRaises(ProviderInvalidRequestError) as ctx:
+            _post("http://localhost:11434", "/api/test", {}, 10)
+
+        self.assertEqual(ctx.exception.code, "ollama_not_found")
+        self.assertIn("model or API endpoint", str(ctx.exception))
+
 
 class TestOllamaChatModel(unittest.TestCase):
 
@@ -122,6 +135,15 @@ class TestOllamaChatModel(unittest.TestCase):
         model = OllamaChatModel(model="llama3.2")
         self.assertTrue(model.supports_json_mode())
 
+    def test_rejects_non_finite_temperature_before_request(self):
+        model = OllamaChatModel(model="llama3.2")
+
+        with self.assertRaises(ProviderInvalidRequestError):
+            model.complete(
+                messages=[{"role": "user", "content": "hi"}],
+                temperature=float("inf"),
+            )
+
     @patch("requests.sessions.Session.post")
     def test_text_completion(self, mock_post):
         mock_resp = MagicMock()
@@ -144,6 +166,23 @@ class TestOllamaChatModel(unittest.TestCase):
         self.assertEqual(result.content, "Hello!")
         self.assertIsNone(result.parsed)
         self.assertEqual(result.usage.estimated_cost_usd, Decimal("0"))
+        payload = mock_post.call_args.kwargs["json"]
+        self.assertEqual(payload["options"]["num_ctx"], 8_192)
+
+    @patch("requests.sessions.Session.post")
+    def test_configured_context_is_sent_to_ollama(self, mock_post):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.headers = {}
+        mock_resp.iter_content.return_value = [b'{"message":{"content":"ok"}}']
+        mock_post.return_value = mock_resp
+
+        OllamaChatModel(model="llama3.2", context_window_tokens=16_384).complete(
+            messages=[{"role": "user", "content": "hi"}],
+        )
+
+        payload = mock_post.call_args.kwargs["json"]
+        self.assertEqual(payload["options"]["num_ctx"], 16_384)
 
     @patch("requests.sessions.Session.post")
     def test_connection_error(self, mock_post):

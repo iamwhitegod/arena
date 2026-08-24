@@ -11,6 +11,7 @@ import crypto from 'crypto';
 import fs from 'fs-extra';
 import inquirer from 'inquirer';
 import ora from 'ora';
+import { validateLocalReadiness } from '../core/local.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import {
@@ -92,10 +93,31 @@ export function nativeCompilerChecks(
   ];
 }
 
+export function windowsVswherePaths(environment: NodeJS.ProcessEnv = process.env): string[] {
+  return [environment['ProgramFiles(x86)'], environment.ProgramFiles]
+    .filter((value): value is string => Boolean(value))
+    .map((root) => path.join(root, 'Microsoft Visual Studio', 'Installer', 'vswhere.exe'));
+}
+
 async function hasNativeCompiler(): Promise<boolean> {
   for (const [command, args] of nativeCompilerChecks()) {
     if (await commandAvailable(command, args)) {
       return true;
+    }
+  }
+  if (process.platform === 'win32') {
+    for (const vswhere of windowsVswherePaths()) {
+      if (!(await fs.pathExists(vswhere))) continue;
+      const result = await runCommand(vswhere, [
+        '-latest',
+        '-products',
+        '*',
+        '-requires',
+        'Microsoft.VisualStudio.Component.VC.Tools.x86.x64',
+        '-property',
+        'installationPath',
+      ]);
+      if (result.code === 0 && result.stdout.trim()) return true;
     }
   }
   return false;
@@ -388,7 +410,7 @@ export function runtimeRequirementsLock(includeLocal: boolean): string {
 }
 
 export function runtimeImportProbe(includeLocal: boolean): string {
-  const imports = ['arena', 'cv2', 'librosa', 'numpy', 'openai', 'yt_dlp'];
+  const imports = ['arena', 'cv2', 'librosa', 'numpy', 'openai', 'requests', 'yt_dlp'];
   if (includeLocal) {
     imports.push('llama_cpp', 'faster_whisper', 'ctranslate2');
   }
@@ -799,6 +821,19 @@ async function printCheck(includeLocal = false): Promise<boolean> {
   const ffmpeg = await commandAvailable('ffmpeg', ['-version']);
   const ffprobe = await commandAvailable('ffprobe', ['-version']);
   const systemPython = await findCompatibleSystemPython();
+  let localModelsReady = !includeLocal;
+  if (includeLocal && runtime.ready) {
+    try {
+      await validateLocalReadiness([
+        { capability: 'chat', provider: 'local' },
+        { capability: 'embedding', provider: 'local' },
+        { capability: 'transcription', provider: 'local' },
+      ]);
+      localModelsReady = true;
+    } catch {
+      localModelsReady = false;
+    }
+  }
 
   const rows: Array<[string, boolean, string]> = [
     ['Bundled engine', enginePath !== null, enginePath ?? 'not found in this installation'],
@@ -823,13 +858,24 @@ async function printCheck(includeLocal = false): Promise<boolean> {
       runtime.ready,
       runtime.ready ? 'llama.cpp, faster-whisper, and CTranslate2 available' : 'not installed',
     ]);
+    rows.push([
+      'Verified local model pack',
+      localModelsReady,
+      localModelsReady ? 'chat, embedding, and speech models verified' : 'not installed or invalid',
+    ]);
   }
 
   for (const [name, ready, detail] of rows) {
     console.log(`${ready ? chalk.green('✓') : chalk.red('✗')} ${name}: ${chalk.gray(detail)}`);
   }
 
-  const ready = enginePath !== null && integrity.valid && runtime.ready && ffmpeg && ffprobe;
+  const ready =
+    enginePath !== null &&
+    integrity.valid &&
+    runtime.ready &&
+    ffmpeg &&
+    ffprobe &&
+    (!includeLocal || localModelsReady);
   console.log(
     ready
       ? chalk.green('\nArena is ready.\n')

@@ -35,6 +35,7 @@ from .local_limits import (
     MAX_RESPONSE_CHARS,
     bounded_usage_count,
     validate_messages,
+    validate_temperature,
 )
 from ..models.hardware import (
     LocalResourceError,
@@ -150,6 +151,7 @@ class LocalChatModel(ChatModel):
         max_output_tokens: Optional[int] = None,
     ) -> ChatResponse:
         validate_messages(messages)
+        temperature = validate_temperature(temperature)
         if (
             max_output_tokens is not None
             and (

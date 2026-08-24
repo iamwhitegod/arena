@@ -1,4 +1,20 @@
 export const SUPPORTED_PROVIDERS = ['openai', 'local', 'ollama'] as const;
+export const DEFAULT_PROVIDER_MODELS = {
+  openai: {
+    chat: 'gpt-4o',
+    embedding: 'text-embedding-3-small',
+    transcription: 'whisper-1',
+  },
+  local: {
+    chat: 'qwen3.5-4b-q4_k_m',
+    embedding: 'nomic-embed-text-v1.5-q4_k_m',
+    transcription: 'faster-whisper-small',
+  },
+  ollama: {
+    chat: 'llama3.2',
+    embedding: 'nomic-embed-text',
+  },
+} as const;
 export const TRANSCRIPTION_MODELS = [
   'whisper-1',
   'base',
@@ -100,17 +116,93 @@ export function resolveProviderSelectors(
 
 export type ProviderCapability = 'chat' | 'overviewChat' | 'embedding' | 'transcription';
 
+export interface RequiredProviderBinding {
+  capability: ProviderCapability;
+  provider: ProviderName;
+  model?: string;
+  modelExplicit?: boolean;
+}
+
+export function isValidModelIdentifier(value: string): boolean {
+  if (!value || value.length > 256) return false;
+  return !Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return code < 32 || code === 127;
+  });
+}
+
+const PROVIDER_CAPABILITIES: Record<ProviderName, ReadonlySet<ProviderCapability>> = {
+  openai: new Set(['chat', 'overviewChat', 'embedding', 'transcription']),
+  local: new Set(['chat', 'overviewChat', 'embedding', 'transcription']),
+  ollama: new Set(['chat', 'overviewChat', 'embedding']),
+};
+
+export function providerSupportsCapability(
+  provider: ProviderName,
+  capability: ProviderCapability
+): boolean {
+  return PROVIDER_CAPABILITIES[provider]?.has(capability) ?? false;
+}
+
+function defaultModel(provider: ProviderName, capability: ProviderCapability): string | undefined {
+  const modelCapability = capability === 'overviewChat' ? 'chat' : capability;
+  const defaults = DEFAULT_PROVIDER_MODELS[provider] as Partial<Record<string, string>> | undefined;
+  if (!defaults) return undefined;
+  return defaults[modelCapability];
+}
+
+export function requiredProviderBindings(
+  selectors: ProviderSelectors,
+  capabilities: ProviderCapability[]
+): RequiredProviderBinding[] {
+  const fallback = selectors.provider || 'openai';
+  const chatProvider = selectors.chatProvider || fallback;
+  const overviewProvider = selectors.overviewChatProvider || chatProvider;
+  const mapping: Record<ProviderCapability, RequiredProviderBinding> = {
+    chat: {
+      capability: 'chat',
+      provider: chatProvider,
+      model: selectors.chatModel || defaultModel(chatProvider, 'chat'),
+      ...(selectors.chatModel ? { modelExplicit: true } : {}),
+    },
+    overviewChat: {
+      capability: 'overviewChat',
+      provider: overviewProvider,
+      model:
+        selectors.overviewChatModel ||
+        (overviewProvider === chatProvider ? selectors.chatModel : undefined) ||
+        defaultModel(overviewProvider, 'overviewChat'),
+      ...(selectors.overviewChatModel || (overviewProvider === chatProvider && selectors.chatModel)
+        ? { modelExplicit: true }
+        : {}),
+    },
+    embedding: {
+      capability: 'embedding',
+      provider: selectors.embeddingProvider || fallback,
+      model:
+        selectors.embeddingModel ||
+        defaultModel(selectors.embeddingProvider || fallback, 'embedding'),
+      ...(selectors.embeddingModel ? { modelExplicit: true } : {}),
+    },
+    transcription: {
+      capability: 'transcription',
+      provider: selectors.transcriptionProvider || fallback,
+      model:
+        selectors.transcriptionModel ||
+        defaultModel(selectors.transcriptionProvider || fallback, 'transcription'),
+      ...(selectors.transcriptionModel ? { modelExplicit: true } : {}),
+    },
+  };
+  return capabilities.map((capability) => mapping[capability]);
+}
+
 export function requiredProviders(
   selectors: ProviderSelectors,
   capabilities: ProviderCapability[]
 ): string[] {
-  const fallback = selectors.provider || 'openai';
-  const chat = selectors.chatProvider || fallback;
-  const mapping: Record<ProviderCapability, ProviderName> = {
-    chat,
-    overviewChat: selectors.overviewChatProvider || chat,
-    embedding: selectors.embeddingProvider || fallback,
-    transcription: selectors.transcriptionProvider || fallback,
-  };
-  return [...new Set(capabilities.map((capability) => mapping[capability]))];
+  return [
+    ...new Set(
+      requiredProviderBindings(selectors, capabilities).map((binding) => binding.provider)
+    ),
+  ];
 }

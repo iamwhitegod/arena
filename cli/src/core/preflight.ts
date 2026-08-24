@@ -15,7 +15,14 @@ import {
   validateDependencies,
   validateDurationRange,
 } from '../validation/index.js';
-import { SUPPORTED_PROVIDERS } from './providers.js';
+import { validateOllamaReadiness } from './ollama.js';
+import { validateLocalReadiness } from './local.js';
+import {
+  providerSupportsCapability,
+  SUPPORTED_PROVIDERS,
+  type ProviderName,
+  type RequiredProviderBinding,
+} from './providers.js';
 
 export interface PreflightOptions {
   videoPath: string;
@@ -26,6 +33,7 @@ export interface PreflightOptions {
   padding?: string;
   skipApiKeyCheck?: boolean;
   requiredProviders?: string[];
+  requiredProviderBindings?: RequiredProviderBinding[];
   enginePath?: string;
 }
 
@@ -37,20 +45,49 @@ export interface PreflightResult {
 }
 
 function providerError(options: PreflightOptions): PreflightError | undefined {
-  const required = options.requiredProviders || ['openai'];
+  const required = [
+    ...(options.requiredProviders || ['openai']),
+    ...(options.requiredProviderBindings || []).map((binding) => binding.provider),
+  ];
   const unsupported = required.find(
     (provider) => !SUPPORTED_PROVIDERS.includes(provider as (typeof SUPPORTED_PROVIDERS)[number])
   );
-  if (!unsupported) return undefined;
-  return new PreflightError(
-    'UNSUPPORTED_PROVIDER',
-    `Unsupported inference provider: ${unsupported}`,
-    `Supported providers: ${SUPPORTED_PROVIDERS.join(', ')}`
+  if (unsupported) {
+    return new PreflightError(
+      'UNSUPPORTED_PROVIDER',
+      `Unsupported inference provider: ${unsupported}`,
+      `Supported providers: ${SUPPORTED_PROVIDERS.join(', ')}`
+    );
+  }
+
+  const unsupportedBinding = options.requiredProviderBindings?.find(
+    (binding) => !providerSupportsCapability(binding.provider as ProviderName, binding.capability)
   );
+  if (unsupportedBinding) {
+    const flag =
+      unsupportedBinding.capability === 'transcription'
+        ? '--transcription-provider local'
+        : `--${unsupportedBinding.capability}-provider openai`;
+    return new PreflightError(
+      'PROVIDER_CAPABILITY_UNSUPPORTED',
+      `Provider '${unsupportedBinding.provider}' does not support ${unsupportedBinding.capability}`,
+      `Select a supported provider for that capability, for example: ${flag}`
+    );
+  }
+  return undefined;
 }
 
 function shouldValidateOpenAI(options: PreflightOptions): boolean {
-  return !options.skipApiKeyCheck && (options.requiredProviders || ['openai']).includes('openai');
+  const providers = options.requiredProviderBindings?.length
+    ? options.requiredProviderBindings.map((binding) => binding.provider)
+    : options.requiredProviders || ['openai'];
+  return !options.skipApiKeyCheck && providers.includes('openai');
+}
+
+function requiredOllamaModels(options: PreflightOptions): string[] {
+  return (options.requiredProviderBindings || [])
+    .filter((binding) => binding.provider === 'ollama' && binding.model)
+    .map((binding) => binding.model as string);
 }
 
 /**
@@ -63,8 +100,8 @@ export async function runPreflightChecks(options: PreflightOptions): Promise<Pre
   const warnings: string[] = [];
   let pythonVersion: string | undefined;
 
-  const unsupportedProvider = providerError(options);
-  if (unsupportedProvider) errors.push(unsupportedProvider);
+  const providerValidationError = providerError(options);
+  if (providerValidationError) errors.push(providerValidationError);
 
   // Video file validation
   try {
@@ -139,6 +176,25 @@ export async function runPreflightChecks(options: PreflightOptions): Promise<Pre
       if (error instanceof PreflightError) {
         errors.push(error);
       }
+    }
+  }
+
+  const ollamaModels = requiredOllamaModels(options);
+  if (!providerValidationError && ollamaModels.length > 0) {
+    try {
+      await validateOllamaReadiness(ollamaModels);
+    } catch (error) {
+      if (error instanceof PreflightError) {
+        errors.push(error);
+      }
+    }
+  }
+
+  if (!providerValidationError && pythonVersion) {
+    try {
+      await validateLocalReadiness(options.requiredProviderBindings || []);
+    } catch (error) {
+      if (error instanceof PreflightError) errors.push(error);
     }
   }
 
@@ -225,6 +281,36 @@ export async function runPreflightChecksWithProgress(
           errors: [error],
           warnings: [],
         };
+      }
+    }
+  }
+
+  const ollamaModels = requiredOllamaModels(options);
+  if (ollamaModels.length > 0) {
+    spinner.text = 'Checking Ollama and required models...';
+    try {
+      await validateOllamaReadiness(ollamaModels);
+    } catch (error) {
+      spinner.fail(chalk.red('Ollama readiness check failed'));
+      if (error instanceof PreflightError) {
+        return {
+          passed: false,
+          errors: [error],
+          warnings: [],
+          pythonVersion,
+        };
+      }
+    }
+  }
+
+  if ((options.requiredProviderBindings || []).some((binding) => binding.provider === 'local')) {
+    spinner.text = 'Checking local inference runtimes and verified models...';
+    try {
+      await validateLocalReadiness(options.requiredProviderBindings || []);
+    } catch (error) {
+      spinner.fail(chalk.red('Local inference readiness check failed'));
+      if (error instanceof PreflightError) {
+        return { passed: false, errors: [error], warnings: [], pythonVersion };
       }
     }
   }

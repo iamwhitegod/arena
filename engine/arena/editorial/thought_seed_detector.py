@@ -80,7 +80,7 @@ class ThoughtSeedDetector:
             )
         else:
             raise ValueError("Either chat or api_key required")
-        self.api_key = api_key
+        self.api_key = None
         self.model = model
         self.overview_model = overview_model or model
         self._detection_context_capacity = self._positive_capability(

@@ -200,6 +200,17 @@ class TestLocalChatModelComplete(unittest.TestCase):
         model._timeout_seconds = 120.0
         return model
 
+    def test_rejects_non_finite_temperature_before_inference(self):
+        model = self._make_model()
+
+        with self.assertRaises(ProviderInvalidRequestError):
+            model.complete(
+                messages=[{"role": "user", "content": "hi"}],
+                temperature=float("nan"),
+            )
+
+        model._llm.create_chat_completion.assert_not_called()
+
     def test_text_mode_returns_content(self):
         model = self._make_model()
         model._llm.create_chat_completion.return_value = {

@@ -149,6 +149,23 @@ class TestProfileFromArgsLocalDefaults(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "does not support transcription"):
             RuntimeProfile.from_args(provider="ollama")
 
+    def test_ollama_allows_transcript_only_profile(self):
+        profile = RuntimeProfile.from_args(
+            provider="ollama",
+            required_capabilities={Capability.CHAT, Capability.EMBEDDING},
+        )
+        self.assertEqual(profile.chat.provider, "ollama")
+        self.assertEqual(profile.embedding.provider, "ollama")
+        self.assertEqual(profile.transcription.provider, "openai")
+
+    def test_explicit_ollama_transcription_is_rejected_when_unused(self):
+        with self.assertRaisesRegex(ValueError, "does not support transcription"):
+            RuntimeProfile.from_args(
+                provider="ollama",
+                transcription_provider="ollama",
+                required_capabilities={Capability.CHAT, Capability.EMBEDDING},
+            )
+
     def test_openai_provider_defaults_unchanged(self):
         profile = RuntimeProfile.from_args(provider="openai")
         self.assertEqual(profile.chat.model, "gpt-4o")

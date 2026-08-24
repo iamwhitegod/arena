@@ -10,6 +10,7 @@ import { isArenaError } from '../errors/index.js';
 import { isUrl } from '../utils/url.js';
 import { commandHeader } from '../ui/output.js';
 import {
+  requiredProviderBindings,
   requiredProviders,
   resolveProviderSelectors,
   type ProviderSelectors,
@@ -57,12 +58,9 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
       },
       globalConfig
     );
-    const providerNames = requiredProviders(selectors, [
-      'chat',
-      'overviewChat',
-      'embedding',
-      'transcription',
-    ]);
+    const requiredCapabilities = ['chat', 'overviewChat', 'embedding', 'transcription'] as const;
+    const providerNames = requiredProviders(selectors, [...requiredCapabilities]);
+    const providerBindings = requiredProviderBindings(selectors, [...requiredCapabilities]);
     await configManager.populateRequiredProviderCredentials(providerNames);
 
     commandHeader('Arena', [
@@ -82,6 +80,7 @@ export async function processCommand(videoPath: string, options: ProcessOptions)
       maxDuration: options.max,
       padding: options.padding,
       requiredProviders: providerNames,
+      requiredProviderBindings: providerBindings,
       enginePath: bridge.getEnginePath(),
     });
 

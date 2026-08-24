@@ -27,7 +27,7 @@ _PROVIDER_OPTION_ALLOWLIST: dict[str, frozenset[str]] = {
         "compute_type", "device", "n_ctx", "n_gpu_layers",
         "n_threads", "threads", "timeout_seconds",
     }),
-    "ollama": frozenset({"concurrency", "timeout_seconds"}),
+    "ollama": frozenset({"concurrency", "n_ctx", "timeout_seconds"}),
     "fake": frozenset(),
 }
 _OPENAI_MODEL_ALLOWLIST = frozenset({
@@ -247,6 +247,7 @@ class RuntimeProfile:
         embedding_model: Optional[str] = None,
         transcription_provider: Optional[str] = None,
         transcription_model: Optional[str] = None,
+        required_capabilities: Optional[set[Capability]] = None,
     ) -> "RuntimeProfile":
         """Build from CLI args.
 
@@ -258,7 +259,20 @@ class RuntimeProfile:
         # Resolve provider: per-capability > global > default
         chat_prov = chat_provider or provider or defaults.chat.provider
         emb_prov = embedding_provider or provider or defaults.embedding.provider
-        trans_prov = transcription_provider or provider or defaults.transcription.provider
+        # A command-level provider shorthand applies to capabilities the command
+        # actually uses. This lets transcript-only analysis use Ollama without
+        # manufacturing an invalid, unused Ollama speech binding. An explicit
+        # transcription provider is always validated, even when speech is unused.
+        uses_speech = (
+            required_capabilities is None
+            or Capability.SPEECH in required_capabilities
+        )
+        shorthand_transcription_provider = provider if uses_speech else None
+        trans_prov = (
+            transcription_provider
+            or shorthand_transcription_provider
+            or defaults.transcription.provider
+        )
 
         # Resolve models: per-capability > provider default > openai default
         chat_mod = chat_model or _provider_default_model(chat_prov, "chat", defaults.chat.model)

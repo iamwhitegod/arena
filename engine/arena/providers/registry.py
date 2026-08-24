@@ -48,14 +48,21 @@ class InferenceBundle:
     def close(self) -> None:
         """Release constructed provider resources, closing shared models once."""
         closed: set[int] = set()
+        first_error: Optional[Exception] = None
         for attribute in ("speech", "embedding", "overview_chat", "chat"):
             model = getattr(self, attribute)
             if model is not None and id(model) not in closed:
                 close = getattr(model, "close", None)
-                if callable(close):
-                    close()
+                try:
+                    if callable(close):
+                        close()
+                except Exception as exc:
+                    if first_error is None:
+                        first_error = exc
                 closed.add(id(model))
             setattr(self, attribute, None)
+        if first_error is not None:
+            raise first_error
 
 
 # Type aliases for factory callables
@@ -175,7 +182,7 @@ def _default_factories() -> ProviderFactories:
         from .ollama_adapter import OllamaChatModel
         return OllamaChatModel(
             model=binding.model,
-            timeout_seconds=float(binding.options.get("timeout_seconds", 60.0)),
+            timeout_seconds=float(binding.options.get("timeout_seconds", 180.0)),
             concurrency_hint=int(binding.options.get("concurrency", 1)),
             context_window_tokens=int(binding.options.get("n_ctx", 8_192)),
         )
@@ -240,28 +247,36 @@ class ProviderRegistry:
         """
         bundle = InferenceBundle(profile=profile)
 
-        if Capability.CHAT in required:
-            bundle.chat = self.build_chat(
-                profile.binding_for(Capability.CHAT), credentials,
-            )
+        try:
+            if Capability.CHAT in required:
+                bundle.chat = self.build_chat(
+                    profile.binding_for(Capability.CHAT), credentials,
+                )
 
-        if Capability.OVERVIEW_CHAT in required:
-            overview_binding = profile.binding_for(Capability.OVERVIEW_CHAT)
-            chat_binding = profile.binding_for(Capability.CHAT)
-            # Reuse the chat model if bindings are identical
-            if overview_binding == chat_binding and bundle.chat is not None:
-                bundle.overview_chat = bundle.chat
-            else:
-                bundle.overview_chat = self.build_chat(overview_binding, credentials)
+            if Capability.OVERVIEW_CHAT in required:
+                overview_binding = profile.binding_for(Capability.OVERVIEW_CHAT)
+                chat_binding = profile.binding_for(Capability.CHAT)
+                # Reuse the chat model if bindings are identical
+                if overview_binding == chat_binding and bundle.chat is not None:
+                    bundle.overview_chat = bundle.chat
+                else:
+                    bundle.overview_chat = self.build_chat(overview_binding, credentials)
 
-        if Capability.EMBEDDING in required:
-            bundle.embedding = self.build_embedding(
-                profile.binding_for(Capability.EMBEDDING), credentials,
-            )
+            if Capability.EMBEDDING in required:
+                bundle.embedding = self.build_embedding(
+                    profile.binding_for(Capability.EMBEDDING), credentials,
+                )
 
-        if Capability.SPEECH in required:
-            bundle.speech = self.build_speech(
-                profile.binding_for(Capability.SPEECH), credentials,
-            )
+            if Capability.SPEECH in required:
+                bundle.speech = self.build_speech(
+                    profile.binding_for(Capability.SPEECH), credentials,
+                )
 
-        return bundle
+            return bundle
+        except Exception:
+            try:
+                bundle.close()
+            except Exception:
+                # Preserve the construction failure; cleanup errors are secondary.
+                pass
+            raise

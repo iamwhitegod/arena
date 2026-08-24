@@ -24,6 +24,27 @@ For terminal examples and the pending, running, cached, warning, partial-success
 
 ## Command Details
 
+### Inference provider options
+
+`process` and `analyze` accept independently selectable inference providers:
+
+- `--provider <provider>` — shorthand for every capability used by the command.
+- `--chat-provider <provider>` and `--chat-model <model>`.
+- `--overview-chat-provider <provider>` and `--overview-chat-model <model>`.
+- `--embedding-provider <provider>` and `--embedding-model <model>`.
+- `--transcription-provider <provider>` and `--transcription-model <model>`.
+
+`transcribe` accepts the global and transcription-specific options. Supported
+provider names are `openai`, `local`, and `ollama`. Ollama supports chat and
+embeddings but not transcription, so full processing requires a mixed profile:
+
+```bash
+arena process video.mp4 --provider ollama --transcription-provider local
+```
+
+See [Local inference](../guides/local-inference.md) and [Ollama](../guides/ollama.md)
+for setup, hardware requirements, defaults, and supported combinations.
+
 ### `arena init`
 
 Interactive setup wizard for first-time configuration.

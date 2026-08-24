@@ -9,6 +9,8 @@ const mockValidateApiKey = vi.fn();
 const mockValidatePython = vi.fn().mockResolvedValue('Python 3.11.5');
 const mockValidateDependencies = vi.fn();
 const mockValidateDurationRange = vi.fn();
+const mockValidateOllamaReadiness = vi.fn();
+const mockValidateLocalReadiness = vi.fn();
 
 vi.mock('../../src/validation/index.js', () => ({
   validateVideoFile: (...args: any[]) => mockValidateVideoFile(...args),
@@ -18,6 +20,14 @@ vi.mock('../../src/validation/index.js', () => ({
   validatePython: (...args: any[]) => mockValidatePython(...args),
   validateDependencies: (...args: any[]) => mockValidateDependencies(...args),
   validateDurationRange: (...args: any[]) => mockValidateDurationRange(...args),
+}));
+
+vi.mock('../../src/core/ollama.js', () => ({
+  validateOllamaReadiness: (...args: any[]) => mockValidateOllamaReadiness(...args),
+}));
+
+vi.mock('../../src/core/local.js', () => ({
+  validateLocalReadiness: (...args: any[]) => mockValidateLocalReadiness(...args),
 }));
 
 // Mock ora to avoid spinner output
@@ -55,6 +65,8 @@ describe('runPreflightChecks', () => {
     mockValidatePython.mockResolvedValue('Python 3.11.5');
     mockValidateDependencies.mockResolvedValue(undefined);
     mockValidateDurationRange.mockReturnValue(undefined);
+    mockValidateOllamaReadiness.mockResolvedValue(undefined);
+    mockValidateLocalReadiness.mockResolvedValue(undefined);
   });
 
   it('should return passed=true when all validators pass', async () => {
@@ -124,6 +136,57 @@ describe('runPreflightChecks', () => {
     expect(mockValidateApiKey).not.toHaveBeenCalled();
   });
 
+  it('derives credential checks from capability bindings when provided', async () => {
+    await runPreflightChecks({
+      ...baseOptions,
+      requiredProviderBindings: [{ capability: 'chat', provider: 'local' }],
+    });
+
+    expect(mockValidateApiKey).not.toHaveBeenCalled();
+  });
+
+  it('should reject Ollama for transcription before processing', async () => {
+    const result = await runPreflightChecks({
+      ...baseOptions,
+      requiredProviders: ['ollama'],
+      requiredProviderBindings: [
+        { capability: 'transcription', provider: 'ollama', model: undefined },
+      ],
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.errors[0].code).toBe('PROVIDER_CAPABILITY_UNSUPPORTED');
+    expect(mockValidateOllamaReadiness).not.toHaveBeenCalled();
+  });
+
+  it('should verify required Ollama models', async () => {
+    await runPreflightChecks({
+      ...baseOptions,
+      requiredProviders: ['ollama'],
+      requiredProviderBindings: [
+        { capability: 'chat', provider: 'ollama', model: 'llama3.2' },
+        { capability: 'embedding', provider: 'ollama', model: 'nomic-embed-text' },
+      ],
+    });
+
+    expect(mockValidateOllamaReadiness).toHaveBeenCalledWith(['llama3.2', 'nomic-embed-text']);
+    expect(mockValidateApiKey).not.toHaveBeenCalled();
+  });
+
+  it('should verify required local runtimes and models', async () => {
+    const bindings = [
+      { capability: 'chat' as const, provider: 'local' as const, model: 'local-chat' },
+    ];
+    await runPreflightChecks({
+      ...baseOptions,
+      requiredProviders: ['local'],
+      requiredProviderBindings: bindings,
+    });
+
+    expect(mockValidateLocalReadiness).toHaveBeenCalledWith(bindings);
+    expect(mockValidateApiKey).not.toHaveBeenCalled();
+  });
+
   it('should include python version in result', async () => {
     mockValidatePython.mockResolvedValue('Python 3.10.14');
 
@@ -172,6 +235,8 @@ describe('runPreflightChecksWithProgress', () => {
     mockValidatePython.mockResolvedValue('Python 3.11.5');
     mockValidateDependencies.mockResolvedValue(undefined);
     mockValidateDurationRange.mockReturnValue(undefined);
+    mockValidateOllamaReadiness.mockResolvedValue(undefined);
+    mockValidateLocalReadiness.mockResolvedValue(undefined);
   });
 
   it('should return passed=true when all checks pass', async () => {
@@ -230,5 +295,21 @@ describe('runPreflightChecksWithProgress', () => {
 
     expect(result.passed).toBe(false);
     expect(result.errors[0].code).toBe('INVALID_OPTION');
+  });
+
+  it('should stop when Ollama readiness fails', async () => {
+    mockValidateOllamaReadiness.mockRejectedValue(
+      new PreflightError('OLLAMA_NOT_RUNNING', 'Ollama is not running')
+    );
+
+    const result = await runPreflightChecksWithProgress({
+      ...baseOptions,
+      requiredProviders: ['ollama'],
+      requiredProviderBindings: [{ capability: 'chat', provider: 'ollama', model: 'llama3.2' }],
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.errors[0].code).toBe('OLLAMA_NOT_RUNNING');
+    expect(mockValidateApiKey).not.toHaveBeenCalled();
   });
 });

@@ -24,6 +24,7 @@ class Transcriber:
             mode: 'api' for OpenAI Whisper API, 'local' for local Whisper model
             speech: Optional SpeechModel instance (takes precedence over api_key/mode)
         """
+        self._owns_speech = speech is None
         if speech is not None:
             self._speech = speech
             self.mode = "provider"
@@ -46,7 +47,17 @@ class Transcriber:
             raise ValueError(
                 "Either speech model, api_key, or mode='local' required"
             )
-        self.api_key = api_key  # keep for backward compat
+        # Never retain plaintext credentials on application-service instances.
+        self.api_key = None
+
+    def close(self) -> None:
+        """Release speech resources created by this Transcriber instance."""
+        speech = getattr(self, "_speech", None)
+        self._speech = None
+        if self._owns_speech:
+            close = getattr(speech, "close", None)
+            if callable(close):
+                close()
 
     AUDIO_EXTENSIONS = {'.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma', '.opus'}
 
@@ -66,6 +77,7 @@ class Transcriber:
             Dict containing full transcript and word-level timestamps
         """
         video_path = Path(video_path)
+        temporary_dir: Optional[Path] = None
 
         # If input is already an audio file, use it directly
         if self._is_audio_file(video_path):
@@ -78,19 +90,18 @@ class Transcriber:
                 cache_dir.mkdir(parents=True, exist_ok=True)
                 audio_path = cache_dir / f"{video_path.stem}_audio.mp3"
             else:
-                temp_dir = tempfile.mkdtemp()
-                audio_path = Path(temp_dir) / "audio.mp3"
+                temporary_dir = Path(tempfile.mkdtemp())
+                audio_path = temporary_dir / "audio.mp3"
 
-            self.extract_audio(video_path, audio_path)
             is_direct_audio = False
 
-        result = self._transcribe_with_provider(audio_path)
-
-        # Clean up temporary file if not cached (don't delete user's audio file)
-        if not is_direct_audio and not cache_dir and audio_path.exists():
-            audio_path.unlink()
-
-        return result
+        try:
+            if not is_direct_audio:
+                self.extract_audio(video_path, audio_path)
+            return self._transcribe_with_provider(audio_path)
+        finally:
+            if temporary_dir is not None:
+                shutil.rmtree(temporary_dir, ignore_errors=True)
 
     @staticmethod
     def _response_to_dict(response, offset: float = 0.0, segment_id_start: int = 0) -> Dict:
@@ -252,7 +263,7 @@ class Transcriber:
 
         finally:
             if temp_dir.exists():
-                shutil.rmtree(temp_dir)
+                shutil.rmtree(temp_dir, ignore_errors=True)
 
     def _get_audio_duration(self, audio_path: Path) -> float:
         """Get audio duration in seconds using ffprobe"""

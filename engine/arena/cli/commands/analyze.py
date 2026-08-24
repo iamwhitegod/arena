@@ -1,7 +1,7 @@
 """arena analyze - Analyze video with AI + energy"""
 
-import os
 import json
+from contextlib import suppress
 from pathlib import Path
 from arena.audio.transcriber import Transcriber
 from arena.audio.energy import AudioEnergyAnalyzer
@@ -19,18 +19,22 @@ def run_analyze(args):
         print(f"❌ Error: Video file not found: {args.video}")
         return 1
 
-    # Resolve inference providers
-    from arena.providers import resolve_inference, Capability
-    from arena.providers.base import ProviderAuthError
+    # Resolve a credential-free profile first. Native models are constructed
+    # one stage at a time so speech can be released before editorial analysis.
+    from arena.providers import resolve_inference, Capability, RuntimeProfile
 
-    has_transcript = args.transcript and Path(args.transcript).exists()
-    required = {Capability.CHAT, Capability.EMBEDDING}
+    transcript_path = Path(args.transcript) if args.transcript else None
+    if transcript_path is not None and not transcript_path.exists():
+        print(f"❌ Error: Transcript file not found: {args.transcript}")
+        return 1
+
+    has_transcript = transcript_path is not None
+    required = {Capability.CHAT, Capability.OVERVIEW_CHAT, Capability.EMBEDDING}
     if not has_transcript:
         required.add(Capability.SPEECH)
 
     try:
-        inference = resolve_inference(
-            required=required,
+        runtime_profile = RuntimeProfile.from_args(
             provider=getattr(args, 'provider', None),
             chat_provider=getattr(args, 'chat_provider', None),
             chat_model=getattr(args, 'chat_model', None) or getattr(args, 'editorial_model', None),
@@ -40,11 +44,8 @@ def run_analyze(args):
             embedding_model=getattr(args, 'embedding_model', None),
             transcription_provider=getattr(args, 'transcription_provider', None),
             transcription_model=getattr(args, 'transcription_model', None),
+            required_capabilities=required,
         )
-    except ProviderAuthError as e:
-        from arena.cli.public_errors import format_public_error
-        print(format_public_error(e))
-        return 1
     except ValueError as e:
         from arena.cli.public_errors import format_public_error
         print(format_public_error(e, "Provider configuration failed"))
@@ -53,27 +54,40 @@ def run_analyze(args):
     print(f"\n🧠 Analyzing: {video_path.name}\n")
 
     # Load or generate transcript
-    if args.transcript:
-        transcript_path = Path(args.transcript)
-        if not transcript_path.exists():
-            print(f"❌ Error: Transcript file not found: {args.transcript}")
-            return 1
-
+    if transcript_path is not None:
         print(f"📖 Loading transcript: {transcript_path.name}")
         with open(transcript_path) as f:
             transcript_data = json.load(f)
         progress("transcription", 100, "Loaded existing transcript")
     else:
         print("🎤 Transcribing video...")
-        transcriber = Transcriber(speech=inference.require_speech())
-        progress("transcription", 5, "Preparing audio")
-        progress("transcription", None, "Transcribing audio")
-        transcript_data = transcriber.transcribe(video_path)
-        progress("transcription", 100, "Transcription complete")
+        speech_inference = None
+        try:
+            speech_inference = resolve_inference(
+                required={Capability.SPEECH}, profile=runtime_profile,
+            )
+            transcriber = Transcriber(speech=speech_inference.require_speech())
+            progress("transcription", 5, "Preparing audio")
+            progress("transcription", None, "Transcribing audio")
+            transcript_data = transcriber.transcribe(video_path)
+            progress("transcription", 100, "Transcription complete")
+        except Exception as e:
+            from arena.cli.public_errors import format_public_error
+            print(format_public_error(e, "Transcription failed"))
+            return 1
+        finally:
+            if speech_inference is not None:
+                with suppress(Exception):
+                    speech_inference.close()
 
     print(f"   ✓ Duration: {transcript_data.get('duration', 0):.1f}s\n")
 
+    inference = None
     try:
+        inference = resolve_inference(
+            required={Capability.CHAT, Capability.OVERVIEW_CHAT, Capability.EMBEDDING},
+            profile=runtime_profile,
+        )
         # Initialize analyzers
         print("🔧 Initializing analyzers...")
         ai_analyzer = FourLayerAdapter(inference=inference)
@@ -116,3 +130,7 @@ def run_analyze(args):
         from arena.cli.public_errors import format_public_error
         print(f"\n{format_public_error(e, 'Analysis failed')}")
         return 1
+    finally:
+        if inference is not None:
+            with suppress(Exception):
+                inference.close()

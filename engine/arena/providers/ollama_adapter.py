@@ -8,6 +8,7 @@ localhost-only base URLs are enforced.
 
 import json
 import math
+import time
 from decimal import Decimal
 from typing import Optional
 from urllib.parse import urlparse
@@ -20,6 +21,7 @@ from .base import (
     ProviderError,
     ProviderInvalidRequestError,
     ProviderResponseError,
+    ProviderTimeoutError,
     ProviderUnavailableError,
     ProviderUsage,
     ResponseMode,
@@ -32,10 +34,12 @@ from .local_limits import (
     validate_embedding_inputs,
     validate_embedding_vectors,
     validate_messages,
+    validate_temperature,
 )
 
-_DEFAULT_BASE_URL = "http://localhost:11434"
-_DEFAULT_TIMEOUT_SECONDS = 60.0
+_DEFAULT_BASE_URL = "http://127.0.0.1:11434"
+_DEFAULT_CHAT_TIMEOUT_SECONDS = 180.0
+_DEFAULT_EMBEDDING_TIMEOUT_SECONDS = 60.0
 _MAX_RESPONSE_BYTES = 10 * 1024 * 1024  # 10 MB
 _LOCALHOST_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
@@ -93,6 +97,7 @@ def _post(
         raise ProviderInvalidRequestError("Ollama timeout is outside Arena's limit.")
 
     url = f"{base_url}{path}"
+    deadline = time.monotonic() + timeout
     session = requests.Session()
     session.trust_env = False
     resp = None
@@ -112,7 +117,7 @@ def _post(
                 retryable=True,
             ) from exc
         except requests.Timeout as exc:
-            raise ProviderUnavailableError(
+            raise ProviderTimeoutError(
                 "Ollama request timed out.",
                 code="timeout",
                 retryable=True,
@@ -121,6 +126,9 @@ def _post(
             raise ProviderUnavailableError(
                 "Ollama request failed.", code="ollama_connection", retryable=True
             ) from exc
+
+        if time.monotonic() >= deadline:
+            raise ProviderTimeoutError("Ollama request exceeded Arena's time limit.")
 
         if 300 <= resp.status_code < 400:
             raise ProviderError(
@@ -133,6 +141,12 @@ def _post(
                 f"Ollama server error (HTTP {resp.status_code}).",
                 code="ollama_server_error",
                 retryable=True,
+            )
+        if resp.status_code == 404:
+            raise ProviderInvalidRequestError(
+                "Ollama could not find the selected model or API endpoint.",
+                code="ollama_not_found",
+                retryable=False,
             )
         if resp.status_code >= 400:
             raise ProviderInvalidRequestError(
@@ -160,6 +174,8 @@ def _post(
         chunks: list[bytes] = []
         total = 0
         for chunk in resp.iter_content(chunk_size=8192):
+            if time.monotonic() >= deadline:
+                raise ProviderTimeoutError("Ollama request exceeded Arena's time limit.")
             total += len(chunk)
             if total > _MAX_RESPONSE_BYTES:
                 raise ProviderResponseError(
@@ -202,7 +218,7 @@ class OllamaChatModel(ChatModel):
         self,
         model: str,
         base_url: str = _DEFAULT_BASE_URL,
-        timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS,
+        timeout_seconds: float = _DEFAULT_CHAT_TIMEOUT_SECONDS,
         concurrency_hint: int = 1,
         context_window_tokens: int = 8_192,
     ):
@@ -247,6 +263,7 @@ class OllamaChatModel(ChatModel):
         max_output_tokens: Optional[int] = None,
     ) -> ChatResponse:
         validate_messages(messages)
+        temperature = validate_temperature(temperature)
         if (
             max_output_tokens is not None
             and (
@@ -262,6 +279,7 @@ class OllamaChatModel(ChatModel):
             "stream": False,
             "options": {
                 "temperature": temperature,
+                "num_ctx": self._context_window_tokens,
                 "num_predict": min(
                     max_output_tokens or MAX_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS
                 ),
@@ -311,7 +329,7 @@ class OllamaEmbeddingModel(EmbeddingModel):
         self,
         model: str,
         base_url: str = _DEFAULT_BASE_URL,
-        timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS,
+        timeout_seconds: float = _DEFAULT_EMBEDDING_TIMEOUT_SECONDS,
     ):
         self._model = model
         self._base_url = _validate_base_url(base_url)

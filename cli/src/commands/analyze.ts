@@ -14,6 +14,7 @@ import { displayAnalysisSummary } from '../ui/summary.js';
 import { commandHeader } from '../ui/output.js';
 import { ConfigManager } from '../core/config.js';
 import {
+  requiredProviderBindings,
   requiredProviders,
   resolveProviderSelectors,
   type ProviderSelectors,
@@ -52,12 +53,11 @@ export async function analyzeCommand(videoPath: string, options: AnalyzeOptions)
       },
       globalConfig
     );
-    const providerNames = requiredProviders(
-      selectors,
-      options.transcript
-        ? ['chat', 'overviewChat', 'embedding']
-        : ['chat', 'overviewChat', 'embedding', 'transcription']
-    );
+    const requiredCapabilities = options.transcript
+      ? (['chat', 'overviewChat', 'embedding'] as const)
+      : (['chat', 'overviewChat', 'embedding', 'transcription'] as const);
+    const providerNames = requiredProviders(selectors, [...requiredCapabilities]);
+    const providerBindings = requiredProviderBindings(selectors, [...requiredCapabilities]);
     await configManager.populateRequiredProviderCredentials(providerNames);
 
     commandHeader('Analyze video', [
@@ -73,6 +73,7 @@ export async function analyzeCommand(videoPath: string, options: AnalyzeOptions)
       minDuration: options.min,
       maxDuration: options.max,
       requiredProviders: providerNames,
+      requiredProviderBindings: providerBindings,
       enginePath: bridge.getEnginePath(),
     });
 

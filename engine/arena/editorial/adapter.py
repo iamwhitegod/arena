@@ -87,7 +87,7 @@ class FourLayerAdapter:
             self._chat = OpenAIChatModel(api_key=api_key, model=model)
             self._overview_chat = self._chat
             self._embedding = OpenAIEmbeddingModel(api_key=api_key)
-            self.api_key = api_key
+            self.api_key = None
             self.model = model
             self._inference_fingerprint = self._legacy_fingerprint(model)
         else:

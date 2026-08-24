@@ -112,6 +112,30 @@ describe('ConfigManager', () => {
       );
     });
 
+    it('should clear stale provider-specific models when the global provider changes', async () => {
+      const manager = new ConfigManager();
+      await manager.ensureGlobalConfig();
+
+      await manager.updateGlobalConfig({ provider: 'ollama' });
+
+      const config = await manager.getGlobalConfig();
+      expect(config.provider).toBe('ollama');
+      expect(config).not.toHaveProperty('chat_model');
+      expect(config).not.toHaveProperty('embedding_model');
+      expect(config).not.toHaveProperty('transcription_model');
+    });
+
+    it('should preserve models explicitly updated with a provider', async () => {
+      const manager = new ConfigManager();
+      await manager.ensureGlobalConfig();
+
+      await manager.updateGlobalConfig({ provider: 'ollama', chat_model: 'qwen3:8b' });
+
+      const config = await manager.getGlobalConfig();
+      expect(config.chat_model).toBe('qwen3:8b');
+      expect(config).not.toHaveProperty('embedding_model');
+    });
+
     it('should store credentials separately with owner-only permissions', async () => {
       const manager = new ConfigManager();
       const apiKey = `sk-${'x'.repeat(48)}`;

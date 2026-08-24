@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from contextlib import suppress
 from pathlib import Path
 from arena.audio.transcriber import Transcriber
 from arena.cli.protocol import progress, result
@@ -51,6 +52,7 @@ def run_transcribe(args):
         {Capability.SPEECH}, namespace="arena-transcription-v1"
     )
     speech = None
+    inference = None
 
     # Determine output path
     if args.output:
@@ -124,3 +126,7 @@ def run_transcribe(args):
         from arena.cli.public_errors import format_public_error
         print(f"\n{format_public_error(e, 'Transcription failed')}")
         return 1
+    finally:
+        if inference is not None:
+            with suppress(Exception):
+                inference.close()

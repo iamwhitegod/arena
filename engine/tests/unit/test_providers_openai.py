@@ -2,6 +2,9 @@
 
 import json
 import pickle
+from pathlib import Path
+from types import SimpleNamespace
+import tempfile
 import unittest
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
@@ -130,6 +133,85 @@ class TestOpenAIChatModelRequestSerialization(unittest.TestCase):
                 response_mode=ResponseMode.JSON,
             )
 
+    def test_rejects_extra_message_fields_and_invalid_temperature(self):
+        model = OpenAIChatModel(api_key="sk-test", model="gpt-4o")
+
+        with self.assertRaises(ProviderInvalidRequestError):
+            model.complete([{"role": "user", "content": "hi", "name": "hidden"}])
+        with self.assertRaises(ProviderInvalidRequestError):
+            model.complete([{"role": "user", "content": "hi"}], temperature=float("nan"))
+
+    @patch("arena.providers.openai_adapter.OpenAIChatModel._ensure_client")
+    def test_malformed_chat_response_is_normalized(self, _):
+        model = OpenAIChatModel(api_key="sk-test", model="gpt-4o")
+        model._client = MagicMock()
+        model._client.chat.completions.create.return_value = SimpleNamespace(choices=[])
+
+        with self.assertRaisesRegex(ProviderResponseError, "invalid chat response"):
+            model.complete([{"role": "user", "content": "hi"}])
+
+
+class TestOpenAIEmbeddingValidation(unittest.TestCase):
+
+    def test_rejects_empty_input_before_constructing_client(self):
+        model = OpenAIEmbeddingModel(api_key="sk-test")
+
+        with self.assertRaises(ProviderInvalidRequestError):
+            model.embed([])
+
+        self.assertIsNone(model._client)
+
+    @patch("arena.providers.openai_adapter.OpenAIEmbeddingModel._ensure_client")
+    def test_rejects_wrong_embedding_count_and_non_finite_values(self, _):
+        model = OpenAIEmbeddingModel(api_key="sk-test")
+        model._client = MagicMock()
+
+        model._client.embeddings.create.return_value = SimpleNamespace(
+            data=[SimpleNamespace(embedding=[0.1, 0.2])],
+            usage=SimpleNamespace(total_tokens=3),
+        )
+        with self.assertRaises(ProviderResponseError):
+            model.embed(["one", "two"])
+
+        model._client.embeddings.create.return_value = SimpleNamespace(
+            data=[SimpleNamespace(embedding=[float("inf")])],
+            usage=SimpleNamespace(total_tokens=3),
+        )
+        with self.assertRaises(ProviderResponseError):
+            model.embed(["one"])
+
+
+class TestOpenAISpeechValidation(unittest.TestCase):
+
+    def _audio_file(self, directory: str) -> Path:
+        audio = Path(directory) / "sample.mp3"
+        audio.write_bytes(b"audio")
+        return audio
+
+    @patch("arena.providers.openai_adapter.OpenAISpeechModel._ensure_client")
+    def test_validates_response_timestamps(self, _):
+        model = OpenAISpeechModel(api_key="sk-test")
+        model._client = MagicMock()
+        model._client.audio.transcriptions.create.return_value = SimpleNamespace(
+            text="hello",
+            language="en",
+            duration=1.0,
+            words=[SimpleNamespace(word="hello", start=0.0, end=3.0)],
+            segments=[],
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaises(ProviderResponseError):
+                model.transcribe(self._audio_file(temp_dir))
+
+    def test_rejects_missing_audio_file_before_constructing_client(self):
+        model = OpenAISpeechModel(api_key="sk-test")
+
+        with self.assertRaises(ProviderInvalidRequestError):
+            model.transcribe(Path("does-not-exist.mp3"))
+
+        self.assertIsNone(model._client)
+
 
 class TestOpenAIChatModelErrorNormalization(unittest.TestCase):
 
@@ -194,6 +276,17 @@ class TestOpenAIChatModelErrorSanitization(unittest.TestCase):
 
         self.assertEqual(mock_openai.call_args.kwargs["max_retries"], 0)
         self.assertEqual(mock_openai.call_args.kwargs["timeout"], 120.0)
+
+    def test_close_releases_client_and_credential_factory(self):
+        model = OpenAIChatModel(api_key="sk-test", model="gpt-4o")
+        client = MagicMock()
+        model._client = client
+
+        model.close()
+
+        client.close.assert_called_once_with()
+        self.assertIsNone(model._client)
+        self.assertIsNone(model._build_client)
 
     def test_invalid_json_error_does_not_leak_content(self):
         """ProviderResponseError must not contain model output."""

@@ -7,7 +7,7 @@ subclasses and computes usage/cost via the centralized pricing table.
 """
 
 import json
-from decimal import Decimal
+import math
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -31,6 +31,12 @@ from .base import (
     WordTimestamp,
 )
 from .json_utils import validate_json_object
+from .local_limits import (
+    bounded_usage_count,
+    validate_embedding_inputs,
+    validate_embedding_vectors,
+    validate_temperature,
+)
 from .pricing import calculate_chat_cost, calculate_embedding_cost, calculate_speech_cost
 
 
@@ -38,6 +44,12 @@ _DEFAULT_TIMEOUT = 120.0  # seconds per HTTP attempt
 _MAX_OUTPUT_TOKENS = 8_192
 _MAX_PROMPT_CHARS = 1_000_000
 _MAX_RESPONSE_CHARS = 1_000_000
+_MAX_TRANSCRIPTION_CHARS = 2_000_000
+_MAX_TRANSCRIPTION_DURATION_SECONDS = 86_400.0
+_MAX_TRANSCRIPTION_SEGMENTS = 50_000
+_MAX_TRANSCRIPTION_WORDS = 500_000
+_MAX_SEGMENT_CHARS = 10_000
+_MAX_WORD_CHARS = 1_000
 
 
 class _CredentialProtectedAdapter:
@@ -48,6 +60,17 @@ class _CredentialProtectedAdapter:
 
     def __reduce_ex__(self, protocol):
         raise TypeError("Provider adapters cannot be serialized")
+
+    def close(self) -> None:
+        """Close the lazy SDK client's connection pool, if it was created."""
+        client = getattr(self, "_client", None)
+        self._client = None
+        # The factory closure contains the API key until first use. Clear it
+        # even when the adapter is closed before an SDK client is constructed.
+        self._build_client = None
+        close = getattr(client, "close", None)
+        if callable(close):
+            close()
 
 
 def _client_factory(api_key: str) -> Callable[[], object]:
@@ -64,8 +87,8 @@ def _validate_messages(messages: list[dict]) -> None:
         raise ProviderInvalidRequestError("Chat messages must be a non-empty list.")
     total_chars = 0
     for message in messages:
-        if not isinstance(message, dict):
-            raise ProviderInvalidRequestError("Each chat message must be an object.")
+        if not isinstance(message, dict) or set(message) - {"role", "content"}:
+            raise ProviderInvalidRequestError("Chat messages contain unsupported fields.")
         role = message.get("role")
         content = message.get("content")
         if role not in {"system", "user", "assistant"} or not isinstance(content, str):
@@ -88,7 +111,17 @@ class OpenAIChatModel(_CredentialProtectedAdapter, ChatModel):
 
     def _ensure_client(self):
         if self._client is None:
-            self._client = self._build_client()
+            factory = self._build_client
+            if factory is None:
+                raise ProviderError(
+                    "OpenAI adapter has been closed.",
+                    code="provider_closed",
+                    retryable=False,
+                )
+            try:
+                self._client = factory()
+            finally:
+                self._build_client = None
 
     @property
     def concurrency_hint(self) -> int:
@@ -106,6 +139,7 @@ class OpenAIChatModel(_CredentialProtectedAdapter, ChatModel):
         max_output_tokens: Optional[int] = None,
     ) -> ChatResponse:
         _validate_messages(messages)
+        temperature = validate_temperature(temperature)
         if (
             max_output_tokens is not None
             and (
@@ -130,12 +164,30 @@ class OpenAIChatModel(_CredentialProtectedAdapter, ChatModel):
         try:
             self._ensure_client()
             response = self._client.chat.completions.create(**kwargs)
+        except ProviderError:
+            raise
         except Exception as e:
             raise self._translate_error(e) from e
 
-        content = response.choices[0].message.content or ""
+        try:
+            choices = response.choices
+            if not isinstance(choices, list) or not choices:
+                raise TypeError
+            content = choices[0].message.content
+            if content is None:
+                content = ""
+        except (AttributeError, IndexError, TypeError) as e:
+            raise ProviderResponseError(
+                "OpenAI returned an invalid chat response.",
+                code="invalid_chat_response",
+                retryable=False,
+            ) from e
         if not isinstance(content, str) or len(content) > _MAX_RESPONSE_CHARS:
-            raise ProviderResponseError("Model response exceeds Arena's size limit")
+            raise ProviderResponseError(
+                "OpenAI returned an invalid or oversized chat response.",
+                code="invalid_chat_response",
+                retryable=False,
+            )
 
         # Parse JSON when requested
         parsed = None
@@ -149,14 +201,24 @@ class OpenAIChatModel(_CredentialProtectedAdapter, ChatModel):
                     retryable=True,
                 ) from e
 
+        response_usage = getattr(response, "usage", None)
+        input_tokens = bounded_usage_count(
+            getattr(response_usage, "prompt_tokens", 0)
+        )
+        output_tokens = bounded_usage_count(
+            getattr(response_usage, "completion_tokens", 0)
+        )
+        total_tokens = bounded_usage_count(
+            getattr(response_usage, "total_tokens", input_tokens + output_tokens)
+        )
         usage = ProviderUsage(
-            input_tokens=response.usage.prompt_tokens,
-            output_tokens=response.usage.completion_tokens,
-            total_tokens=response.usage.total_tokens,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=total_tokens,
             estimated_cost_usd=calculate_chat_cost(
                 "openai", self._model,
-                response.usage.prompt_tokens,
-                response.usage.completion_tokens,
+                input_tokens,
+                output_tokens,
             ),
         )
 
@@ -250,25 +312,56 @@ class OpenAIEmbeddingModel(_CredentialProtectedAdapter, EmbeddingModel):
 
     def _ensure_client(self):
         if self._client is None:
-            self._client = self._build_client()
+            factory = self._build_client
+            if factory is None:
+                raise ProviderError(
+                    "OpenAI adapter has been closed.",
+                    code="provider_closed",
+                    retryable=False,
+                )
+            try:
+                self._client = factory()
+            finally:
+                self._build_client = None
 
     def embed(self, texts: list[str]) -> EmbeddingResponse:
+        validate_embedding_inputs(texts)
         try:
             self._ensure_client()
             response = self._client.embeddings.create(
                 model=self._model,
                 input=texts,
             )
+        except ProviderError:
+            raise
         except Exception as e:
             raise OpenAIChatModel._translate_error(e) from e
 
-        embeddings = [item.embedding for item in response.data]
+        try:
+            response_data = response.data
+            if not isinstance(response_data, list):
+                raise TypeError
+            embeddings = validate_embedding_vectors(
+                [item.embedding for item in response_data], len(texts)
+            )
+        except ProviderResponseError:
+            raise
+        except (AttributeError, TypeError) as e:
+            raise ProviderResponseError(
+                "OpenAI returned an invalid embedding response.",
+                code="invalid_embedding_response",
+                retryable=False,
+            ) from e
 
+        response_usage = getattr(response, "usage", None)
+        input_tokens = bounded_usage_count(
+            getattr(response_usage, "total_tokens", 0)
+        )
         usage = ProviderUsage(
-            input_tokens=response.usage.total_tokens,
-            total_tokens=response.usage.total_tokens,
+            input_tokens=input_tokens,
+            total_tokens=input_tokens,
             estimated_cost_usd=calculate_embedding_cost(
-                "openai", self._model, response.usage.total_tokens,
+                "openai", self._model, input_tokens,
             ),
         )
 
@@ -288,13 +381,36 @@ class OpenAISpeechModel(_CredentialProtectedAdapter, SpeechModel):
 
     def _ensure_client(self):
         if self._client is None:
-            self._client = self._build_client()
+            factory = self._build_client
+            if factory is None:
+                raise ProviderError(
+                    "OpenAI adapter has been closed.",
+                    code="provider_closed",
+                    retryable=False,
+                )
+            try:
+                self._client = factory()
+            finally:
+                self._build_client = None
 
     @property
     def max_file_size_mb(self) -> float:
         return 24.0  # OpenAI's 25MB limit with 1MB safety buffer
 
+    @property
+    def max_audio_duration_seconds(self) -> float:
+        return 600.0
+
     def transcribe(self, audio_path: Path) -> TranscriptionResponse:
+        if not isinstance(audio_path, Path) or not audio_path.is_file():
+            raise ProviderInvalidRequestError("Audio input must be a regular file.")
+        try:
+            if audio_path.stat().st_size > int(self.max_file_size_mb * 1024 * 1024):
+                raise ProviderInvalidRequestError(
+                    "Audio input exceeds the OpenAI upload size limit."
+                )
+        except OSError as e:
+            raise ProviderInvalidRequestError("Audio input could not be read.") from e
         try:
             self._ensure_client()
             with open(audio_path, "rb") as audio_file:
@@ -304,31 +420,77 @@ class OpenAISpeechModel(_CredentialProtectedAdapter, SpeechModel):
                     response_format="verbose_json",
                     timestamp_granularities=["word", "segment"],
                 )
+        except ProviderError:
+            raise
         except Exception as e:
             raise OpenAIChatModel._translate_error(e) from e
 
-        # Build typed word timestamps
-        words = []
-        if hasattr(response, "words") and response.words:
-            for w in response.words:
-                words.append(WordTimestamp(
-                    word=w.word,
-                    start=w.start,
-                    end=w.end,
-                ))
+        try:
+            duration_value = getattr(response, "duration", 0.0)
+            duration = 0.0 if duration_value is None else duration_value
+            if (
+                isinstance(duration, bool)
+                or not isinstance(duration, (int, float))
+                or not math.isfinite(duration)
+                or duration < 0
+                or duration > _MAX_TRANSCRIPTION_DURATION_SECONDS
+            ):
+                raise TypeError
+            duration = float(duration)
 
-        # Build typed segments
-        segments = []
-        if hasattr(response, "segments") and response.segments:
-            for s in response.segments:
+            text = response.text
+            language = getattr(response, "language", "unknown") or "unknown"
+            if not isinstance(text, str) or len(text) > _MAX_TRANSCRIPTION_CHARS:
+                raise TypeError
+            if not isinstance(language, str) or not language or len(language) > 32:
+                raise TypeError
+
+            raw_words = getattr(response, "words", None) or []
+            raw_segments = getattr(response, "segments", None) or []
+            if not isinstance(raw_words, (list, tuple)) or len(raw_words) > _MAX_TRANSCRIPTION_WORDS:
+                raise TypeError
+            if not isinstance(raw_segments, (list, tuple)) or len(raw_segments) > _MAX_TRANSCRIPTION_SEGMENTS:
+                raise TypeError
+
+            words = []
+            for item in raw_words:
+                word = item.word
+                start = item.start
+                end = item.end
+                self._validate_timestamp(start, end, duration)
+                if not isinstance(word, str) or len(word) > _MAX_WORD_CHARS:
+                    raise TypeError
+                words.append(WordTimestamp(word=word, start=float(start), end=float(end)))
+
+            segments = []
+            for item in raw_segments:
+                segment_id = item.id
+                start = item.start
+                end = item.end
+                segment_text = item.text
+                self._validate_timestamp(start, end, duration)
+                if (
+                    isinstance(segment_id, bool)
+                    or not isinstance(segment_id, int)
+                    or segment_id < 0
+                    or not isinstance(segment_text, str)
+                    or len(segment_text) > _MAX_SEGMENT_CHARS
+                ):
+                    raise TypeError
                 segments.append(TranscriptionSegment(
-                    id=s.id,
-                    start=s.start,
-                    end=s.end,
-                    text=s.text,
+                    id=segment_id,
+                    start=float(start),
+                    end=float(end),
+                    text=segment_text,
                 ))
-
-        duration = getattr(response, "duration", 0.0) or 0.0
+        except ProviderResponseError:
+            raise
+        except (AttributeError, TypeError) as e:
+            raise ProviderResponseError(
+                "OpenAI returned an invalid transcription response.",
+                code="invalid_transcription_response",
+                retryable=False,
+            ) from e
 
         usage = ProviderUsage(
             input_audio_seconds=duration,
@@ -338,10 +500,30 @@ class OpenAISpeechModel(_CredentialProtectedAdapter, SpeechModel):
         )
 
         return TranscriptionResponse(
-            text=response.text,
-            language=getattr(response, "language", "unknown") or "unknown",
+            text=text,
+            language=language,
             duration=duration,
             words=words,
             segments=segments,
             usage=usage,
         )
+
+    @staticmethod
+    def _validate_timestamp(start, end, duration: float) -> None:
+        if any(
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            for value in (start, end)
+        ):
+            raise ProviderResponseError(
+                "OpenAI returned an invalid transcription timestamp.",
+                code="invalid_transcription_response",
+                retryable=False,
+            )
+        if start < 0 or end < start or end > duration + 1.0:
+            raise ProviderResponseError(
+                "OpenAI returned an out-of-range transcription timestamp.",
+                code="invalid_transcription_response",
+                retryable=False,
+            )

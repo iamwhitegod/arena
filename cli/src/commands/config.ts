@@ -6,6 +6,12 @@
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { ConfigManager, isSensitiveConfigKey } from '../core/config.js';
+import {
+  isValidModelIdentifier,
+  providerSupportsCapability,
+  SUPPORTED_PROVIDERS,
+  type ProviderName,
+} from '../core/providers.js';
 import { commandHeader } from '../ui/output.js';
 
 type ConfigAction = 'view' | 'set' | 'get' | 'reset';
@@ -120,6 +126,33 @@ async function setConfig(configManager: ConfigManager, key: string, value?: stri
 
   if (value === undefined) {
     throw new Error(`A value is required for non-sensitive key "${key}".`);
+  }
+
+  const providerKeys = new Set([
+    'provider',
+    'chat_provider',
+    'overview_chat_provider',
+    'embedding_provider',
+    'transcription_provider',
+  ]);
+  if (providerKeys.has(key)) {
+    if (!SUPPORTED_PROVIDERS.includes(value as (typeof SUPPORTED_PROVIDERS)[number])) {
+      throw new Error(
+        `Unsupported provider "${value}". Choose: ${SUPPORTED_PROVIDERS.join(', ')}.`
+      );
+    }
+    if (
+      key === 'transcription_provider' &&
+      !providerSupportsCapability(value as ProviderName, 'transcription')
+    ) {
+      throw new Error(
+        `Provider "${value}" does not support transcription. Choose local or openai.`
+      );
+    }
+  }
+
+  if (key.endsWith('_model') && !isValidModelIdentifier(value)) {
+    throw new Error('Model identifiers must be bounded text without control characters.');
   }
 
   // Parse value (handle booleans, numbers, strings)

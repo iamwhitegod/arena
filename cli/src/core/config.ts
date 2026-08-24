@@ -115,7 +115,39 @@ export class ConfigManager {
     }
 
     const current = await this.getGlobalConfig();
-    await this.writePrivateJson(this.globalConfigPath, { ...current, ...updates });
+    const next: GlobalConfig = { ...current, ...updates };
+    const clearUnlessUpdated = (keys: Array<keyof GlobalConfig>) => {
+      for (const key of keys) {
+        if (!Object.prototype.hasOwnProperty.call(updates, key)) delete next[key];
+      }
+    };
+
+    if (updates.provider) {
+      clearUnlessUpdated([
+        'chat_provider',
+        'chat_model',
+        'overview_chat_provider',
+        'overview_chat_model',
+        'embedding_provider',
+        'embedding_model',
+        'transcription_provider',
+        'transcription_model',
+      ]);
+    }
+    if (updates.chat_provider) {
+      clearUnlessUpdated(['chat_model', 'overview_chat_model']);
+    }
+    if (updates.overview_chat_provider) {
+      clearUnlessUpdated(['overview_chat_model']);
+    }
+    if (updates.embedding_provider) {
+      clearUnlessUpdated(['embedding_model']);
+    }
+    if (updates.transcription_provider) {
+      clearUnlessUpdated(['transcription_model']);
+    }
+
+    await this.writePrivateJson(this.globalConfigPath, next);
   }
 
   async resetGlobalConfig(includeCredentials = false): Promise<void> {

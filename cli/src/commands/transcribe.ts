@@ -15,6 +15,7 @@ import { displayTranscriptionSummary } from '../ui/summary.js';
 import { isUrl } from '../utils/url.js';
 import { commandHeader } from '../ui/output.js';
 import {
+  requiredProviderBindings,
   requiredProviders,
   resolveProviderSelectors,
   type ProviderSelectors,
@@ -54,6 +55,7 @@ export async function transcribeCommand(
     const globalConfig = await configManager.getGlobalConfig();
     const selectors = resolveProviderSelectors(options, globalConfig);
     const providerNames = requiredProviders(selectors, ['transcription']);
+    const providerBindings = requiredProviderBindings(selectors, ['transcription']);
     await configManager.populateRequiredProviderCredentials(providerNames);
 
     commandHeader('Transcribe media', [
@@ -65,6 +67,7 @@ export async function transcribeCommand(
       videoPath: absoluteVideoPath,
       outputDir: path.dirname(outputFile),
       requiredProviders: providerNames,
+      requiredProviderBindings: providerBindings,
       enginePath: bridge.getEnginePath(),
     });
 
