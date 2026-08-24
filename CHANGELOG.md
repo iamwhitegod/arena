@@ -14,6 +14,7 @@ All notable user-facing changes will be documented here. Arena follows [Semantic
 ### Changed
 
 - Pre-release publication now uses the non-default npm `next` tag and cannot replace `latest`.
+- Release publication now requires successful Security evidence for the exact tagged commit instead of invoking an event-sensitive scanner from an unsupported GitHub release event.
 - Updated installation evidence for the green Ubuntu x64, Windows x64, macOS ARM64, Docker AMD64, and Docker ARM64 release-candidate matrices.
 
 ## [0.4.2] - 2026-08-13
