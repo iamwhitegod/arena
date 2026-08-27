@@ -1,28 +1,28 @@
 # Core dependencies
-openai~=1.0
-python-dotenv~=1.0
+openai~=3.3
+python-dotenv~=1.2
 
 # Video processing
-moviepy~=1.0
-opencv-python~=4.8
-scenedetect~=0.6
+moviepy~=2.2
+opencv-python~=5.0
+scenedetect~=0.7
 ffmpeg-python~=0.2
 
 # Audio processing
-librosa~=0.10
-soundfile~=0.12
-numba>=0.59,<0.60
+librosa~=1.0
+soundfile~=0.14
+numba>=0.67.0,<0.68
 noisereduce~=3.0
-pyloudnorm~=0.1
-scipy~=1.11
+pyloudnorm~=0.2
+scipy~=1.18
 
 # Image processing
-pillow>=12.1.1,<13.0.0
+pillow>=12.3.0,<13.0.0
 
 # URL download support (broader range — tracks rapidly-changing site APIs)
-yt-dlp>=2025.1.0,<2027.0.0
+yt-dlp>=2026.8.19,<2027.0.0
 
 # Utilities
-numpy~=1.24
-tqdm~=4.66
-tiktoken~=0.5
+numpy~=2.5
+tqdm~=4.70
+tiktoken~=0.14
