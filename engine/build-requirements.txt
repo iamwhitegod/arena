@@ -1,3 +1,3 @@
 # Build tooling is installed from build-requirements.lock with hash verification.
-setuptools>=75,<83
-wheel>=0.45,<0.47
+setuptools>=84.0.0,<85
+wheel>=0.48.0,<0.49
